@@ -1,15 +1,13 @@
 Sparse LR Examples
 ==================
 
-This example shows l1 penalty and sparsity in logistic regression, based on `scikit-learn` example from https://scikit-learn.org/stable/auto_examples/linear_model/plot_logistic_l1_l2_sparsity.html#sphx-glr-auto-examples-linear-model-plot-logistic-l1-l2-sparsity-py.
-
-`sparse_lr_train` (from `model.py`) classifies 8x8 images of digits into two classes: 0-4 against 5-9, 
+This example is based on `scikit-learn` example: [l1 penalty and sparsity in logistic regression](https://scikit-learn.org/stable/auto_examples/linear_model/plot_logistic_l1_l2_sparsity.html#sphx-glr-auto-examples-linear-model-plot-logistic-l1-l2-sparsity-py), which classifies 8x8 images of digits into two classes: 0-4 against 5-9, 
 and visualize the coefficients of the model for different penalty methods(l1 or l2) and C.
 
-We use the `let` decorator to declare hyper-parameters for our algorithm:
+The algorithm is defined in function `sparse_lr_plot` from `model.py`. We use the decorator `let`  to declare hyper-parameters for our function:
 ``` python
 @let(learning_rate=0.01, penalty='l1', C=0.01, tol=0.01)
-def sparse_lr_train(X, y):
+def sparse_lr_plot(X, y):
     C = local_param('C')
     penalty = local_param('penalty')
     tol = local_param('tol')
@@ -17,13 +15,13 @@ def sparse_lr_train(X, y):
     ...
 ```
 
-Four hyper-parameter are defined for function `sparse_lr_train`: `learning_rate`, `penalty`, `C` and `tol`. 
+Four hyper-parameter are defined for `sparse_lr_plot`: `learning_rate`, `penalty`, `C` and `tol`. 
 There are two ways to control the hyper-parameters:
 1. parameter scope (see detail in `example_1.py`):
 
 ``` python 
 with param_scope('model.sparse_lr_train.C=0.1'):
-    sparse_lr_train(X, y)
+    sparse_lr_plot(X, y)
 ```
 
 2. command line arguments (see detail in `example_2.py`):
@@ -32,7 +30,7 @@ with param_scope('model.sparse_lr_train.C=0.1'):
 def run(args):
     # run the lr model with parameter from cmdline
     with param_scope(*args.define):  # set parameters according to cmd line
-        sparse_lr_train(X, y)
+        sparse_lr_plot(X, y)
         ...
 
 

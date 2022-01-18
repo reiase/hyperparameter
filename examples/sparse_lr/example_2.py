@@ -1,5 +1,5 @@
 from hyperparameter.hp import param_scope, Tracker
-from model import sparse_lr_train
+from model import sparse_lr_plot
 import numpy as np
 
 from sklearn import datasets
@@ -17,16 +17,7 @@ y = (y > 4).astype(int)
 def run(args):
     # run the lr model with parameter from cmdline
     with param_scope(*args.define):  # set parameters according to cmd line
-        coef = sparse_lr_train(X, y)
-        plt.imshow(
-            np.abs(coef.reshape(8, 8)),
-            interpolation="nearest",
-            cmap="binary",
-            vmax=1,
-            vmin=0,
-        )
-        plt.show()
-
+        sparse_lr_plot(X, y)
 
 if __name__ == '__main__':
     # create cmd line arguments parser

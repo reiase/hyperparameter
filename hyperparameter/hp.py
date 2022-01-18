@@ -326,6 +326,12 @@ class param_scope(HyperParameter):
     def __exit__(self, exc_type, exc_value, traceback):
         param_scope.tls._cfg_.pop()
 
+    @staticmethod
+    def init(params):
+        if not hasattr(param_scope.tls, '_cfg_'):
+            param_scope.tls._cfg_ = []
+            param_scope.tls._cfg_.append(params)
+
 
 def local_param(name: str):
     """

@@ -7,6 +7,7 @@ A hyper-parameter library for researchers, data scientists and machine learning 
 - [Quick Start](#quick-start)
   - [Object-Style API:](#object-style-api)
   - [Scoped Parameter](#scoped-parameter)
+  - [Predefined Parameter](#predefined-parameter)
 - [Examples](#examples)
   - [parameter tunning for researchers](#parameter-tunning-for-researchers)
   - [experiment tracing for data scientists](#experiment-tracing-for-data-scientists)
@@ -71,6 +72,23 @@ foo() # 1
 # passing parameter using param_scope
 with param_scope(param1=2): 
     foo() # 2
+```
+
+## Predefined Parameter
+```python
+@let( # predefine two parameter for `model_train`
+    learning_rate = 1.0,
+    penalty = 'l1'
+)
+def model_train(X, y):
+    LR = LogisticRegression(C=1.0, 
+        lr=local_param('learning_rate'), 
+        penalty=local_param('penalty'))
+    LR.fit(X, y)
+
+# specify predefined parameter using `param_scope`
+with param_scope('model_train.learning_rate=0.01'):
+    model_train(X, y)
 ```
 
 Examples
