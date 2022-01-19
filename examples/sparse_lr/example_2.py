@@ -23,14 +23,9 @@ if __name__ == '__main__':
     # create cmd line arguments parser
     import argparse
     parser = argparse.ArgumentParser('example')
-    parser.add_argument(
-        '-D',
-        '--define',
-        nargs='*',
-        default=[],
-        help=
-        'define a parameter `param_name=param_value`, supported parameter list: \n\n  {}'
-        .format('\n  '.join(Tracker.all())))
+    parser.add_argument('-D', '--define', nargs='*', default=[], action="extend",
+        help='define a parameter `param_name=param_value`, supported parameter list: \n\n  {}'
+            .format('\n  '.join(Tracker.all())))
     args = parser.parse_args()
     run(args)
 

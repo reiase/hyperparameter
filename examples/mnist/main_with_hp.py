@@ -96,7 +96,7 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
-    parser.add_argument('-D', '--define', nargs='*', default=[])
+    parser.add_argument('-D', '--define', nargs='*', default=[], action="extend")
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 

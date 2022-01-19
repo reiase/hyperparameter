@@ -5,9 +5,11 @@ import matplotlib.pyplot as plt
 from hyperparameter import auto_param, param_scope
 
 
+MyLogisticRegression = auto_param(LogisticRegression)
+
 @auto_param
 def sparse_lr_plot(X, y, learning_rate=0.01, penalty='l1', C=0.01, tol=0.01):
-    LR = LogisticRegression(C=C, penalty=penalty, tol=tol, solver='saga')
+    LR = MyLogisticRegression(C=C, penalty=penalty, tol=tol, solver='saga')
 
     LR.fit(X, y)
     coef = LR.coef_.ravel()
