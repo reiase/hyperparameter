@@ -2,14 +2,11 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 import matplotlib.pyplot as plt
 
-from hyperparameter import let, local_param, param_scope
+from hyperparameter import auto_param, param_scope
 
 
-@let(learning_rate=0.01, penalty='l1', C=0.01, tol=0.01)
-def sparse_lr_plot(X, y):
-    C = local_param('C')
-    penalty = local_param('penalty')
-    tol = local_param('tol')
+@auto_param
+def sparse_lr_plot(X, y, learning_rate=0.01, penalty='l1', C=0.01, tol=0.01):
     LR = LogisticRegression(C=C, penalty=penalty, tol=tol, solver='saga')
 
     LR.fit(X, y)

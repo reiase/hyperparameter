@@ -76,11 +76,8 @@ with param_scope(param1=2):
 
 ## Predefined Parameter
 ```python
-@let( # predefine two parameter for `model_train`
-    learning_rate = 1.0,
-    penalty = 'l1'
-)
-def model_train(X, y):
+@auto_param #convert keyword arguments into hyper parameters
+def model_train(X, y, learning_rate = 1.0, penalty = 'l1'):
     LR = LogisticRegression(C=1.0, 
         lr=local_param('learning_rate'), 
         penalty=local_param('penalty'))

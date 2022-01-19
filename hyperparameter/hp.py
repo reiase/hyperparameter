@@ -274,10 +274,6 @@ class HyperParameter(dict):
             return HyperParameter(**obj)
 
 
-def hparam(*arg, **kws):
-    return HyperParameter(*arg, **kws)
-
-
 class param_scope(HyperParameter):
     ''' 
     thread safe scoped hyper parameeter
@@ -327,117 +323,12 @@ class param_scope(HyperParameter):
 
     @staticmethod
     def init(params):
+        """
+        init param_scope for a new thread.
+        """
         if not hasattr(param_scope.tls, '_cfg_'):
             param_scope.tls._cfg_ = []
             param_scope.tls._cfg_.append(params)
-
-
-def local_param(name: str):
-    """
-    >>> @let(a=1)
-    ... def foo():
-    ...     print(local_param('a'))
-
-    >>> foo()
-    1
-
-    >>> with param_scope('foo.a=2'):
-    ...     foo()
-    2
-    """
-    import sys
-    namespace = inspect.getmodulename(sys._getframe(1).f_code.co_filename)
-    if namespace == '__main__':
-        namespace = None
-    if namespace is not None:
-        namespace += '.{}'.format(sys._getframe(1).f_code.co_name)
-    else:
-        namespace = sys._getframe(1).f_code.co_name
-    with param_scope() as hp:
-        value = hp.get(namespace + '.' + name)
-        if value is not None:
-            return value
-        else:
-            raise Exception(
-                'name {} not defined for {}, available parameters: {}'.format(
-                    name, namespace, str(hp)))
-
-
-def let(*arg, **kws):
-    """
-    wrap a function with parameters
-
-    example for pre-defined global parameter
-    >>> @let(
-    ...     'a.b=1',
-    ... )
-    ... def foo():
-    ...     with param_scope() as hp:
-    ...         print(hp.a.b)
-
-    >>> foo()
-    1
-
-    >>> with param_scope('a.b=2') as hp:
-    ...     foo()
-    2
-
-    example for pre-defined function local parameter
-
-    >>> @let(b=1)
-    ... def foo():
-    ...     return local_param('b')
-
-    >>> foo()
-    1
-
-    >>> with param_scope('foo.b=2'):
-    ...     foo()
-    2
-    """
-    predef_arg = arg
-    predef_kws = kws
-
-    def wrapper(func):
-        namespace = func.__module__
-        if namespace == '__main__':
-            namespace = None
-        if namespace is not None:
-            namespace += '.{}'.format(func.__name__)
-        else:
-            namespace = func.__name__
-
-        global params_list
-        for item in predef_arg:
-            if '=' in item:
-                k, v = item.split('=', 1)
-                Tracker.wlist.add(k)
-        for k, v in predef_kws.items():
-            name = '{}.{}'.format(namespace, k)
-            Tracker.wlist.add(name)
-
-        def result_func(*arg, **kws):
-            accepted_arg = []
-            accepted_kws = {}
-            with param_scope() as hp:
-                for item in predef_arg:
-                    if '=' in item:
-                        k, v = item.split('=', 1)
-                        if hp.get(k) is None:
-                            accepted_arg.append(item)
-                for k, v in predef_kws.items():
-                    name = '{}.{}'.format(namespace, k)
-                    if hp.get(name) is None:
-                        accepted_kws[name] = safe_numeric(v)
-            with param_scope(*accepted_arg) as hp:
-                for k, v in accepted_kws.items():
-                    v = safe_numeric(v)
-                    hp.put(k, v)
-                return func(*arg, **kws)
-
-        return result_func
-
-    return wrapper
 
 
 def auto_param(func):
@@ -472,6 +363,7 @@ def auto_param(func):
         if v.default != v.empty:
             name = '{}.{}'.format(namespace, k)
             predef_kws[k] = name
+            Tracker.rlist.add(name)
 
     def wrapper(*arg, **kws):
         with param_scope() as hp:
@@ -505,11 +397,11 @@ if __name__ == "__main__":
     class TestHyperParameter(unittest.TestCase):
 
         def test_parameter_create(self):
-            param1 = hparam(a=1, b=2)
+            param1 = HyperParameter(a=1, b=2)
             self.assertEqual(param1.a, 1)
             self.assertEqual(param1.b, 2)
 
-            param2 = hparam(**{'a': 1, 'b': 2})
+            param2 = HyperParameter(**{'a': 1, 'b': 2})
             self.assertEqual(param2.a, 1)
             self.assertEqual(param2.b, 2)
 
