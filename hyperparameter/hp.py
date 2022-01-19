@@ -1,8 +1,7 @@
-from argparse import Namespace
 import inspect
 import json
 import threading
-import sys
+import inspect
 
 from typing import Any
 
@@ -437,6 +436,49 @@ def let(*arg, **kws):
                 return func(*arg, **kws)
 
         return result_func
+
+    return wrapper
+
+
+def auto_param(func):
+    """
+    Convert keyword arguments into hyperparameters
+
+    Examples:
+
+    >>> @auto_param
+    ... def foo(a, b=2, c='c'):
+    ...     print(a, b, c)
+
+    >>> foo(1)
+    1 2 c
+
+    >>> with param_scope('foo.b=3'):
+    ...     foo(2)
+    2 3 c
+    """
+    predef_kws = {}
+
+    namespace = func.__module__
+    if namespace == '__main__':
+        namespace = None
+    if namespace is not None:
+        namespace += '.{}'.format(func.__name__)
+    else:
+        namespace = func.__name__
+
+    signature = inspect.signature(func)
+    for k, v in signature.parameters.items():
+        if v.default != v.empty:
+            name = '{}.{}'.format(namespace, k)
+            predef_kws[k] = name
+
+    def wrapper(*arg, **kws):
+        with param_scope() as hp:
+            for k, v in predef_kws.items():
+                if hp.get(v) is not None:
+                    kws[k] = hp.get(v)
+            return func(*arg, **kws)
 
     return wrapper
 
