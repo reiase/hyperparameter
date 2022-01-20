@@ -9,6 +9,7 @@ from typing import Any
 class Tracker:
     rlist = set()
     wlist = set()
+    callback = None
 
     @staticmethod
     def reads():
@@ -36,6 +37,9 @@ class Tracker:
         ]
         return '\n'.join(retvals)
 
+    @staticmethod
+    def set_tracker(func):
+        Tracker.callback = func
 
 class Accessor(dict):
     """
@@ -338,17 +342,18 @@ def auto_param(func):
     Examples:
 
     >>> @auto_param
-    ... def foo(a, b=2, c='c'):
-    ...     print(a, b, c)
+    ... def foo(a, b=2, c='c', d=None):
+    ...     print(a, b, c, d)
 
     >>> foo(1)
-    1 2 c
+    1 2 c None
 
     >>> with param_scope('foo.b=3'):
     ...     foo(2)
-    2 3 c
+    2 3 c None
     """
     predef_kws = {}
+    predef_val = {}
 
     namespace = func.__module__
     if namespace == '__main__':
@@ -364,12 +369,18 @@ def auto_param(func):
             name = '{}.{}'.format(namespace, k)
             predef_kws[k] = name
             Tracker.rlist.add(name)
+            predef_val[name] = v.default
 
     def wrapper(*arg, **kws):
         with param_scope() as hp:
+            local_params = {}
             for k, v in predef_kws.items():
+                local_params[v] = predef_val[v]
                 if hp.get(v) is not None:
                     kws[k] = hp.get(v)
+                    local_params[v] = hp.get(v)
+            if Tracker.callback is not None:
+                Tracker.callback(local_params)
             return func(*arg, **kws)
 
     return wrapper
