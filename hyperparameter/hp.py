@@ -375,10 +375,11 @@ def auto_param(func):
         with param_scope() as hp:
             local_params = {}
             for k, v in predef_kws.items():
-                local_params[v] = predef_val[v]
-                if hp.get(v) is not None:
+                if hp.get(v) is not None and k not in kws:
                     kws[k] = hp.get(v)
                     local_params[v] = hp.get(v)
+                else:
+                    local_params[v] = predef_val[v]
             if Tracker.callback is not None:
                 Tracker.callback(local_params)
             return func(*arg, **kws)

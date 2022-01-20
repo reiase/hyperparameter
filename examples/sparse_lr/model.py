@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 
 from hyperparameter import auto_param, param_scope, set_tracker
 
-set_tracker(lambda x: print(x))
-
 MyLogisticRegression = auto_param(LogisticRegression)
 
 
