@@ -1,13 +1,17 @@
 import inspect
 import json
 import threading
-import inspect
 
-from typing import Any
+from typing import Any, Dict
+from typing import Callable
 
 
 class Tracker:
+    """
+    tracker for python read/write operations
+    """
     rlist = set()
+
     wlist = set()
     callback = None
 
@@ -38,8 +42,11 @@ class Tracker:
         return '\n'.join(retvals)
 
     @staticmethod
-    def set_tracker(func):
+    def set_tracker(func: Callable[[Dict[str, Any]], None]):
+        """ report hyper-parameter value to a tracker, for example, `mlflow.tracking`
+        """
         Tracker.callback = func
+
 
 class Accessor(dict):
     """
@@ -100,6 +107,7 @@ class Accessor(dict):
             root[path] = HyperParameter()
             root = root[path]
         root[name] = value
+        return value
 
     def __str__(self):
         return ''
@@ -154,7 +162,8 @@ class HyperParameter(dict):
     '''
 
     def __init__(self, **kws):
-        return self.update(kws)
+        super(HyperParameter, self).__init__()
+        self.update(kws)
 
     def update(self, kws):
         for k, v in kws.items():
@@ -220,9 +229,6 @@ class HyperParameter(dict):
         Tracker.rlist.add(name)
         return obj[path[-1]] if path[-1] in obj else None
 
-    def holder(self):
-        return
-
     def __setitem__(self, key, value):
         if isinstance(value, dict):
             return dict.__setitem__(self, key, HyperParameter(**value))
@@ -247,11 +253,11 @@ class HyperParameter(dict):
 
     def __call__(self) -> Any:
         """
-        Return a parameter accessor. 
+        Return a parameter accessor.
 
         Returns:
             Any: holder of current parameter
-        
+
         Examples:
         >>> cfg = HyperParameter(a=1, b = {'c':2, 'd': 3})
         >>> cfg().a.getOrElse(2)
@@ -279,9 +285,9 @@ class HyperParameter(dict):
 
 
 class param_scope(HyperParameter):
-    ''' 
+    '''
     thread safe scoped hyper parameeter
-    
+
     Examples:
     create a scoped HyperParameter
     >>> with param_scope(**{'a': 1, 'b': 2}) as cfg:
