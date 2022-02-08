@@ -1,3 +1,5 @@
+This project now is part of machine learning framework [towhee](https://github.com/towhee-io/towhee), and this repo is no longer maintained.
+
 **H**_yper_**P**_arameter_
 ===========================
 
