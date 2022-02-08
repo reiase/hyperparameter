@@ -50,7 +50,7 @@ class Tracker:
 
 class Accessor(dict):
     """
-    Helper for accessing undefined parameters.
+    Helper for accessing hyper-parameters.
 
     When reading an undefined parameter, accessor will:
     1. return false in `if` statement:
@@ -60,7 +60,7 @@ class Accessor(dict):
 
     2. support default value for undefined parameter
     >>> params = HyperParameter()
-    >>> params().undefined_int.getOrElse(10)
+    >>> params.undefined_int.getOrElse(10)
     10
 
     3. support to create nested parameter:
@@ -76,13 +76,7 @@ class Accessor(dict):
 
     def getOrElse(self, default: Any):
         """
-        get value for the parameter, or get default value if parameter is not defined
-
-        Args:
-            default (Any): default value if the parameter is not defined
-
-        Returns:
-            Any: parameter value or default value
+        get value for the parameter, or get default value if parameter is not defined.
         """
         Tracker.rlist.add(self._path)
         value = self._root.get(self._path)
@@ -125,13 +119,13 @@ class Accessor(dict):
 
 
 class HyperParameter(dict):
-    ''' 
+    '''
     HyperParameter is an extended dict with features for better parameter management.
 
     A HyperParameter can be create with:
     >>> hp = HyperParameter(param1=1, param2=2, obj1={'propA': 'A'})
 
-    or 
+    or
 
     >>> hp = HyperParameter(**{'param1': 1, 'param2': 2, 'obj1': {'propA': 'A'}})
 
@@ -147,7 +141,7 @@ class HyperParameter(dict):
     >>> hp['obj1']['propA']
     'A'
 
-    The object-style api also support create or update the parameters:
+    The object-style api also support creating or updating the parameters:
     >>> hp.a.b.c = 1
 
     which avoid to maintain the dict data manually like this:
@@ -158,7 +152,7 @@ class HyperParameter(dict):
 
     You can also create a parameter with a string name:
     >>> hp = HyperParameter()
-    >>> hp.put('a.b.c', 1)    
+    >>> hp.put('a.b.c', 1)
     '''
 
     def __init__(self, **kws):
