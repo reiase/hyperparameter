@@ -433,25 +433,28 @@ class param_scope(HyperParameter):
     Examples
     --------
     create a scoped HyperParameter
-    >>> with param_scope(**{'a': 1, 'b': 2}) as cfg:
-    ...     print(cfg.a)
+    >>> with param_scope(**{'a': 1, 'b': 2}) as ps:
+    ...     print(ps.a)
     1
 
     read parameter in a function
     >>> def foo():
-    ...    with param_scope() as cfg:
-    ...        return cfg.a
-    >>> with param_scope(**{'a': 1, 'b': 2}) as cfg:
-    ...     foo() # foo should get cfg using a with statement
+    ...    with param_scope() as ps:
+    ...        return ps.a
+    >>> with param_scope(**{'a': 1, 'b': 2}) as ps:
+    ...     foo() # foo should get param_scope using a with statement
     1
 
     update some config only in new scope
-    >>> with param_scope(**{'a': 1, 'b': 2}) as cfg:
-    ...     cfg.b
-    ...     with param_scope(**{'b': 3}) as cfg2:
-    ...         cfg2.b
-    2
-    3
+    >>> with param_scope(**{'a': 1, 'b': 2}) as ps:
+    ...     ps
+    ...     with param_scope(**{'b': 3}) as ps:
+    ...         ps
+    ...     with param_scope() as ps:
+    ...         ps
+    {'a': 1, 'b': 2}
+    {'a': 1, 'b': 3}
+    {'a': 1, 'b': 2}
     """
 
     tls = threading.local()

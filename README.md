@@ -1,19 +1,7 @@
-This project now is part of machine learning framework [towhee](https://github.com/towhee-io/towhee), and this repo is no longer maintained.
-
 **H**_yper_**P**_arameter_
 ===========================
 
 A hyper-parameter library for researchers, data scientists and machine learning engineers.
-
-- [**H**_yper_**P**_arameter_](#hyperparameter)
-- [Quick Start](#quick-start)
-  - [Object-Style API:](#object-style-api)
-  - [Scoped Parameter](#scoped-parameter)
-  - [Predefined Parameter](#predefined-parameter)
-- [Examples](#examples)
-  - [parameter tunning for researchers](#parameter-tunning-for-researchers)
-  - [experiment tracing for data scientists](#experiment-tracing-for-data-scientists)
-  - [design-pattern for system engineers](#design-pattern-for-system-engineers)
 
 Quick Start
 ============
@@ -21,38 +9,51 @@ Quick Start
 ## Object-Style API:
 
 ```python
-from hyperparameter import HyperParameter
+>>> from hyperparameter import HyperParameter
 
-params = HyperParameter(a=1, b={'c': 2})
-params.a == 1   # True
-params.b.c == 2 # True (nested parameter)
+>>> hp = HyperParameter(a=1, b={'c': 2})
+>>> hp.a == 1
+True
+>>> hp.b.c == 2  # (nested parameter)
+True
+
 ```
 
-or becomes powerful with `params()`:
+or becomes powerful with `hp()`:
 
 ```python
-params().a.b.c.getOrElse(3) # 3 (default value)
-params().a.b.c(3)           # 3 (shortcut for default value)
+>>> hp = HyperParameter()
+>>> hp().a.b.c.get_or_else(3) # (default value for undefined parameter)
+3
+>>> hp().a.b.c(3)             # (shortcut for `get_or_else`)
+3
 
-params().a.b.c = 4          # set value to param `a.b.c`
-params().a.b.c(3)           # 4 (default value is ignored) 
+>>> hp().a.b.c = 4          # set value to param `a.b.c`
+>>> hp().a.b.c(3)           # (default value is ignored) 
+4
+
 ```
 
 ## Scoped Parameter
 
 ```python
-from hyperparameter import param_scope
+>>> from hyperparameter import param_scope
 
 # scoped parameter
-with param_scope(a=1) as hp: 
-    hp.a == 1 # True
+>>> with param_scope(a=1) as ps: 
+...     ps.a == 1
+True
+
 ```
 or becomes powerful with `nested scope`:
 ``` python
-with param_scope(a=1) as hp: 
-    with param_scope(a=2) as hp: 
-        hp.a == 2 # True, a=2 for inner scope
-    hp.a == 1     # True, a=1 for outer scope
+>>> with param_scope(a=1) as ps:
+...     with param_scope(a=2) as ps2:
+...         ps2.a == 2 # True, a=2 for inner scope
+...     ps.a == 1      # True, a=1 for outer scope
+True
+True
+
 ```
 
 even more powerful when using `param_scope` in function:
@@ -61,8 +62,8 @@ even more powerful when using `param_scope` in function:
 #change function behavior with scoped parameter:
 def foo(arg):
     # receive parameter using param_scope
-    with param_scope() as hp: 
-        if (hp().param1.getOrElse(1) == 1):
+    with param_scope() as ps: 
+        if (ps().param1(1) == 1):
             return 1
         else:
             return 2
