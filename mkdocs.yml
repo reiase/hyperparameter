@@ -1,5 +1,5 @@
-site_name: Pulse - Data.Collection for Python
-repo_url: https://github.com/reiase/pulse
+site_name: HyperParameter
+repo_url: https://github.com/reiase/hyperparameter
 
 theme:
   name: "material"
@@ -10,12 +10,12 @@ plugins:
       languages:
         en: "English"
         zh: "中文"
-      default_language: 'en'
+      default_language: "en"
   - mkdocstrings:
       handlers:
         python:
           options:
-            docstring_style: google
+            docstring_style: numpy
             docstring_options:
               ignore_init_summary: yes
             merge_init_into_class: yes
@@ -23,14 +23,15 @@ plugins:
 
 nav:
   - Home: index.md
+  - Reference: reference.md
 
 watch:
-    - hyperparameter
+  - hyperparameter
 
 extra:
   alternate:
     - name: English
-      link: /en/ 
+      link: /en/
       lang: en
     - name: 中文
       link: /zh/

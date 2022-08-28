@@ -1,9 +1,7 @@
 import inspect
 import json
 import threading
-
-from typing import Any, Dict, Set
-from typing import Callable
+from typing import Any, Callable, Dict, Set
 
 _read_tracker: Set[str] = set()
 _write_tracker: Set[str] = set()
@@ -204,15 +202,11 @@ def dynamic_dispatch(func, name=None, index=None):
 
 
 class HyperParameter(dict):
-    """
-    HyperParameter is an extended dict with features for better parameter management.
+    """HyperParameter is an extended dict with features for better parameter management.
 
-    A HyperParameter can be created with:
+    Examples
+    --------
     >>> hp = HyperParameter(param1=1, param2=2, obj1={'propA': 'A'})
-
-    or
-
-    >>> hp = HyperParameter(**{'param1': 1, 'param2': 2, 'obj1': {'propA': 'A'}})
 
     Once the HyperParameter object is created, you can access the values using the object-style api:
     >>> hp.param1
@@ -228,16 +222,6 @@ class HyperParameter(dict):
 
     The object-style api also support creating or updating the parameters:
     >>> hp.a.b.c = 1
-
-    which avoid maintaining the dict data manually like this:
-    >>> hp = {}
-    >>> if 'a' not in hp: hp['a'] = {}
-    >>> if 'b' not in hp['a']: hp['a']['b'] = {}
-    >>> hp['a']['b']['c'] = 1
-
-    You can also create a parameter with a string name:
-    >>> hp = HyperParameter()
-    >>> hp.put('a.b.c', 1)
     """
 
     def __init__(self, **kws):
@@ -255,24 +239,29 @@ class HyperParameter(dict):
                     v = HyperParameter(**v)
             self[k] = v
 
-    def put(self, name: str, value: Any):
-        """
-        put/update a parameter with a string name
+    def put(self, name: str, value: Any) -> None:
+        """create or update the parameter with the given `name`
 
-        Args:
-            name (str): parameter name, 'obj.prop' is supported
-            value (Any): parameter value
+        Parameters
+        ----------
+        name : str
+            parameter name, 'obj.prop' is supported
+        value : Any
+            parameter value
 
-        Examples:
+        Examples
+        --------
         >>> cfg = HyperParameter()
         >>> cfg.put('param1', 1)
         >>> cfg.put('obj1.propA', 'A')
 
         >>> cfg.param1
         1
+
         >>> cfg.obj1.propA
         'A'
         """
+
         path = name.split(".")
         obj = self
         for p in path[:-1]:
@@ -282,22 +271,27 @@ class HyperParameter(dict):
         obj[path[-1]] = safe_numeric(value)
 
     def get(self, name: str) -> Any:
-        """
-        get a parameter by a string name
+        """get the parameter with the given name
 
-        Args:
-            name (str): parameter name
+        Parameters
+        ----------
+        name : str
+            parameter name
 
-        Returns:
-            Any: parameter value
+        Returns
+        -------
+        Any
+            parameter value
 
-        Examples:
+        Examples
+        --------
         >>> cfg = HyperParameter(a=1, b = {'c':2, 'd': 3})
         >>> cfg.get('a')
         1
         >>> cfg.get('b.c')
         2
         """
+
         path = name.split(".")
         obj = self
         for p in path[:-1]:
@@ -306,20 +300,36 @@ class HyperParameter(dict):
             obj = obj[p]
         return obj[path[-1]] if path[-1] in obj else _Accessor(self, name)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Any) -> None:
+        """set value and convert the value into `HyperParameter` if necessary
+
+        Parameters
+        ----------
+        key : str
+            parameter name
+        value : Any
+            parameter value
         """
-        set value and convert the value into `HyperParameter` if necessary
-        """
+
         if isinstance(value, dict):
             return dict.__setitem__(self, key, HyperParameter(**value))
         return dict.__setitem__(self, key, value)
 
-    def __getattr__(self, name):
-        """
-        read parameter with object-style api
+    def __getattr__(self, name: str) -> Any:
+        """read parameter with object-style api
 
-        Examples:
+        Parameters
+        ----------
+        name : str
+            parameter name
 
+        Returns
+        -------
+        Any
+            parameter value
+
+        Examples
+        --------
         for simple parameters:
         >>> hp = HyperParameter(a=1, b = {'c':2, 'd': 3})
         >>> hp.a
@@ -333,18 +343,19 @@ class HyperParameter(dict):
         2
         """
         return self.get(name)
-        # if name in self.keys():
-        #     return self[name]
-        # else:
-        #     if name in self.__dict__.keys():
-        #         return self.__dict__[name]
-        #     return _Accessor(self, name)
 
-    def __setattr__(self, name, value):
-        """
-        create/update parameter with object-style api
+    def __setattr__(self, name: str, value: Any) -> None:
+        """create/update parameter with object-style api
 
-        Examples:
+        Parameters
+        ----------
+        name : str
+            parameter name
+        value : Any
+            parameter value
+
+        Examples
+        --------
         >>> hp = HyperParameter(a=1, b = {'c':2, 'd': 3})
         >>> hp.e = 4
 
@@ -356,69 +367,47 @@ class HyperParameter(dict):
         1
         """
         self.put(name, value)
-        # self[name] = value
 
     def __call__(self) -> Any:
-        """
-        Return a parameter accessor.
+        """Return a parameter accessor.
 
-        Returns:
-            Any: holder of the current parameter
+        Returns
+        -------
+        Any
+            accessor of the current parameter
 
-        Examples:
+        Examples
+        --------
         >>> cfg = HyperParameter(a=1, b = {'c':2, 'd': 3})
         >>> cfg().a.get_or_else('default')   # default value for simple parameter
         1
+
         >>> cfg().b.c.get_or_else('default') # default value for nested parameter
         2
+
         >>> cfg().b.undefined.get_or_else('default')
         'default'
         """
 
         return _Accessor(self, None)
 
-    def dispatch(self, callback: Callable = None):
-        """
-        Return a call holder.
-
-        Examples:
-        >>> def debug_print(path, index, *arg, **kws):
-        ...     return (path, index, arg, kws)
-        >>> ch = param_scope().dispatch(debug_print)
-        >>> ch.my.foo(a=1,b=2)
-        ('my.foo', None, (), {'a': 1, 'b': 2})
-
-        >>> ch.myspace2.gee(c=1,d=2)
-        ('myspace2.gee', None, (), {'c': 1, 'd': 2})
-        """
-
-        @dynamic_dispatch
-        def wrapper(*arg, **kws):
-            with param_scope() as hp:
-                name = hp._name
-                index = hp._index
-            return callback(name, index, *arg, **kws)
-
-        return wrapper
-
-    def callholder(self, callback: Callable = None):
-        return self.dispatch(callback)
-
     @staticmethod
     def loads(s):
-        """
-        Load parameters from JSON string, similar as `json.loads`.
+        """Load parameters from JSON string, similar as `json.loads`.
+
+        Examples
+        --------
+        >>> hp = HyperParameter.loads('{"a": 1, "b": {"c": 2}}')
+        >>> hp.a
+        1
         """
         obj = json.loads(s)
         return HyperParameter(**obj)
 
     @staticmethod
     def load(f):
-        """
-        Load parameters from json file, similar as `json.load`.
-        """
-        obj = json.load(f)
-        return HyperParameter(**obj)
+        """Load parameters from json file, similar as `json.load`."""
+        return HyperParameter.load(f.read())
 
 
 class param_scope(HyperParameter):
