@@ -16,12 +16,21 @@ def run(args):
     with param_scope(*args.define):  # set parameters according to cmd line
         sparse_lr_plot(X, y)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser('example')
-    parser.add_argument('-D', '--define', nargs='*', default=[], action="extend",
-        help='define a parameter `param_name=param_value`, supported parameter list: \n\n  {}'
-            .format('\n  '.join(Tracker.all())))
+
+    parser = argparse.ArgumentParser("example")
+    parser.add_argument(
+        "-D",
+        "--define",
+        nargs="*",
+        default=[],
+        action="extend",
+        help="define a parameter `param_name=param_value`, supported parameter list: \n\n  {}".format(
+            "\n  ".join(Tracker.all())
+        ),
+    )
     args = parser.parse_args()
     run(args)
 

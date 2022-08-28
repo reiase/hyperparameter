@@ -8,8 +8,8 @@ MyLogisticRegression = auto_param(LogisticRegression)
 
 
 @auto_param
-def sparse_lr_plot(X, y, learning_rate=0.01, penalty='l1', C=0.01, tol=0.01):
-    LR = MyLogisticRegression(C=C, penalty=penalty, tol=tol, solver='saga')
+def sparse_lr_plot(X, y, learning_rate=0.01, penalty="l1", C=0.01, tol=0.01):
+    LR = MyLogisticRegression(C=C, penalty=penalty, tol=tol, solver="saga")
 
     LR.fit(X, y)
     coef = LR.coef_.ravel()
@@ -23,10 +23,13 @@ def sparse_lr_plot(X, y, learning_rate=0.01, penalty='l1', C=0.01, tol=0.01):
         vmin=0,
     )
     plt.title(
-        str({
-            'C': C,
-            'penalty': penalty,
-            'tol': tol,
-            'sparsity': '%.2f%%' % (sparsity_LR)
-        }))
+        str(
+            {
+                "C": C,
+                "penalty": penalty,
+                "tol": tol,
+                "sparsity": "%.2f%%" % (sparsity_LR),
+            }
+        )
+    )
     plt.show()

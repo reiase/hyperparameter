@@ -27,11 +27,19 @@ def run(args):
         sparse_lr_plot(X, y)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser('example')
-    parser.add_argument('-D', '--define', nargs='*', default=[], action="extend",
-        help='define a parameter `param_name=param_value`, supported parameter list: \n' + '\n  '.join(Tracker.all()))
+
+    parser = argparse.ArgumentParser("example")
+    parser.add_argument(
+        "-D",
+        "--define",
+        nargs="*",
+        default=[],
+        action="extend",
+        help="define a parameter `param_name=param_value`, supported parameter list: \n"
+        + "\n  ".join(Tracker.all()),
+    )
     args = parser.parse_args()
     run(args)
 

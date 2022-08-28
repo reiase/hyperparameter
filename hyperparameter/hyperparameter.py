@@ -121,8 +121,7 @@ class _Accessor(dict):
         # _path and _root are not allowed as keys for user.
         if name in ["_path", "_root"]:
             return self.__setitem__(name, value)
-        full_name = "{}.{}".format(self._path,
-                                   name) if self._path is not None else name
+        full_name = "{}.{}".format(self._path, name) if self._path is not None else name
         _write_tracker.add(full_name)
         root = self._root
         root.put(full_name, value)
@@ -453,8 +452,7 @@ class param_scope(HyperParameter):
 
     def __init__(self, *args, **kws):
         # Check if nested param_scope, if so, update current scope to include previous.
-        if hasattr(param_scope.tls,
-                   "history") and len(param_scope.tls.history) > 0:
+        if hasattr(param_scope.tls, "history") and len(param_scope.tls.history) > 0:
             self.update(param_scope.tls.history[-1])
         self.update(kws)
         for line in args:
@@ -562,9 +560,7 @@ def auto_param(name_or_func):
             with param_scope() as hp:
                 local_params = {}
                 for k, v in predef_kws.items():
-                    if getattr(
-                            hp(),
-                            v).get_or_else(None) is not None and k not in kws:
+                    if getattr(hp(), v).get_or_else(None) is not None and k not in kws:
                         kws[k] = hp.get(v)
                         local_params[v] = hp.get(v)
                     else:
