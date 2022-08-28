@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm", "setuptools-rust"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyperparameter"
+authors = [{ name = "Reiase", email = "reiase@gmail.com" }]
+description = "A hyper-parameter library for researchers, data scientists and machine learning engineers."
+requires-python = ">=3.7"
+readme = "README.md"
+license = { text = "Apache License Version 2.0" }
+dynamic = ["version"]
+
+[tool.setuptools]
+packages = ["hyperparameter"]
+
+[tool.setuptools.dynamic]
+version = { attr = "hyperparameter.VERSION" }
+
+[tool.black]
+line-length = 88
+
+[tool.flake8]
+extend-ignore = ["E203", "E501"]
+max-line-length = 88
+count = true
+
+[tool.isort]
+atomic = true
+profile = "black"
+line_length = 88
+
+[tool.coverage.run]
+branch = true
+source = ["hyperparameter"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --durations=5 --doctest-modules --doctest-glob=*.md"
+testpaths = ["tests/unittests/", "hyperparameter/"]
