@@ -8,13 +8,15 @@ _write_tracker: Set[str] = set()
 
 
 def reads():
-    """
-    Get hyperparameter read operations.
+    """Get hyperparameter read operations
 
-    Returns:
-        List[str]: hyperparameter read operations
+    Returns
+    -------
+    List[str]
+        hyperparameter read operations
 
-    Examples:
+    Examples
+    --------
     >>> _read_tracker.clear()
     >>> hp = HyperParameter(a=1, b={'c': 2})
     >>> reads() # no read operations
@@ -36,13 +38,15 @@ def reads():
 
 
 def writes():
-    """
-    Get hyperparameter write operations.
+    """Get hyperparameter write operations.
 
-    Returns:
-        List[str]: hyperparameter write operations
+    Returns
+    -------
+    List[str]
+        hyperparameter write operations
 
-    Examples:
+    Examples
+    --------
     >>> _write_tracker.clear()
     >>> hp = HyperParameter(a=1, b={'c': 2})
     >>> writes()
@@ -63,17 +67,14 @@ def writes():
 
 
 def all_params():
-    """
-    Get all tracked hyperparameters.
-    """
+    """Get all tracked hyperparameters."""
     retval = list(_read_tracker.union(_write_tracker))
     retval.sort()
     return retval
 
 
 class _Accessor(dict):
-    """
-    Helper for accessing hyper-parameters.
+    """Helper for accessing hyper-parameters.
 
     When reading an undefined parameter, the accessor will:
     1. return false in `if` statement:
@@ -99,9 +100,7 @@ class _Accessor(dict):
         self._path = path
 
     def get_or_else(self, default: Any = None):
-        """
-        Get value for the parameter, or get default value if the parameter is not defined.
-        """
+        """Get value for the parameter, or get default value if the parameter is not defined."""
         _read_tracker.add(self._path)
         value = self._root.get(self._path)
         return default if not value else value
@@ -141,10 +140,10 @@ class _Accessor(dict):
 
 
 class DynamicDispatch:
-    """
-    Dynamic call dispatch
+    """Dynamic call dispatcher
 
-    Examples:
+    Examples
+    --------
 
     >>> @dynamic_dispatch
     ... def debug_print(*args, **kws):
@@ -204,6 +203,9 @@ def dynamic_dispatch(func, name=None, index=None):
 class HyperParameter(dict):
     """HyperParameter is an extended dict with features for better parameter management.
 
+    **create and access hyper-parameters**
+    ======================================
+
     Examples
     --------
     >>> hp = HyperParameter(param1=1, param2=2, obj1={'propA': 'A'})
@@ -222,6 +224,21 @@ class HyperParameter(dict):
 
     The object-style api also support creating or updating the parameters:
     >>> hp.a.b.c = 1
+
+    **undefined parameters and default values**
+    ===========================================
+
+    Examples
+    --------
+    1. undefined parameter in `if` statement:
+    >>> params = HyperParameter()
+    >>> if not params.undefined_int: print("parameter undefined")
+    parameter undefined
+
+    2. default value for undefined parameter
+    >>> params = HyperParameter()
+    >>> params.undefined_int(10)
+    10
     """
 
     def __init__(self, **kws):
@@ -379,13 +396,13 @@ class HyperParameter(dict):
         Examples
         --------
         >>> cfg = HyperParameter(a=1, b = {'c':2, 'd': 3})
-        >>> cfg().a.get_or_else('default')   # default value for simple parameter
+        >>> cfg().a('default')   # default value for simple parameter
         1
 
-        >>> cfg().b.c.get_or_else('default') # default value for nested parameter
+        >>> cfg().b.c('default') # default value for nested parameter
         2
 
-        >>> cfg().b.undefined.get_or_else('default')
+        >>> cfg().b.undefined('default')
         'default'
         """
 
@@ -411,10 +428,10 @@ class HyperParameter(dict):
 
 
 class param_scope(HyperParameter):
-    """
-    thread-safe scoped hyperparameter
+    """A thread-safe context scope that manages hyperparameters
 
-    Examples:
+    Examples
+    --------
     create a scoped HyperParameter
     >>> with param_scope(**{'a': 1, 'b': 2}) as cfg:
     ...     print(cfg.a)
@@ -459,13 +476,20 @@ class param_scope(HyperParameter):
         param_scope.tls.history.pop()
 
     @staticmethod
-    def init(params):
+    def current():
+        if not hasattr(param_scope.tls, "history"):
+            param_scope.init()
+        return param_scope.tls.history[-1]
+
+    @staticmethod
+    def init(params=None):
         """
         init param_scope for a new thread.
         """
-        if not hasattr(param_scope.tls, "history"):
-            param_scope.tls.history = []
-            param_scope.tls.history.append(params)
+        param_scope.tls.history = []
+        param_scope.tls.history.append(
+            params if params is not None else HyperParameter()
+        )
 
 
 """
@@ -484,7 +508,8 @@ def auto_param(name_or_func):
     """
     Convert keyword arguments into hyperparameters
 
-    Examples:
+    Examples
+    --------
 
     >>> @auto_param
     ... def foo(a, b=2, c='c', d=None):
