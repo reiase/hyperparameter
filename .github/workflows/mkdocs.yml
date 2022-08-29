@@ -11,7 +11,10 @@ jobs:
     steps:
       - name: Checkout main
         uses: actions/checkout@v2
-
+      - name: Install requirements
+        run: |
+          pip install mkdocs mkdocs-i18n mkdocs-material mkdocs-material-extensions && 
+          pip install mkdocs-autorefs mkdocstrings mkdocstrings-python
       - name: Deploy docs
         uses: mhausenblas/mkdocs-deploy-gh-pages@master
         # Or use mhausenblas/mkdocs-deploy-gh-pages@nomaterial to build without the mkdocs-material theme

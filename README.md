@@ -4,9 +4,9 @@
 A hyper-parameter library for researchers, data scientists and machine learning engineers.
 
 Quick Start
-============
+-----------
 
-## Object-Style API:
+### Object-Style API:
 
 ```python
 >>> from hyperparameter import HyperParameter
@@ -19,7 +19,7 @@ True
 
 ```
 
-or becomes powerful with `hp()`:
+If we want safe access to undefined parameters with default values, we can use `hp()` instead of `hp`:
 
 ```python
 >>> hp = HyperParameter()
@@ -34,7 +34,7 @@ or becomes powerful with `hp()`:
 
 ```
 
-## Scoped Parameter
+### Scoped Parameter
 
 ```python
 >>> from hyperparameter import param_scope
@@ -45,7 +45,8 @@ or becomes powerful with `hp()`:
 True
 
 ```
-or becomes powerful with `nested scope`:
+
+When nested, the parameter modifications are limited to the inner scope:
 ``` python
 >>> with param_scope(a=1) as ps:
 ...     with param_scope(a=2) as ps2:
@@ -56,28 +57,27 @@ True
 
 ```
 
-even more powerful when using `param_scope` in function:
+The nested scope feature can be used to config the default behavior when used in functions:
 
 ```python
 #change function behavior with scoped parameter:
-def foo(arg):
+def dnn(input):
     # receive parameter using param_scope
-    with param_scope() as ps: 
-        if (ps().param1(1) == 1):
-            return 1
-        else:
-            return 2
-        ...
+    with param_scope() as ps:
+        output = linear(inputs)
+        return activation_fn(
+                    output, 
+                    activation=ps().activation("relu"))
 
 # call function with default parameter
-foo() # 1
+dnn()
 
 # passing parameter using param_scope
-with param_scope(param1=2): 
-    foo() # 2
+with param_scope(activation="sigmoid"): 
+    dnn()
 ```
 
-## Predefined Parameter
+### Predefined Parameter
 ```python
 @auto_param #convert keyword arguments into hyper parameters
 def model_train(X, y, learning_rate = 1.0, penalty = 'l1'):
@@ -92,18 +92,18 @@ with param_scope('model_train.learning_rate=0.01'):
 ```
 
 Examples
-========
+--------
 
-## [parameter tunning for researchers](examples/sparse_lr/README.md)
+### [parameter tunning for researchers](examples/sparse_lr/README.md)
 
 This example shows how to use hyperparameter in your research projects, and make your experiments reproducible.
 
-## [experiment tracing for data scientists](examples/mnist/README.md)
+### [experiment tracing for data scientists](examples/mnist/README.md)
 
 This example shows experiment management with hyperparameter, and tracing the results with mlflow.tracing.
 
 Todo.
 
-## design-pattern for system engineers
+### design-pattern for system engineers
 
 Todo.
