@@ -116,9 +116,3 @@ This example shows how to use hyperparameter in your research projects, and make
 ### [experiment tracing for data scientists](examples/mnist/README.md)
 
 This example shows experiment management with hyperparameter, and tracing the results with mlflow.tracing.
-
-Todo.
-
-### design-pattern for system engineers
-
-Todo.
