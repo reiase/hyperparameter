@@ -23,6 +23,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - Quick Start: quick_start.md
   - Reference: reference.md
 
 watch:

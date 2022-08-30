@@ -103,7 +103,7 @@ class _Accessor(dict):
         """Get value for the parameter, or get default value if the parameter is not defined."""
         _read_tracker.add(self._path)
         value = self._root.get(self._path)
-        return default if not value else value
+        return default if isinstance(value, _Accessor) else value
 
     def __getattr__(self, name: str) -> Any:
         # _path and _root are not allowed as keys for user.
