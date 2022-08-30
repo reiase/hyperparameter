@@ -1,52 +1,71 @@
 **H**_yper_**P**_arameter_
 ===========================
 
-A hyper-parameter library for researchers, data scientists and machine learning engineers.
+HyperParameter is a configuration framework designed for data scientists and machine learning enginners. HyperParameter provides the following features:
+
+1. `param_scope`, a context manager maintains a thread-safe global parameter configuration and manage parameter modifications with nested `param_scope`;
+2. `auto_param`, a decorator allowing default parameters of a function or class to be supplied from `param_scope`;
+
+HyperParameter is particularly well suited for machine learning experiments and related systems, which have many parameters and nested codes.
 
 Quick Start
 -----------
 
-### Object-Style API:
+A quick example for defining model with HyperParameter:
 
 ```python
->>> from hyperparameter import HyperParameter
+@auto_param()
+def dnn(input, layers=3, activation="relu"):
+    for i in range(layers):
+        input = Linear(input)
+        input = activation_fn(
+            activation,
+            input
+        )
+    return input
 
->>> hp = HyperParameter(a=1, b={'c': 2})
->>> hp.a == 1
-True
->>> hp.b.c == 2  # (nested parameter)
-True
+# create a 3 layer dnn with relu activation
+dnn(x)
 
+# passing parameter using param_scope
+with param_scope(
+        "dnn.layers=4", 
+        "dnn.activation=sigmoid"):
+    # create a 4 layer dnn with sigmoid activation
+    dnn()
 ```
 
-If we want safe access to undefined parameters with default values, we can use `hp()` instead of `hp`:
+Another example for building ML system:
 
 ```python
->>> hp = HyperParameter()
->>> hp().a.b.c.get_or_else(3) # (default value for undefined parameter)
-3
->>> hp().a.b.c(3)             # (shortcut for `get_or_else`)
-3
+@auto_param
+def inference(x, backend="tvm"):
+    ...
 
->>> hp().a.b.c = 4          # set value to param `a.b.c`
->>> hp().a.b.c(3)           # (default value is ignored) 
-4
-
+with param_scope(backend="onnx"):
+    inference(x)
 ```
 
-### Scoped Parameter
+We can also load parameters from config file (e.g., YAML config):
+
+```YAML
+dnn:
+    layers: 4
+    activation: sigmoid
+```
 
 ```python
->>> from hyperparameter import param_scope
+cfg = yaml.load(f)
 
-# scoped parameter
->>> with param_scope(a=1) as ps: 
-...     ps.a == 1
-True
-
+with param_scope(**cfg):
+    dnn(x)
 ```
 
-When nested, the parameter modifications are limited to the inner scope:
+Advanced Usage
+--------------
+### Nested Scope
+
+When nested, the `param_scope` will manage parameter modifications :
 ``` python
 >>> with param_scope(a=1) as ps:
 ...     with param_scope(a=2) as ps2:
@@ -57,38 +76,34 @@ True
 
 ```
 
-The nested scope feature can be used to config the default behavior when used in functions:
+### Manage Parameters from CMD Line
+
+It is recommended to use three-layer configuration for complex programmes:
+
+1. `inline default values`;
+2. `config file`, which will override `inline default values`;
+3. `cmdline arguments` that override both `config file` and `inline default values`;
 
 ```python
-#change function behavior with scoped parameter:
-def dnn(input):
-    # receive parameter using param_scope
-    with param_scope() as ps:
-        output = linear(inputs)
-        return activation_fn(
-                    output, 
-                    activation=ps().activation("relu"))
+from hyperparameter import param_scope, auto_param
 
-# call function with default parameter
-dnn()
+@auto_param
+def main(a=0, b=1): # `inline default values`
+    print(a, b)
 
-# passing parameter using param_scope
-with param_scope(activation="sigmoid"): 
-    dnn()
-```
+if __name__ == "__main__":
+    import argparse
+    import json
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default=None)
+    parser.add_argument("-D", "--define", nargs="*", default=[], action="extend")
+    args = parser.parse_args()
 
-### Predefined Parameter
-```python
-@auto_param #convert keyword arguments into hyper parameters
-def model_train(X, y, learning_rate = 1.0, penalty = 'l1'):
-    LR = LogisticRegression(C=1.0, 
-        lr=local_param('learning_rate'), 
-        penalty=local_param('penalty'))
-    LR.fit(X, y)
-
-# specify predefined parameter using `param_scope`
-with param_scope('model_train.learning_rate=0.01'):
-    model_train(X, y)
+    with open(args.config) as f:
+        cfg = json.load(f) # read config file
+    with param_scope(**cfg): # scope for `config file`
+        with param_scope(*args.define): # scope for `cmdline args`
+            main()
 ```
 
 Examples
