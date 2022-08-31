@@ -37,4 +37,4 @@ source = ["hyperparameter"]
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --durations=5 --doctest-modules --doctest-glob=*.md"
-testpaths = ["hyperparameter/"]
+testpaths = ["hyperparameter/", "docs"]

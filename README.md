@@ -67,6 +67,7 @@ Advanced Usage
 
 When nested, the `param_scope` will manage parameter modifications :
 ``` python
+>>> from hyperparameter import param_scope
 >>> with param_scope(a=1) as ps:
 ...     with param_scope(a=2) as ps2:
 ...         ps2.a == 2 # True, a=2 for inner scope
