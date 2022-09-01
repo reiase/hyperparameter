@@ -14,4 +14,4 @@ __all__ = [
     "set_auto_param_callback",
 ]
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
