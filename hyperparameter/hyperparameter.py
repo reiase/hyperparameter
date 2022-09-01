@@ -254,7 +254,7 @@ class HyperParameter(dict):
                     v = vv
                 else:
                     v = HyperParameter(**v)
-            self[k] = v
+            self.put(k, v)
 
     def put(self, name: str, value: Any) -> None:
         """create or update the parameter with the given `name`
@@ -455,6 +455,11 @@ class param_scope(HyperParameter):
     {'a': 1, 'b': 2}
     {'a': 1, 'b': 3}
     {'a': 1, 'b': 2}
+
+    set config with object-style key:
+    >>> with param_scope(**{"a.b.c": [1,2]}) as ps:
+    ...     ps.a.b.c
+    [1, 2]
     """
 
     tls = threading.local()
