@@ -1,21 +1,29 @@
 **H**_yper_**P**_arameter_
 ===========================
 
-HyperParameter is a configuration framework designed for data scientists and machine learning enginners. HyperParameter provides the following features:
+HyperParameter is a pythonic configuration framework designed to simplify the massive configuration in complex applications. The key feature is a dynamic hierarchical parameter tree composited with scopes. HyperParameter is particularly well suited for machine learning experiments and related systems, which have many parameters and nested codes.
 
-1. `param_scope`, a context manager maintains a thread-safe global parameter configuration and manage parameter modifications with nested `param_scope`;
+Key Conceptions
+---------------
+
+1. `parameter tree`, a nested python dict with support for default values and object-style API;
+1. `param_scope`, a context manager for compositing the ` parameter tree` with nested `param_scope`;
 2. `auto_param`, a decorator allowing default parameters of a function or class to be supplied from `param_scope`;
 
-HyperParameter is particularly well suited for machine learning experiments and related systems, which have many parameters and nested codes.
 
 Quick Start
 -----------
 
-A quick example for defining model with HyperParameter:
+A quick example for defining a model with HyperParameter:
 
 ```python
-@auto_param()
+@auto_param
 def dnn(input, layers=3, activation="relu"):
+  	"""
+  	build a DNN model with the following configurations:
+  		- dnn.layers(default: 3)
+  		- dnn.activation(default: "relu")
+  	"""
     for i in range(layers):
         input = Linear(input)
         input = activation_fn(
@@ -24,13 +32,14 @@ def dnn(input, layers=3, activation="relu"):
         )
     return input
 
-# create a 3 layer dnn with relu activation
+# call dnn with default configuration 
+# and create a 3 layer dnn with relu activation
 dnn(x)
 
 # passing parameter using param_scope
-with param_scope(
-        "dnn.layers=4", 
-        "dnn.activation=sigmoid"):
+with param_scope(**{
+        "dnn.layers": 4, 
+        "dnn.activation": "sigmoid"}):
     # create a 4 layer dnn with sigmoid activation
     dnn()
 ```
@@ -46,35 +55,25 @@ with param_scope(backend="onnx"):
     inference(x)
 ```
 
-We can also load parameters from config file (e.g., YAML config):
-
-```YAML
-dnn:
-    layers: 4
-    activation: sigmoid
-```
-
-```python
-cfg = yaml.load(f)
-
-with param_scope(**cfg):
-    dnn(x)
-```
-
 Advanced Usage
 --------------
-### Nested Scope
+### Nested Scope and Configuration Composition
 
-When nested, the `param_scope` will manage parameter modifications :
+HyperParameter uses nested  `param_scope` for configuration composition :
+
 ``` python
->>> from hyperparameter import param_scope
->>> with param_scope(a=1) as ps:
-...     with param_scope(a=2) as ps2:
-...         ps2.a == 2 # True, a=2 for inner scope
-...     ps.a == 1      # True, a=1 for outer scope
-True
-True
-
+from hyperparameter import param_scope
+# on initialization, the parameter tree is empty: {}
+with param_scope(a=1) as ps:
+    # in the with context, the composited parameter tree is {"a": 1}
+    ps == {"a": 1}
+    with param_scope(a=2, b=3) as ps2:
+        # in the nested scope, the composited parameter tree is {"a": 2, "b": 3}
+        # param `b` is a new, and param `a` is overwrite by new value
+        ps2 == {"a": 2, "b": 3}
+    # when exit the inner scope, the modification of inner scope is cleaned up
+    # the composited parameter tree is {"a": 1}
+    ps == {"a": 1}
 ```
 
 ### Manage Parameters from CMD Line
