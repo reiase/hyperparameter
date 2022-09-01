@@ -543,7 +543,7 @@ def auto_param(name_or_func):
     ...     obj = foo(2)
     2 3 c None
 
-    >>> @auto_param('my')
+    >>> @auto_param('myns.foo.params')
     ... def foo(a, b=2, c='c', d=None):
     ...     print(a, b, c, d)
     >>> foo(1)
@@ -553,7 +553,7 @@ def auto_param(name_or_func):
     ...     foo(2)
     2 2 c None
 
-    >>> with param_scope('my.foo.b=3'):
+    >>> with param_scope('myns.foo.params.b=3'):
     ...     foo(2)
     2 3 c None
     """
@@ -568,7 +568,7 @@ def auto_param(name_or_func):
         if name_or_func is None:
             namespace = func.__name__
         else:
-            namespace = name_or_func + "." + func.__name__
+            namespace = name_or_func
 
         signature = inspect.signature(func)
         for k, v in signature.parameters.items():
