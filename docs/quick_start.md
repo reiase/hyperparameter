@@ -127,7 +127,7 @@ The hyperparameter object is a `Callable`, and will be turned into `safe-mode` w
 We can config the default behavior of a function with `param_scope`. Since the `param_scope` API is scoped and thread-safe, we can use it without too much warry.
 
 ```python
->>> with param_scope("foo.b=0"):
+>>> with param_scope(**{"foo.b": 0}):
 ...     foo(0)
 (0, 0, 2)
 

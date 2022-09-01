@@ -3,74 +3,72 @@ import json
 import threading
 from typing import Any, Callable, Dict, Set
 
-_read_tracker: Set[str] = set()
-_write_tracker: Set[str] = set()
+
+def _sorted_set(s):
+    retval = list(s)
+    retval.sort()
+    return retval
+
+
+class _Tracker:
+    """parameter access tracker
+
+    Examples
+    --------
+    >>> _tracker.clear()
+    >>> hp = HyperParameter(a=1, b={'c': 2})
+    >>> reads(), writes() # empty read/write trackers
+    ([], [])
+
+    Only access through accessor is tracked, raw access
+    to the parameter is not tracked.
+    >>> hp.a,  hp().b.c(3)
+    (1, 2)
+    >>> reads()
+    ['b.c']
+
+    >>> hp.a = 1
+    >>> hp().a.b.c = 1
+    >>> writes()
+    ['a.b.c']
+    """
+
+    def __init__(self) -> None:
+        self._get: Set[str] = set()
+        self._put: Set[str] = set()
+
+    def clear(self):
+        self._get.clear()
+        self._put.clear()
+
+    def read(self, key: str = None) -> Set[str]:
+        if key:
+            return self._get.add(key)
+        return _sorted_set(self._get)
+
+    def write(self, key: str = None) -> Set[str]:
+        if key:
+            return self._put.add(key)
+        return _sorted_set(self._put)
+
+    def all(self):
+        return _sorted_set(self._get.union(self._put))
+
+
+_tracker = _Tracker()
 
 
 def reads():
-    """Get hyperparameter read operations
-
-    Returns
-    -------
-    List[str]
-        hyperparameter read operations
-
-    Examples
-    --------
-    >>> _read_tracker.clear()
-    >>> hp = HyperParameter(a=1, b={'c': 2})
-    >>> reads() # no read operations
-    []
-
-    >>> hp.a    # accessing parameter directly
-    1
-    >>> reads() # not tracked
-    []
-
-    >>> hp().a() # accessing with accessor
-    1
-    >>> reads()  # tracked!
-    ['a']
-    """
-    retval = list(_read_tracker)
-    retval.sort()
-    return retval
+    return _tracker.read()
 
 
 def writes():
-    """Get hyperparameter write operations.
-
-    Returns
-    -------
-    List[str]
-        hyperparameter write operations
-
-    Examples
-    --------
-    >>> _write_tracker.clear()
-    >>> hp = HyperParameter(a=1, b={'c': 2})
-    >>> writes()
-    []
-
-    >>> hp.a = 1
-    >>> writes()
-    []
-
-    >>> hp().a = 1
-    >>> hp().a.b.c = 1
-    >>> writes()
-    ['a', 'a.b.c']
-    """
-    retval = list(_write_tracker)
-    retval.sort()
-    return retval
+    return _tracker.write()
 
 
 def all_params():
     """Get all tracked hyperparameters."""
-    retval = list(_read_tracker.union(_write_tracker))
-    retval.sort()
-    return retval
+    return _tracker.all()
 
 
 class _Accessor(dict):
@@ -101,7 +99,7 @@ class _Accessor(dict):
 
     def get_or_else(self, default: Any = None):
         """Get value for the parameter, or get default value if the parameter is not defined."""
-        _read_tracker.add(self._path)
+        _tracker.read(self._path)
         value = self._root.get(self._path)
         return default if isinstance(value, _Accessor) else value
 
@@ -119,7 +117,7 @@ class _Accessor(dict):
         if name in ["_path", "_root"]:
             return self.__setitem__(name, value)
         full_name = "{}.{}".format(self._path, name) if self._path is not None else name
-        _write_tracker.add(full_name)
+        _tracker.write(full_name)
         root = self._root
         root.put(full_name, value)
         return value
@@ -285,7 +283,7 @@ class HyperParameter(dict):
             if p not in obj or (not isinstance(obj[p], dict)):
                 obj[p] = HyperParameter()
             obj = obj[p]
-        obj[path[-1]] = safe_numeric(value)
+        obj[path[-1]] = value
 
     def get(self, name: str) -> Any:
         """get the parameter with the given name
@@ -575,7 +573,7 @@ def auto_param(name_or_func):
             if v.default != v.empty:
                 name = "{}.{}".format(namespace, k)
                 predef_kws[k] = name
-                _read_tracker.add(name)
+                _tracker.read(name)
                 predef_val[name] = v.default
 
         def inner(*arg, **kws):
@@ -594,16 +592,3 @@ def auto_param(name_or_func):
         return inner
 
     return wrapper
-
-
-def safe_numeric(value):
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except:
-            pass
-        try:
-            return float(value)
-        except:
-            pass
-    return value
