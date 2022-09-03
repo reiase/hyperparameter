@@ -68,28 +68,48 @@ def all_params():
 class _Accessor(dict):
     """Helper for accessing hyper-parameters."""
 
-    def __init__(self, root, path=None):
+    def __init__(self, root, path=None, suffix=None):
         super().__init__()
         self._root = root
         self._path = path
+        self._suffix = suffix
 
     def get_or_else(self, default: Any = None):
         """Get value for the parameter, or get default value if the parameter is not defined."""
+        if self._suffix is not None:
+            suffixes = self._suffix.replace(".", "#").split("#")
+            while suffixes:
+                suffix = "#".join(suffixes)
+                full_name = f"{self._path}@{suffix}"
+                value = self._root.get(full_name)
+                if not isinstance(value, _Accessor):
+                    _tracker.read(full_name)
+                    return value
+                suffixes.pop()
         _tracker.read(self._path)
         value = self._root.get(self._path)
         return default if isinstance(value, _Accessor) else value
 
     def __getattr__(self, name: str) -> Any:
         # _path and _root are not allowed as keys for user.
-        if name in ["_path", "_root"]:
+        if name in ["_path", "_root", "_suffix"]:
             return self[name]
-        return _Accessor(self._root, f"{self._path}.{name}" if self._path else name)
+        return _Accessor(
+            self._root,
+            f"{self._path}.{name}" if self._path else name,
+            suffix=self._suffix,
+        )
 
     def __setattr__(self, name: str, value: Any):
         # _path and _root are not allowed as keys for user.
-        if name in ["_path", "_root"]:
+        if name in ["_path", "_root", "_suffix"]:
             return self.__setitem__(name, value)
         full_name = f"{self._path}.{name}" if self._path is not None else name
+        full_name = (
+            f"{full_name}@{self._suffix.replace('.', '#')}"
+            if self._suffix is not None
+            else full_name
+        )
         _tracker.write(full_name)
         self._root.put(full_name, value)
 
@@ -339,7 +359,7 @@ class HyperParameter(dict):
         """
         self.put(name, value)
 
-    def __call__(self) -> Any:
+    def __call__(self, suffix=None) -> Any:
         """Return a parameter accessor.
 
         Returns
@@ -349,6 +369,7 @@ class HyperParameter(dict):
 
         Examples
         --------
+        1. default parameter for undefined parameter
         >>> cfg = HyperParameter(a=1, b = {'c':2, 'd': 3})
         >>> cfg().a('default')   # default value for simple parameter
         1
@@ -358,9 +379,21 @@ class HyperParameter(dict):
 
         >>> cfg().b.undefined('default')
         'default'
+
+        2. hyper-parameter with suffix
+        >>> cfg(suffix="ns").a("undefined")
+        1
+
+        >>> cfg(suffix="ns").a = 4
+        >>> cfg
+        {'a': 1, 'b': {'c': 2, 'd': 3}, 'a@ns': 4}
+
+        >>> cfg("ns.ns").a()
+        4
         """
 
-        return _Accessor(self, None)
+        suffix = dict.get(self, "#suffix#", None) if suffix is None else suffix
+        return _Accessor(self, suffix=suffix)
 
 
 class param_scope(HyperParameter):
