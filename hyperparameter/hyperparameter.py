@@ -149,7 +149,7 @@ class DynamicDispatch:
         self._index = index
 
     def __call__(self, *args, **kws) -> Any:
-        with param_scope(_index=self._index, _name=self._name):
+        with _param_scope(_index=self._index, _name=self._name):
             return self._func(*args, **kws)
 
     def __getattr__(self, name: str) -> Any:
@@ -396,7 +396,7 @@ class HyperParameter(dict):
         return _Accessor(self, suffix=suffix)
 
 
-class param_scope(HyperParameter):
+class _param_scope(HyperParameter):
     """A thread-safe context scope that manages hyperparameters
 
     Examples
@@ -435,8 +435,8 @@ class param_scope(HyperParameter):
 
     def __init__(self, *args, **kws):
         # Check if nested param_scope, if so, update current scope to include previous.
-        if hasattr(param_scope.tls, "history") and len(param_scope.tls.history) > 0:
-            self.update(param_scope.tls.history[-1])
+        if hasattr(_param_scope.tls, "history") and len(_param_scope.tls.history) > 0:
+            self.update(_param_scope.tls.history[-1])
         self.update(kws)
         for line in args:
             if "=" in line:
@@ -444,27 +444,47 @@ class param_scope(HyperParameter):
                 self.put(k, v)
 
     def __enter__(self):
-        if not hasattr(param_scope.tls, "history"):
-            param_scope.tls.history = []
-        param_scope.tls.history.append(self)
-        return param_scope.tls.history[-1]
+        if not hasattr(_param_scope.tls, "history"):
+            _param_scope.tls.history = []
+        _param_scope.tls.history.append(self)
+        return _param_scope.tls.history[-1]
 
     def __exit__(self, exc_type, exc_value, traceback):
-        param_scope.tls.history.pop()
+        _param_scope.tls.history.pop()
 
     @staticmethod
     def current():
-        if not hasattr(param_scope.tls, "history"):
-            param_scope.init()
-        return param_scope.tls.history[-1]
+        if not hasattr(_param_scope.tls, "history"):
+            _param_scope.init()
+        return _param_scope.tls.history[-1]
 
     @staticmethod
     def init(params=None):
         """init param_scope for a new thread."""
-        param_scope.tls.history = []
-        param_scope.tls.history.append(
+        _param_scope.tls.history = []
+        _param_scope.tls.history.append(
             params if params is not None else HyperParameter()
         )
+
+
+class _ParamScopeWrapper:
+    def __init__(self, index=None):
+        self._index = index
+
+    def __call__(self, *args, **kwargs):
+        retval = _param_scope(*args, **kwargs)
+        if self._index is not None:
+            retval._suffix = self._index
+        return retval
+
+    def __getitem__(self, index):
+        return _ParamScopeWrapper(index)
+
+    def current(self):
+        return _param_scope.current()
+
+
+param_scope = _ParamScopeWrapper()
 
 
 """
