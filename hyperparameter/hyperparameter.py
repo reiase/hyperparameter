@@ -1,5 +1,4 @@
 import inspect
-import json
 import threading
 from typing import Any, Callable, Dict, Set
 
@@ -16,19 +15,19 @@ class _Tracker:
     Examples
     --------
     >>> _tracker.clear()
-    >>> hp = HyperParameter(a=1, b={'c': 2})
+    >>> ps = param_scope(a=1, b={'c': 2})
     >>> reads(), writes() # empty read/write trackers
     ([], [])
 
     Only access through accessor is tracked, raw access
     to the parameter is not tracked.
-    >>> hp.a,  hp().b.c(3)
+    >>> ps.a,  ps().b.c(3)
     (1, 2)
     >>> reads()
     ['b.c']
 
-    >>> hp.a = 1
-    >>> hp().a.b.c = 1
+    >>> ps.a = 1
+    >>> ps().a.b.c = 1
     >>> writes()
     ['a.b.c']
     """
@@ -42,14 +41,10 @@ class _Tracker:
         self._put.clear()
 
     def read(self, key: str = None) -> Set[str]:
-        if key:
-            return self._get.add(key)
-        return _sorted_set(self._get)
+        return self._get.add(key) if key else _sorted_set(self._get)
 
     def write(self, key: str = None) -> Set[str]:
-        if key:
-            return self._put.add(key)
-        return _sorted_set(self._put)
+        return self._put.add(key) if key else _sorted_set(self._put)
 
     def all(self):
         return _sorted_set(self._get.union(self._put))
@@ -67,30 +62,11 @@ def writes():
 
 
 def all_params():
-    """Get all tracked hyperparameters."""
     return _tracker.all()
 
 
 class _Accessor(dict):
-    """Helper for accessing hyper-parameters.
-
-    When reading an undefined parameter, the accessor will:
-    1. return false in `if` statement:
-    >>> params = HyperParameter()
-    >>> if not params.undefined_int: print("parameter undefined")
-    parameter undefined
-
-    2. support default value for undefined parameter
-    >>> params = HyperParameter()
-    >>> params.undefined_int.get_or_else(10)
-    10
-
-    3. support to create nested parameter:
-    >>> params = HyperParameter()
-    >>> params.undefined_object.undefined_prop = 1
-    >>> print(params)
-    {'undefined_object': {'undefined_prop': 1}}
-    """
+    """Helper for accessing hyper-parameters."""
 
     def __init__(self, root, path=None):
         super().__init__()
@@ -107,31 +83,21 @@ class _Accessor(dict):
         # _path and _root are not allowed as keys for user.
         if name in ["_path", "_root"]:
             return self[name]
-
-        if self._path:
-            name = "{}.{}".format(self._path, name)
-        return _Accessor(self._root, name)
+        return _Accessor(self._root, f"{self._path}.{name}" if self._path else name)
 
     def __setattr__(self, name: str, value: Any):
         # _path and _root are not allowed as keys for user.
         if name in ["_path", "_root"]:
             return self.__setitem__(name, value)
-        full_name = "{}.{}".format(self._path, name) if self._path is not None else name
+        full_name = f"{self._path}.{name}" if self._path is not None else name
         _tracker.write(full_name)
-        root = self._root
-        root.put(full_name, value)
-        return value
-
-    def __str__(self):
-        return ""
+        self._root.put(full_name, value)
 
     def __bool__(self):
         return False
 
     def __call__(self, default: Any = None) -> Any:
-        """
-        shortcut for get_or_else
-        """
+        """shortcut for get_or_else"""
         return self.get_or_else(default)
 
     __nonzero__ = __bool__
@@ -152,19 +118,9 @@ class DynamicDispatch:
 
     >>> debug_print()
     (None, None, (), {})
-    >>> debug_print.a()
-    ('a', None, (), {})
-    >>> debug_print.a.b.c()
-    ('a.b.c', None, (), {})
-    >>> debug_print[1]()
-    (None, 1, (), {})
-    >>> debug_print[1,2]()
-    (None, (1, 2), (), {})
-    >>> debug_print(1,2, a=1,b=2)
-    (None, None, (1, 2), {'a': 1, 'b': 2})
 
-    >>> debug_print.a.b.c[1,2](1, 2, a=1, b=2)
-    ('a.b.c', (1, 2), (1, 2), {'a': 1, 'b': 2})
+    >>> debug_print.a.b.c[1,2](3, 4, a=5, b=6)
+    ('a.b.c', (1, 2), (3, 4), {'a': 5, 'b': 6})
     """
 
     def __init__(self, func: Callable, name=None, index=None):
@@ -178,7 +134,7 @@ class DynamicDispatch:
 
     def __getattr__(self, name: str) -> Any:
         if self._name is not None:
-            name = "{}.{}".format(self._name, name)
+            name = f"{self._name}.{name}"
         return dynamic_dispatch(self._func, name, self._index)
 
     def __getitem__(self, index):
@@ -406,24 +362,6 @@ class HyperParameter(dict):
 
         return _Accessor(self, None)
 
-    @staticmethod
-    def loads(s):
-        """Load parameters from JSON string, similar as `json.loads`.
-
-        Examples
-        --------
-        >>> hp = HyperParameter.loads('{"a": 1, "b": {"c": 2}}')
-        >>> hp.a
-        1
-        """
-        obj = json.loads(s)
-        return HyperParameter(**obj)
-
-    @staticmethod
-    def load(f):
-        """Load parameters from json file, similar as `json.load`."""
-        return HyperParameter.load(f.read())
-
 
 class param_scope(HyperParameter):
     """A thread-safe context scope that manages hyperparameters
@@ -489,9 +427,7 @@ class param_scope(HyperParameter):
 
     @staticmethod
     def init(params=None):
-        """
-        init param_scope for a new thread.
-        """
+        """init param_scope for a new thread."""
         param_scope.tls.history = []
         param_scope.tls.history.append(
             params if params is not None else HyperParameter()
@@ -510,9 +446,11 @@ def set_auto_param_callback(func: Callable[[Dict[str, Any]], None]):
     _callback = func
 
 
+_auto_param_tracker: Set[str] = set()
+
+
 def auto_param(name_or_func):
-    """
-    Convert keyword arguments into hyperparameters
+    """Convert keyword arguments into hyperparameters
 
     Examples
     --------
@@ -547,13 +485,14 @@ def auto_param(name_or_func):
     >>> foo(1)
     1 2 c None
 
-    >>> with param_scope('foo.b=3'):
-    ...     foo(2)
-    2 2 c None
-
     >>> with param_scope('myns.foo.params.b=3'):
     ...     foo(2)
     2 3 c None
+
+    >>> defined = list(auto_param.defined)
+    >>> defined.sort()
+    >>> defined
+    ['foo.b', 'foo.c', 'foo.d', 'myns.foo.params.b', 'myns.foo.params.c', 'myns.foo.params.d']
     """
 
     if callable(name_or_func):
@@ -574,6 +513,7 @@ def auto_param(name_or_func):
                 name = "{}.{}".format(namespace, k)
                 predef_kws[k] = name
                 _tracker.read(name)
+                _auto_param_tracker.add(name)
                 predef_val[name] = v.default
 
         def inner(*arg, **kws):
@@ -592,3 +532,6 @@ def auto_param(name_or_func):
         return inner
 
     return wrapper
+
+
+auto_param.defined = _auto_param_tracker
