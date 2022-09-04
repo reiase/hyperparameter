@@ -176,8 +176,8 @@ with param_scope["wdmodel"]():
 
 ```python
 with param_scope["wdmodel"](**{
-    "myns.rec.rank.dropout.ratio@wdmodel#layer1": 0.6,
-    "myns.rec.rank.dropout.ratio@wdmodel#layer2": 0.7,
+    "myns.rec.rank.dropout.ratio@wdmodel.layer1": 0.6,
+    "myns.rec.rank.dropout.ratio@wdmodel.layer2": 0.7,
 }):
     model = WideAndDeepModel()
 ```
