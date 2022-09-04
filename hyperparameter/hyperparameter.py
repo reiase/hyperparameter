@@ -68,16 +68,17 @@ def all_params():
 class _Accessor(dict):
     """Helper for accessing hyper-parameters."""
 
-    def __init__(self, root, path=None, suffix=None):
+    def __init__(self, root, path=None, scope=None):
         super().__init__()
         self._root = root
         self._path = path
-        self._suffix = suffix
+        self._scope = scope
 
     def get_or_else(self, default: Any = None):
         """Get value for the parameter, or get default value if the parameter is not defined."""
-        if self._suffix is not None:
-            suffixes = self._suffix.replace(".", "#").split("#")
+        if self._scope is not None:
+            suffixes = self._scope.replace(".", "#").split("#")
+            _tracker.read(f"{self._path}@{self._scope}")
             while suffixes:
                 suffix = "#".join(suffixes)
                 full_name = f"{self._path}@{suffix}"
@@ -92,22 +93,22 @@ class _Accessor(dict):
 
     def __getattr__(self, name: str) -> Any:
         # _path and _root are not allowed as keys for user.
-        if name in ["_path", "_root", "_suffix"]:
+        if name in ["_path", "_root", "_scope"]:
             return self[name]
         return _Accessor(
             self._root,
             f"{self._path}.{name}" if self._path else name,
-            suffix=self._suffix,
+            scope=self._scope,
         )
 
     def __setattr__(self, name: str, value: Any):
         # _path and _root are not allowed as keys for user.
-        if name in ["_path", "_root", "_suffix"]:
+        if name in ["_path", "_root", "_scope"]:
             return self.__setitem__(name, value)
         full_name = f"{self._path}.{name}" if self._path is not None else name
         full_name = (
-            f"{full_name}@{self._suffix.replace('.', '#')}"
-            if self._suffix is not None
+            f"{full_name}@{self._scope.replace('.', '#')}"
+            if self._scope is not None
             else full_name
         )
         _tracker.write(full_name)
@@ -175,7 +176,7 @@ def dynamic_dispatch(func, name=None, index=None):
 
 
 class HyperParameter(dict):
-    """HyperParameter is an extended dict with features for better parameter management.
+    """HyperParameter is an extended dict designed for parameter storage.
 
     **create and access hyper-parameters**
     ======================================
@@ -242,15 +243,17 @@ class HyperParameter(dict):
 
         Examples
         --------
+
+        1. put parameter with simple name
         >>> cfg = HyperParameter()
         >>> cfg.put('param1', 1)
+        >>> cfg
+        {'param1': 1}
+
+        2. put parameter with object-style name
         >>> cfg.put('obj1.propA', 'A')
-
-        >>> cfg.param1
-        1
-
-        >>> cfg.obj1.propA
-        'A'
+        >>> cfg
+        {'param1': 1, 'obj1': {'propA': 'A'}}
         """
 
         path = name.split(".")
@@ -307,60 +310,24 @@ class HyperParameter(dict):
         return dict.__setitem__(self, key, value)
 
     def __getattr__(self, name: str) -> Any:
-        """read parameter with object-style api
-
-        Parameters
-        ----------
-        name : str
-            parameter name
-
-        Returns
-        -------
-        Any
-            parameter value
-
-        Examples
-        --------
-        for simple parameters:
-        >>> hp = HyperParameter(a=1, b = {'c':2, 'd': 3})
-        >>> hp.a
-        1
-
-        for nested parameters:
-        >>> hp.b.c
-        2
-
-        >>> getattr(hp, 'b.c')
-        2
-        """
         return self.get(name)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """create/update parameter with object-style api
+        self.put(name, value)
+
+    def __call__(self, scope=None) -> Any:
+        """Return a parameter accessor.
+
+        This is the suggested method for accessing parameter, it supports the following features:
+
+        1. default value for undefined parameter;
+        2. parameter access with named scope;
+        3. access tracking that records which parameter is accessed;
 
         Parameters
         ----------
-        name : str
-            parameter name
-        value : Any
-            parameter value
-
-        Examples
-        --------
-        >>> hp = HyperParameter(a=1, b = {'c':2, 'd': 3})
-        >>> hp.e = 4
-
-        >>> hp['e']
-        4
-
-        >>> setattr(hp, 'A.B.C', 1)
-        >>> hp.A.B.C
-        1
-        """
-        self.put(name, value)
-
-    def __call__(self, suffix=None) -> Any:
-        """Return a parameter accessor.
+        scope : str
+            scope name, in which the accessor looks for the parameters
 
         Returns
         -------
@@ -380,11 +347,11 @@ class HyperParameter(dict):
         >>> cfg().b.undefined('default')
         'default'
 
-        2. hyper-parameter with suffix
-        >>> cfg(suffix="ns").a("undefined")
+        2. hyper-parameter with scope
+        >>> cfg(scope="ns").a("undefined")
         1
 
-        >>> cfg(suffix="ns").a = 4
+        >>> cfg(scope="ns").a = 4
         >>> cfg
         {'a': 1, 'b': {'c': 2, 'd': 3}, 'a@ns': 4}
 
@@ -392,8 +359,7 @@ class HyperParameter(dict):
         4
         """
 
-        suffix = dict.get(self, "#suffix#", None) if suffix is None else suffix
-        return _Accessor(self, suffix=suffix)
+        return _Accessor(self, scope=scope)
 
 
 class _param_scope(HyperParameter):
@@ -452,7 +418,7 @@ class _param_scope(HyperParameter):
     def __exit__(self, exc_type, exc_value, traceback):
         _param_scope.tls.history.pop()
 
-    def __call__(self, suffix=None) -> Any:
+    def __call__(self, scope=None) -> Any:
         """
         >>> @auto_param('myns.foo.params')
         ... def foo(a, b=2, c='c', d=None):
@@ -476,8 +442,8 @@ class _param_scope(HyperParameter):
         ps = {'myns': {'foo': {'params': {'b@sec1#sec2': 3}}}}
         1 3 c None
         """
-        suffix = dict.get(self, "_suffix", None) if suffix is None else suffix
-        return _Accessor(self, suffix=suffix)
+        scope = dict.get(self, "_scope", None) if scope is None else scope
+        return _Accessor(self, scope=scope)
 
     @staticmethod
     def current():
@@ -501,10 +467,10 @@ class _ParamScopeWrapper:
     def __call__(self, *args, **kwargs):
         retval = _param_scope(*args, **kwargs)
         if self._index is not None:
-            if dict.get(retval, "_suffix", None) is not None:
-                retval._suffix = f"{retval._suffix}#{self._index}"
+            if dict.get(retval, "_scope", None) is not None:
+                retval._scope = f"{retval._scope}#{self._index}"
             else:
-                retval._suffix = self._index
+                retval._scope = self._index
         return retval
 
     def __getitem__(self, index):
