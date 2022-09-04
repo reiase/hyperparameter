@@ -452,6 +452,33 @@ class _param_scope(HyperParameter):
     def __exit__(self, exc_type, exc_value, traceback):
         _param_scope.tls.history.pop()
 
+    def __call__(self, suffix=None) -> Any:
+        """
+        >>> @auto_param('myns.foo.params')
+        ... def foo(a, b=2, c='c', d=None):
+        ...     print(a, b, c, d)
+
+        >>> def test():
+        ...     with param_scope["sec1"]():
+        ...         with param_scope["sec2"]():
+        ...             foo(1)
+
+        >>> test()
+        1 2 c None
+
+        >>> with param_scope(**{"myns.foo.params.b": 1}):
+        ...     test()
+        1 1 c None
+
+        >>> with param_scope(**{"myns.foo.params.b@sec1#sec2": 3}) as ps:
+        ...     print(f"ps = {ps}")
+        ...     test()
+        ps = {'myns': {'foo': {'params': {'b@sec1#sec2': 3}}}}
+        1 3 c None
+        """
+        suffix = dict.get(self, "_suffix", None) if suffix is None else suffix
+        return _Accessor(self, suffix=suffix)
+
     @staticmethod
     def current():
         if not hasattr(_param_scope.tls, "history"):
@@ -474,7 +501,10 @@ class _ParamScopeWrapper:
     def __call__(self, *args, **kwargs):
         retval = _param_scope(*args, **kwargs)
         if self._index is not None:
-            retval._suffix = self._index
+            if dict.get(retval, "_suffix", None) is not None:
+                retval._suffix = f"{retval._suffix}#{self._index}"
+            else:
+                retval._suffix = self._index
         return retval
 
     def __getitem__(self, index):
@@ -574,7 +604,7 @@ def auto_param(name_or_func):
                 local_params = {}
                 for k, v in predef_kws.items():
                     if getattr(hp(), v).get_or_else(None) is not None and k not in kws:
-                        kws[k] = hp.get(v)
+                        kws[k] = getattr(hp(), v).get_or_else(None)
                         local_params[v] = hp.get(v)
                     else:
                         local_params[v] = predef_val[v]
