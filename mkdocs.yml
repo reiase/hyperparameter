@@ -24,10 +24,17 @@ plugins:
 nav:
   - Home: index.md
   - Quick Start: quick_start.md
+  - Best Practice: structured_parameter.md
   - Reference: reference.md
 
 watch:
   - hyperparameter
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      use_pygments: true
+  - pymdownx.superfences 
 
 extra:
   alternate:
