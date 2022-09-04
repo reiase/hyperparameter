@@ -77,10 +77,10 @@ class _Accessor(dict):
     def get_or_else(self, default: Any = None):
         """Get value for the parameter, or get default value if the parameter is not defined."""
         if self._scope is not None:
-            suffixes = self._scope.replace(".", "#").split("#")
+            suffixes = self._scope.split(".")
             _tracker.read(f"{self._path}@{self._scope}")
             while suffixes:
-                suffix = "#".join(suffixes)
+                suffix = ".".join(suffixes)
                 full_name = f"{self._path}@{suffix}"
                 value = self._root.get(full_name)
                 if not isinstance(value, _Accessor):
@@ -107,9 +107,7 @@ class _Accessor(dict):
             return self.__setitem__(name, value)
         full_name = f"{self._path}.{name}" if self._path is not None else name
         full_name = (
-            f"{full_name}@{self._scope.replace('.', '#')}"
-            if self._scope is not None
-            else full_name
+            f"{full_name}@{self._scope}" if self._scope is not None else full_name
         )
         _tracker.write(full_name)
         self._root.put(full_name, value)
@@ -256,13 +254,19 @@ class HyperParameter(dict):
         {'param1': 1, 'obj1': {'propA': 'A'}}
         """
 
-        path = name.split(".")
+        if "@" in name:
+            name, scope = name.split("@", 1)
+            path = name.split(".")
+            scope = f"@{scope}"
+        else:
+            path = name.split(".")
+            scope = ""
         obj = self
         for p in path[:-1]:
             if p not in obj or (not isinstance(obj[p], dict)):
                 obj[p] = HyperParameter()
             obj = obj[p]
-        obj[path[-1]] = value
+        obj[path[-1] + scope] = value
 
     def get(self, name: str) -> Any:
         """get the parameter with the given name
@@ -286,13 +290,20 @@ class HyperParameter(dict):
         2
         """
 
-        path = name.split(".")
+        if "@" in name:
+            name, scope = name.split("@", 1)
+            path = name.split(".")
+            scope = f"@{scope}"
+        else:
+            path = name.split(".")
+            scope = ""
         obj = self
         for p in path[:-1]:
             if p not in obj:
                 return _Accessor(obj, p)
             obj = obj[p]
-        return obj[path[-1]] if path[-1] in obj else _Accessor(self, name)
+        name_with_scope = path[-1] + scope
+        return obj[name_with_scope] if name_with_scope in obj else _Accessor(self, name)
 
     def __setitem__(self, key: str, value: Any) -> None:
         """set value and convert the value into `HyperParameter` if necessary
@@ -436,10 +447,10 @@ class _param_scope(HyperParameter):
         ...     test()
         1 1 c None
 
-        >>> with param_scope(**{"myns.foo.params.b@sec1#sec2": 3}) as ps:
+        >>> with param_scope(**{"myns.foo.params.b@sec1.sec2": 3}) as ps:
         ...     print(f"ps = {ps}")
         ...     test()
-        ps = {'myns': {'foo': {'params': {'b@sec1#sec2': 3}}}}
+        ps = {'myns': {'foo': {'params': {'b@sec1.sec2': 3}}}}
         1 3 c None
         """
         scope = dict.get(self, "_scope", None) if scope is None else scope
@@ -468,7 +479,7 @@ class _ParamScopeWrapper:
         retval = _param_scope(*args, **kwargs)
         if self._index is not None:
             if dict.get(retval, "_scope", None) is not None:
-                retval._scope = f"{retval._scope}#{self._index}"
+                retval._scope = f"{retval._scope}.{self._index}"
             else:
                 retval._scope = self._index
         return retval
