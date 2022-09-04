@@ -432,8 +432,8 @@ class _param_scope(HyperParameter):
     def __call__(self, scope=None) -> Any:
         """
         >>> @auto_param('myns.foo.params')
-        ... def foo(a, b=2, c='c', d=None):
-        ...     print(a, b, c, d)
+        ... def foo(a, b=2):
+        ...     print(f"a={a}, b={b}")
 
         >>> def test():
         ...     with param_scope["sec1"]():
@@ -441,17 +441,34 @@ class _param_scope(HyperParameter):
         ...             foo(1)
 
         >>> test()
-        1 2 c None
+        a=1, b=2
 
         >>> with param_scope(**{"myns.foo.params.b": 1}):
         ...     test()
-        1 1 c None
+        a=1, b=1
 
         >>> with param_scope(**{"myns.foo.params.b@sec1.sec2": 3}) as ps:
         ...     print(f"ps = {ps}")
         ...     test()
         ps = {'myns': {'foo': {'params': {'b@sec1.sec2': 3}}}}
-        1 3 c None
+        a=1, b=3
+
+        >>> with param_scope(**{
+        ...         "myns.foo.params.b@sec1": 4,
+        ...         }) as ps:
+        ...     print(f"ps = {ps}")
+        ...     test()
+        ps = {'myns': {'foo': {'params': {'b@sec1': 4}}}}
+        a=1, b=4
+
+        >>> with param_scope(**{
+        ...         "myns.foo.params.b@sec1": 4,
+        ...         "myns.foo.params.b@sec1.sec2": 3,
+        ...         }) as ps:
+        ...     print(f"ps = {ps}")
+        ...     test()
+        ps = {'myns': {'foo': {'params': {'b@sec1': 4, 'b@sec1.sec2': 3}}}}
+        a=1, b=3
         """
         scope = dict.get(self, "_scope", None) if scope is None else scope
         return _Accessor(self, scope=scope)
