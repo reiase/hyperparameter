@@ -1,6 +1,12 @@
 **H**_yper_**P**_arameter_
 ===========================
 
+<h3 align="center">
+  <p style="text-align: center;">
+  <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
+  </p>
+</h3>
+
 HyperParameter is a pythonic configuration framework designed to simplify the massive configuration in complex applications. The key feature is a dynamic hierarchical parameter tree composited with scopes. HyperParameter is particularly well suited for machine learning experiments and related systems, which have many parameters and nested codes.
 
 Key Conceptions
