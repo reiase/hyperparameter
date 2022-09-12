@@ -56,9 +56,10 @@ with param_scope(**study.best_params):
     print(f"{study.best_params} => {objective()}")
 ```
 
-- hyperparameters for nested functions:
+Optimization on Nested Functions
+--------------------------------
 
-For complex problems with nested functions:
+`param_scope` and `auto_param` also support complex problems with nested functions:
 
 ```python
 @auto_param
