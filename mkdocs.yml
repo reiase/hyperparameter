@@ -11,6 +11,13 @@ plugins:
         en: "English"
         zh: "中文"
       default_language: "en"
+      translate_nav:
+        zh:
+          home: 首页
+          quick: 快速开始
+        en:
+          home: Home
+          quick: Quick Start
   - mkdocstrings:
       handlers:
         python:
@@ -22,9 +29,13 @@ plugins:
             show_submodules: no
 
 nav:
-  - Home: index.md
-  - Quick Start: quick_start.md
+  - home: index.md
+  - home: index.zh.md
+  - quick: quick_start.md
   - Best Practice: structured_parameter.md
+  - Examples:
+    - Hyperparameter Optimization: examples/optimization.md
+    - 参数优化: examples/optimization.zh.md
   - Reference: reference.md
 
 watch:
