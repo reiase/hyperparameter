@@ -32,6 +32,7 @@ nav:
   - home: index.md
   - home: index.zh.md
   - quick: quick_start.md
+  - quick: quick_start.zh.md
   - Best Practice: structured_parameter.md
   - Examples:
     - Hyperparameter Optimization: examples/optimization.md
