@@ -1,8 +1,8 @@
 import io
 import os
 import sys
-from hyperparameter import param_scope
 
+from hyperparameter import param_scope
 
 _usage = """\
 usage: python -m hparam [-o option] [-m module | pyfile] [arg] ...
@@ -13,7 +13,6 @@ Examples:
 """
 
 
-
 def runscript(filename):
     # The script has to run in __main__ namespace (or imports from
     # __main__ will break).
@@ -21,6 +20,7 @@ def runscript(filename):
     # So we clear up the __main__ and set several special variables
     # (this gets rid of pdb's globals and cleans old variables on restarts).
     import __main__
+
     # import ipdb; ipdb.set_trace()
 
     def canonic(filename):
@@ -34,12 +34,13 @@ def runscript(filename):
         if filename == "<" + filename[1:-1] + ">":
             return filename
         import os
+
         canonic = os.path.abspath(filename)
         canonic = os.path.normcase(canonic)
         return canonic
 
     builtins = __builtins__
-    # __main__.__dict__.clear()
+    __main__.__dict__.clear()
     __main__.__dict__.update(
         {
             "__name__": "__main__",
@@ -49,10 +50,13 @@ def runscript(filename):
     )
 
     import io
+
     with io.open_code(filename) as fp:
-        statement = "exec(compile(%r, %r, 'exec'))" % (fp.read(), canonic(filename))
-    
-    exec(statement)
+        statement = "exec(compile(%r, %r, 'exec'))" % (fp.read(), (filename))
+    import linecache
+
+    linecache.checkcache()
+    exec(compile(statement, "<string>", "exec"), __main__.__dict__, __main__.__dict__)
 
 
 def main():
@@ -80,7 +84,6 @@ def main():
     print(f"start with hyperparameters: {options}, and args: {args}")
     with param_scope(*options):
         runscript(mainpyfile)
-    
 
 
 if __name__ == "__main__":
