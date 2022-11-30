@@ -75,7 +75,7 @@ class Suggester:
 
 
 def suggest_from(callback: Callable) -> Suggester:
-    """ Suggest parameter from a callback function
+    """Suggest parameter from a callback function
 
     Examples
     --------
@@ -104,6 +104,7 @@ def _unwrap_suggester(func):
         if isinstance(retval, Suggester):
             return retval()
         return retval
+
     return wrapper
 
 
@@ -252,9 +253,11 @@ class LazyDispatch:
     def __getitem__(self, index):
         return lazy_dispatch(self._obj, self._name, index)
 
+
 def lazy_dispatch(obj, name=None, index=None):
     """Wraps an object for lazy dispatch"""
     return LazyDispatch(obj, name, index)
+
 
 class HyperParameter(dict):
     """HyperParameter is an extended dict designed for parameter storage.
@@ -489,6 +492,13 @@ class _param_scope(HyperParameter):
     >>> with param_scope(**{"a.b.c": [1,2]}) as ps:
     ...     ps.a.b.c
     [1, 2]
+
+    access parameter with `param_scope`
+    >>> with param_scope(x=1):
+    ...     param_scope.x(2)
+    ...     param_scope.y(2)
+    1
+    2
     """
 
     tls = threading.local()
@@ -590,9 +600,11 @@ class _ParamScopeWrapper:
     def current(self):
         return _param_scope.current()
 
+    def __getattr__(self, name):
+        return _param_scope()().__getattr__(name)
+
 
 param_scope = _ParamScopeWrapper()
-
 
 """
 Tracker callback for auto_param
