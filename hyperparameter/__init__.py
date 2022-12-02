@@ -25,4 +25,4 @@ __all__ = [
     "all_params",
 ]
 
-VERSION = "0.4.1"
+VERSION = "0.4.2"

@@ -1,4 +1,3 @@
-import io
 import os
 import sys
 
@@ -62,13 +61,16 @@ def runscript(filename):
 def main():
     import getopt
 
-    opts, args = getopt.getopt(sys.argv[1:], "ho:", ["help", "option="])
+    opts, args = getopt.getopt(sys.argv[1:], "ho:p:vc:", ["help", "option="])
 
     if not args:
         print(_usage)
         sys.exit(2)
 
     options = []
+    cfgfile = ".hparams"
+    profile = None
+    verbose = False
 
     for opt, optarg in opts:
         if opt in ["-h", "--help"]:
@@ -76,14 +78,56 @@ def main():
             sys.exit()
         elif opt in ["-o", "--option"]:
             options.append(optarg)
+        elif opt in ["-c", "--config"]:
+            cfgfile = optarg
+        elif opt in ["-p", "--profile"]:
+            profile = optarg
+        elif opt in ["-v", "--verbose"]:
+            verbose = True
 
     sys.argv[:] = args
     mainpyfile = args[0]
     mainpyfile = os.path.realpath(mainpyfile)
     sys.path[0] = os.path.dirname(mainpyfile)
-    print(f"start with hyperparameters: {options}, and args: {args}")
-    with param_scope(*options):
-        runscript(mainpyfile)
+
+    rawcfg = {}
+    if os.path.exists(cfgfile):
+        import hyperparameter.loader
+
+        rawcfg = hyperparameter.loader.load(cfgfile)
+    else:
+        cfgfile = None
+    if profile is not None:
+        if profile in rawcfg:
+            cfg = rawcfg[profile]
+        else:
+            raise Exception(f"profile: {profile} not found in {cfgfile}")
+    else:
+        cfg = rawcfg
+    if verbose:
+        print(
+            f"start with hyperparameters from config file: {cfgfile} with profile: {profile}"
+        )
+        print("==== start verbose ====")
+        print(f"  parameters from config file:")
+        print(f"  \t{hyperparameter.loader.dumps(rawcfg)}".replace("\n", "\n  \t"))
+        print(f"  hyperparameter options: {options}")
+        print(f"  command line args: {args}")
+
+    with param_scope(**cfg):
+        with param_scope(*options) as ps:
+            if verbose:
+                import json
+
+                print("  hyperparameters in use:")
+                config_inuse = json.loads(json.dumps(ps))
+                print(
+                    f"  \t{hyperparameter.loader.dumps(config_inuse)}".replace(
+                        "\n", "\n  \t"
+                    )
+                )
+                print("---- end verbose ----")
+            runscript(mainpyfile)
 
 
 if __name__ == "__main__":
