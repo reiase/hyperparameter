@@ -6,6 +6,10 @@ from .tracker import _tracker
 from .tune import unwrap_suggester
 
 
+class NocopyDict(dict):
+    pass
+
+
 class _Accessor(dict):
     """Helper for accessing hyper-parameters."""
 
@@ -162,7 +166,7 @@ class HyperParameter(dict):
 
     def update(self, kws):
         for k, v in kws.items():
-            if isinstance(v, dict):
+            if isinstance(v, dict) and not isinstance(v, NocopyDict):
                 if k in self and isinstance(self[k], dict):
                     vv = HyperParameter(**self[k])
                     vv.update(v)
@@ -258,7 +262,7 @@ class HyperParameter(dict):
             parameter value
         """
 
-        if isinstance(value, dict):
+        if isinstance(value, dict) and not isinstance(value, NocopyDict):
             return dict.__setitem__(self, key, HyperParameter(**value))
         return dict.__setitem__(self, key, value)
 
