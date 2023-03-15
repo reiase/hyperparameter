@@ -1,7 +1,6 @@
 from .hyperparameter import (
     auto_param,
     dynamic_dispatch,
-    NocopyDict,
     HyperParameter,
     param_scope,
     set_auto_param_callback,
@@ -11,7 +10,6 @@ from .tune import suggest_from, lazy_dispatch
 
 __all__ = [
     # base class for hyper-parameters
-    "NocopyDict",
     "HyperParameter",
     # api for parameter configuration
     "auto_param",
