@@ -1,4 +1,4 @@
-from .hyperparameter import (
+from .old import (
     auto_param,
     dynamic_dispatch,
     HyperParameter,
@@ -25,4 +25,4 @@ __all__ = [
     "all_params",
 ]
 
-VERSION = "0.4.3"
+VERSION = "0.5.0"
