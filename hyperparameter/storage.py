@@ -18,6 +18,9 @@ class Storage:
 
     def put(self, name: str, value: Any) -> None:
         return None
+    
+    def __iter__(self):
+        pass
 
 
 class KVStorage(Storage):
@@ -30,6 +33,9 @@ class KVStorage(Storage):
         self._parent = parent
         self._accessor = accessor
         super().__init__()
+        
+    def __iter__(self):
+        return iter(self._storage.items())
 
     def child(self) -> "Storage":
         obj = KVStorage(self, self._accessor)

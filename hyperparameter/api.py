@@ -7,45 +7,31 @@ from hyperparameter.storage import KVStorage
 
 
 class _DynamicDispatch:
-    """Dynamic call dispatcher
+    """Dynamic call dispatcher"""
 
-    Examples
-    --------
+    __slots__ = ("_func", "_name")
 
-    >>> @_dynamic_dispatch
-    ... def debug_print(*args, **kws):
-    ...     return _HyperParameter(**kws)
-    """
-
-    __slots__ = ("_func", "_name", "_index")
-
-    def __get__(self):
+    def __get__(self):  # a trick that let doctest descover this class
         pass
 
-    def __init__(self, func: Callable, name=None, index=None):
+    def __init__(self, func: Callable, name=None):
         self._func = func
         self._name = name
-        self._index = index
 
     def __call__(self, *args, **kws) -> Any:
-        if self._name is None and self._index is None:
+        if self._name is None:
             return self._func(*args, **kws)
-        target = self._func()
-        if self._name is not None:
-            target = target.__getattr__(self._name)
-        if self._index is not None:
-            target = target.__getitem__(self._index)
-        return target(*args, **kws)
+        return self._func().__getattr__(self._name)(*args, **kws)
 
     def __repr__(self) -> str:
         """
         >>> @_dynamic_dispatch
         ... def debug_print(*args, **kws):
         ...     return _HyperParameter(**kws)
-        >>> debug_print.a.b.c["d"] # doctest: +ELLIPSIS
-        <a.b.c.d in <...._HyperParameter object at ...>>
+        >>> debug_print.a.b.c # doctest: +ELLIPSIS
+        <a.b.c in <...._HyperParameter object at ...>>
         """
-        return repr(self._func().__getattr__(self._name).__getitem__(self._index))
+        return repr(self._func().__getattr__(self._name))
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -67,7 +53,7 @@ class _DynamicDispatch:
         if self._name is not None:
             self._name = f"{self._name}.{name}"
             return self
-        return _dynamic_dispatch(self._func, name, self._index)
+        return _dynamic_dispatch(self._func, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         """
@@ -82,33 +68,16 @@ class _DynamicDispatch:
         if name in self.__slots__:
             return self.__dict__.__setitem__(name, value)
         target = self._func().__getattr__(self._name)
-        if self._index is not None:
-            target = self.__getitem__(self._index)
         target.__setattr__(name, value)
 
-    def __getitem__(self, index):
-        return _dynamic_dispatch(self._func, self._name, index)
-
-    def __setitem__(self, key, val):
-        """
-        >>> hp = _HyperParameter()
-        >>> @_dynamic_dispatch
-        ... def debug_print():
-        ...     return hp
-        >>> debug_print.a.b["c"] = 1
-        >>> hp.storage().storage()
-        {'a.b.c': 1}
-        """
-        target = self._func().__getattr__(self._name)
-        if self._index is not None:
-            target = self.__getitem__(self._index)
-        target.__setattr__(key, val)
+    def __or__(self, default: Any) -> Any:
+        return _ParamAccessor(self._func(), self._name) | default
 
 
-def _dynamic_dispatch(func, name=None, index=None):
-    """Wraps function with a class to allow __getitem__ and __getattr__ on a function."""
+def _dynamic_dispatch(func, name=None):
+    """Wraps function with a class to allow __getattr__ on a function."""
     clz = type(func.__name__, (_DynamicDispatch, object), dict(__doc__=func.__doc__))
-    return clz(func, name, index)
+    return clz(func, name)
 
 
 class _ParamAccessor:
@@ -149,15 +118,14 @@ class _ParamAccessor:
     def __getattr__(self, name: str) -> Any:
         if name in ("_root", "_name"):
             return self.__dict__[name]
-        return _ParamAccessor(
-            self._root, f"{self._name}.{name}" if self._name else name
-        )
+        name = f"{self._name}.{name}" if self._name else name
+        return _ParamAccessor(self._root, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name in ("_root", "_name"):
             return self.__dict__.__setitem__(name, value)
-        full_name = f"{self._name}.{name}" if self._name is not None else name
-        self._root.put(full_name, value)
+        name = f"{self._name}.{name}" if self._name else name
+        self._root.put(name, value)
 
     def __repr__(self) -> str:
         return f"<{self._name} in {repr(self._root)}>"
@@ -264,6 +232,9 @@ class _HyperParameter:
         if name in self.__dict__:
             return self.__dict__.__setitem__(name, value)
         self.put(name, value)
+        
+    def __iter__(self):
+        return self._storage.__iter__()
 
     def __call__(self) -> Any:
         return _ParamAccessor(self)
@@ -275,20 +246,32 @@ class param_scope(_HyperParameter):
 
     Examples
     --------
-    create a scope for hyperparameters
-    >>> with param_scope(**{'a': 1, 'b': 2}) as ps:
-    ...     print(ps.a())
-    1
+    **create new `param_scope`**
+    >>> ps = param_scope(a="a", b="b")           # create from call arguments
+    >>> ps = param_scope(**{"a": "a", "b": "b"}) # create from a dict
 
-    read parameter from param_scope in a function
+    **read parameters from `param_scope`**
+    >>> ps.a() # read parameter
+    'a'
+    >>> ps.c("c")  # read parameter with default value if missing
+    'c'
+    >>> ps.c | "c" # another way for reading missing parameters
+    'c'
+
+    **`param_scope` as a context scope**
+    >>> with param_scope(**{"a": "a"}) as ps:
+    ...     print(ps.a())
+    a
+
+    **read parameter from param_scope in a function**
     >>> def foo():
     ...    with param_scope() as ps:
     ...        return ps.a()
-    >>> with param_scope(**{'a': 1, 'b': 2}) as ps:
+    >>> with param_scope(**{"a": "a", "b": "b"}) as ps:
     ...     foo() # foo should get param_scope using a with statement
-    1
+    'a'
 
-    modify parameters in nested scopes
+    **modify parameters in nested scopes**
     >>> with param_scope(**{'a': 1, 'b': 2}) as ps:
     ...     ps.storage().storage()
     ...     with param_scope(**{'b': 3}) as ps:
@@ -299,17 +282,24 @@ class param_scope(_HyperParameter):
     {'a': 1, 'b': 3}
     {'a': 1, 'b': 2}
 
-    use object-style parameter key in param_scope:
+    **use object-style parameter key in param_scope**
     >>> with param_scope(**{"a.b.c": [1,2]}) as ps:
     ...     ps.a.b.c()
     [1, 2]
 
-    access parameter with `param_scope`
+    **access parameter with `param_scope`**
     >>> with param_scope(x=1):
-    ...     param_scope.x(2)
-    ...     param_scope.y(2)
+    ...     param_scope.x(2) # read parameter
+    ...     param_scope.y(2) # read a missing parameter with default value
+    ...     param_scope.z | 3
     1
     2
+    3
+    
+    **convert param_scope to dict**:
+    >>> ps = param_scope(a=1, b=2)
+    >>> dict(iter(ps))
+    {'a': 1, 'b': 2}
     """
 
     tls = threading.local()
@@ -356,12 +346,6 @@ class param_scope(_HyperParameter):
 
     def __call__(self) -> Any:
         return _ParamAccessor(self)
-
-    @staticmethod
-    def current():
-        if not hasattr(param_scope.tls, "history"):
-            param_scope.init()
-        return param_scope.tls.his[-1]
 
     @staticmethod
     def init(params=None):
