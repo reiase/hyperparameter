@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
 
 
 class Storage:
@@ -8,6 +8,9 @@ class Storage:
         return None
 
     def storage(self) -> Dict[str, Any]:
+        pass
+    
+    def keys(self) -> Iterable:
         pass
 
     def update(self, kws: Dict[str, Any]) -> None:
@@ -44,6 +47,9 @@ class KVStorage(Storage):
 
     def storage(self) -> Dict[str, Any]:
         return self._storage
+    
+    def keys(self) -> Iterable:
+        return self._storage.keys()
 
     def update(self, kws: Dict[str, Any]) -> None:
         if self._storage is None:

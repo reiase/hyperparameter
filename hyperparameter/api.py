@@ -172,6 +172,9 @@ class _HyperParameter:
 
     def storage(self):
         return self._storage
+    
+    def keys(self):
+        return self.storage().keys()
 
     def __getitem__(self, key: str) -> Any:
         """get parameter with dict-style api
