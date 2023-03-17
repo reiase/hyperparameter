@@ -18,7 +18,7 @@ class _DynamicDispatch:
     """
 
     __slots__ = ("_func", "_name", "_index")
-    
+
     def __get__(self):
         pass
 
@@ -56,7 +56,7 @@ class _DynamicDispatch:
         >>> debug_print().storage().storage()
         {}
         """
-        if name.startswith('__') and name.endswith('__'):
+        if name.startswith("__") and name.endswith("__"):
             raise AttributeError
         if name == "pytest_mock_example_attribute_that_shouldnt_exist":
             raise AttributeError
@@ -107,19 +107,9 @@ class _DynamicDispatch:
 
 def _dynamic_dispatch(func, name=None, index=None):
     """Wraps function with a class to allow __getitem__ and __getattr__ on a function."""
-    new_class = type(
-        func.__name__,
-        (
-            _DynamicDispatch,
-            object,
-        ),
-        dict(__doc__=func.__doc__),
-    )
-    retval = new_class(func, name, index)
-    retval.__dict__["__module__"] = func.__module__
-    retval.__dict__["__doc__"] = func.__doc__
-    retval.__dict__["__name__"] = func.__name__
-    return retval
+    clz = type(func.__name__, (_DynamicDispatch, object), dict(__doc__=func.__doc__))
+    return clz(func, name, index)
+
 
 class _ParamAccessor:
     """Accessor that handles missing parameters and default values
@@ -159,7 +149,9 @@ class _ParamAccessor:
     def __getattr__(self, name: str) -> Any:
         if name in ("_root", "_name"):
             return self.__dict__[name]
-        return _ParamAccessor(self._root, f"{self._name}.{name}" if self._name else name)
+        return _ParamAccessor(
+            self._root, f"{self._name}.{name}" if self._name else name
+        )
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name in ("_root", "_name"):
@@ -283,12 +275,12 @@ class param_scope(_HyperParameter):
 
     Examples
     --------
-    create a scoped HyperParameter
+    create a scope for hyperparameters
     >>> with param_scope(**{'a': 1, 'b': 2}) as ps:
     ...     print(ps.a())
     1
 
-    read parameter in a function
+    read parameter from param_scope in a function
     >>> def foo():
     ...    with param_scope() as ps:
     ...        return ps.a()
@@ -296,7 +288,7 @@ class param_scope(_HyperParameter):
     ...     foo() # foo should get param_scope using a with statement
     1
 
-    update some config only in new scope
+    modify parameters in nested scopes
     >>> with param_scope(**{'a': 1, 'b': 2}) as ps:
     ...     ps.storage().storage()
     ...     with param_scope(**{'b': 3}) as ps:
@@ -307,7 +299,7 @@ class param_scope(_HyperParameter):
     {'a': 1, 'b': 3}
     {'a': 1, 'b': 2}
 
-    set config with object-style key:
+    use object-style parameter key in param_scope:
     >>> with param_scope(**{"a.b.c": [1,2]}) as ps:
     ...     ps.a.b.c()
     [1, 2]
@@ -328,8 +320,6 @@ class param_scope(_HyperParameter):
             super().__init__(storage)
         else:
             super().__init__()
-            param_scope.tls.his = []
-            param_scope.tls.his.append(self)
 
         self.update(kwargs)
         for line in args:
@@ -339,7 +329,22 @@ class param_scope(_HyperParameter):
 
     def __enter__(self):
         """
-        print(1)
+        Examples
+        --------
+        >>> param_scope.p = "origin"
+        >>> with param_scope(**{"p": "origin"}) as ps:
+        ...     ps.storage().storage()      # outer scope
+        ...     with param_scope() as ps:   # unmodified scope
+        ...         ps.storage().storage()  # inner scope
+        ...     with param_scope(**{"p": "modified"}) as ps: # modified scope
+        ...         ps.storage().storage()  # inner scope with modified params
+        ...     _ = param_scope(**{"p": "modified"}) # not used in with ctx
+        ...     with param_scope() as ps:   # unmodified scope
+        ...         ps.storage().storage()  # inner scope
+        {'p': 'origin'}
+        {'p': 'origin'}
+        {'p': 'modified'}
+        {'p': 'origin'}
         """
         if not hasattr(param_scope.tls, "his"):
             param_scope.tls.his = []
@@ -363,6 +368,9 @@ class param_scope(_HyperParameter):
         """init param_scope for a new thread."""
         param_scope.tls.his = []
         param_scope.tls.his.append(params if params is not None else _HyperParameter())
+
+
+_param_scope = param_scope._func
 
 
 def auto_param(name_or_func):
@@ -440,10 +448,3 @@ def auto_param(name_or_func):
         return inner
 
     return wrapper
-
-
-if __name__ == "__main__":
-    import doctest
-
-    doctest.testmod(verbose=True)
-    import pytest
