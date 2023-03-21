@@ -1,9 +1,8 @@
 import functools
 import inspect
-import threading
 from typing import Any, Callable, Dict
 
-from hyperparameter.storage import KVStorage
+from hyperparameter.storage import TLSKVStorage
 
 
 class _DynamicDispatch:
@@ -157,7 +156,7 @@ class _HyperParameter:
 
     def __init__(self, storage=None, /, **kws):
         if storage is None:
-            storage = KVStorage(None, _ParamAccessor)
+            storage = TLSKVStorage(None, _ParamAccessor)
         self.__dict__["_storage"] = storage
         self.update(kws)
 
@@ -172,7 +171,7 @@ class _HyperParameter:
 
     def storage(self):
         return self._storage
-    
+
     def keys(self):
         return self.storage().keys()
 
@@ -235,7 +234,7 @@ class _HyperParameter:
         if name in self.__dict__:
             return self.__dict__.__setitem__(name, value)
         self.put(name, value)
-        
+
     def __iter__(self):
         return self._storage.__iter__()
 
@@ -298,22 +297,15 @@ class param_scope(_HyperParameter):
     1
     2
     3
-    
+
     **convert param_scope to dict**:
     >>> ps = param_scope(a=1, b=2)
     >>> dict(iter(ps))
     {'a': 1, 'b': 2}
     """
 
-    tls = threading.local()
-
     def __init__(self, *args, **kwargs):
-        if hasattr(param_scope.tls, "his") and len(param_scope.tls.his) > 0:
-            storage = param_scope.tls.his[-1].storage().child()
-            super().__init__(storage)
-        else:
-            super().__init__()
-
+        super().__init__()
         self.update(kwargs)
         for line in args:
             if "=" in line:
@@ -339,13 +331,12 @@ class param_scope(_HyperParameter):
         {'p': 'modified'}
         {'p': 'origin'}
         """
-        if not hasattr(param_scope.tls, "his"):
-            param_scope.tls.his = []
-        param_scope.tls.his.append(self)
-        return param_scope.tls.his[-1]
+
+        self._storage.enter()
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        param_scope.tls.his.pop()
+        self._storage.exit()
 
     def __call__(self) -> Any:
         return _ParamAccessor(self)
@@ -353,8 +344,7 @@ class param_scope(_HyperParameter):
     @staticmethod
     def init(params=None):
         """init param_scope for a new thread."""
-        param_scope.tls.his = []
-        param_scope.tls.his.append(params if params is not None else _HyperParameter())
+        param_scope(**params).__enter__()
 
 
 _param_scope = param_scope._func
