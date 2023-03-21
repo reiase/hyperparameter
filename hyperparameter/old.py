@@ -1,20 +1,44 @@
 import inspect
 import threading
-from typing import Any, Callable, Dict, Set
+from functools import wraps
+from typing import Any, Callable, Dict, Optional, Set
 
 from .tracker import _tracker
 from .tune import unwrap_suggester
 
 
-class NocopyDict(dict):
-    pass
+class _Accessor:
+    """Helper for accessing hyper-parameters.
 
+    Examples
+    ---------
 
-class _Accessor(dict):
-    """Helper for accessing hyper-parameters."""
+    >>> cfg = HyperParameter(a=1, b = {'c':2, 'd': 3})
+
+    1. read with default value
+    >>> cfg().a | "default"
+    1
+
+    >>> cfg().missing | "default"
+    'default'
+
+    >>> cfg().missing.missing_again | "default"
+    'default'
+
+    2. read with namespace
+    >>> cfg(scope="ns").a = 3
+
+    >>> cfg().a | "default"
+    1
+
+    >>> cfg().a @ "ns" | "default"
+    3
+
+    >>> cfg().a @ "missing_ns" | "default"
+    1
+    """
 
     def __init__(self, root, path=None, scope=None):
-        super().__init__()
         self._root = root
         self._path = path
         self._scope = scope
@@ -27,10 +51,9 @@ class _Accessor(dict):
             _tracker.read(f"{self._path}@{self._scope}")
             while suffixes:
                 suffix = ".".join(suffixes)
-                full_name = f"{self._path}@{suffix}"
-                value = self._root.get(full_name)
+                value = self._root.get(self._path, scope=suffix)
                 if not isinstance(value, _Accessor):
-                    _tracker.read(full_name)
+                    _tracker.read(f"{self._path}@{suffix}")
                     return value
                 suffixes.pop()
         _tracker.read(self._path)
@@ -40,7 +63,7 @@ class _Accessor(dict):
     def __getattr__(self, name: str) -> Any:
         # _path and _root are not allowed as keys for user.
         if name in ["_path", "_root", "_scope"]:
-            return self[name]
+            return self.__dict__[name]
         return _Accessor(
             self._root,
             f"{self._path}.{name}" if self._path else name,
@@ -50,7 +73,8 @@ class _Accessor(dict):
     def __setattr__(self, name: str, value: Any):
         # _path and _root are not allowed as keys for user.
         if name in ["_path", "_root", "_scope"]:
-            return self.__setitem__(name, value)
+            return self.__dict__.__setitem__(name, value)
+
         full_name = f"{self._path}.{name}" if self._path is not None else name
         full_name = (
             f"{full_name}@{self._scope}" if self._scope is not None else full_name
@@ -58,11 +82,69 @@ class _Accessor(dict):
         _tracker.write(full_name)
         self._root.put(full_name, value)
 
+    def __repr__(self) -> str:
+        if self._scope is not None:
+            return f"<{self._path}@{self._scope} in {repr(self._root)}>"
+        else:
+            return f"<{self._path} in {repr(self._root)}>"
+
     def __bool__(self):
         return False
 
     def __call__(self, default: Any = None) -> Any:
         """shortcut for get_or_else"""
+        return self.get_or_else(default)
+
+    def __matmul__(self, scope: str):
+        """handling namespace
+
+        Examples
+        ---------
+        >>> cfg = HyperParameter(a=1, b = {'c':2, 'd': 3})
+        >>> cfg(scope="ns").a = 3
+
+        >>> cfg().a | "default"
+        1
+
+        >>> cfg().a @ "ns" | "default"
+        3
+
+        >>> cfg().a @ "missing_ns" | "default"
+        1
+        """
+        return _Accessor(self._root, self._path, scope)
+
+    def __or__(self, default: Any) -> Any:
+        """shortcut for get_or_else
+
+        Parameters
+        ----------
+        default : Any
+            default value
+
+        Returns
+        -------
+        Any
+            parameter value or default if parameter not exists
+
+
+        Examples
+        --------
+
+        >>> cfg = HyperParameter(a=1, b = {'c':2, 'd': 3})
+        >>> cfg().a | "default"
+        1
+
+        >>> cfg().missing | "default"
+        'default'
+
+        >>> if cfg().missing | True and True:
+        ...     print("is true")
+        is true
+
+        >>> if cfg().missing | False and True:
+        ...     print("is true")
+        """
         return self.get_or_else(default)
 
     __nonzero__ = __bool__
@@ -166,7 +248,7 @@ class HyperParameter(dict):
 
     def update(self, kws):
         for k, v in kws.items():
-            if isinstance(v, dict) and not isinstance(v, NocopyDict):
+            if isinstance(v, dict):
                 if k in self and isinstance(self[k], dict):
                     vv = HyperParameter(**self[k])
                     vv.update(v)
@@ -214,13 +296,15 @@ class HyperParameter(dict):
             obj = obj[p]
         obj[path[-1] + scope] = value
 
-    def get(self, name: str) -> Any:
+    def get(self, name: str, scope: Optional[str] = None) -> Any:
         """get the parameter with the given name
 
         Parameters
         ----------
         name : str
             parameter name
+        scope : str | None
+            parameter scope
 
         Returns
         -------
@@ -229,27 +313,48 @@ class HyperParameter(dict):
 
         Examples
         --------
+
+        1. get parameter
         >>> cfg = HyperParameter(a=1, b = {'c':2, 'd': 3})
         >>> cfg.get('a')
         1
+
+        2. get nested parameter
         >>> cfg.get('b.c')
         2
+
+        3. get parameter with scope suffix
+        >>> cfg(scope="ns").a = 3
+        >>> cfg.get("a@ns")
+        3
+
+        4. get parameter with scope arg
+        >>> cfg(scope="ns").a = 4
+        >>> cfg.get("a", "ns")
+        4
+
+        5. get missing parameter
+        >>> cfg.get("b.missing")
+        <b.missing in {'a': 1, 'b': {'c': 2, 'd': 3}, 'a@ns': 4}>
+        >>> cfg.get("b.missing.missing")
+        <b.missing.missing in {'a': 1, 'b': {'c': 2, 'd': 3}, 'a@ns': 4}>
+
+        6. get missing parameter with scope
+        >>> cfg.get("b.missing", "ns")
+        <b.missing@ns in {'a': 1, 'b': {'c': 2, 'd': 3}, 'a@ns': 4}>
         """
 
-        if "@" in name:
+        if scope is None and "@" in name:
             name, scope = name.split("@", 1)
-            path = name.split(".")
-            scope = f"@{scope}"
-        else:
-            path = name.split(".")
-            scope = ""
+
+        path = name.split(".")
         obj = self
         for p in path[:-1]:
             if p not in obj:
-                return _Accessor(obj, p)
+                return _Accessor(self, name, scope)
             obj = obj[p]
-        name_with_scope = path[-1] + scope
-        return obj[name_with_scope] if name_with_scope in obj else _Accessor(self, name)
+        fullpath = path[-1] if scope is None else path[-1] + "@" + scope
+        return obj[fullpath] if fullpath in obj else _Accessor(self, name, scope)
 
     def __setitem__(self, key: str, value: Any) -> None:
         """set value and convert the value into `HyperParameter` if necessary
@@ -262,7 +367,7 @@ class HyperParameter(dict):
             parameter value
         """
 
-        if isinstance(value, dict) and not isinstance(value, NocopyDict):
+        if isinstance(value, dict):
             return dict.__setitem__(self, key, HyperParameter(**value))
         return dict.__setitem__(self, key, value)
 
@@ -548,6 +653,7 @@ def auto_param(name_or_func):
                 _auto_param_tracker.add(name)
                 predef_val[name] = v.default
 
+        @wraps(func)
         def inner(*arg, **kws):
             with param_scope() as hp:
                 local_params = {}

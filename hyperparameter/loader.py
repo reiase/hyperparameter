@@ -23,6 +23,7 @@ def loads(config: str):
         raise e
     return toml.loads(config)
 
+
 def dumps(config) -> str:
     try:
         import toml
