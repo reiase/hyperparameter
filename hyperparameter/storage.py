@@ -5,25 +5,42 @@ from typing import Any, Dict, Iterable
 class Storage:
     """Base class for all storage implementations"""
 
+    # storage operations
     def child(self) -> "Storage":
         return None
 
     def storage(self) -> Dict[str, Any]:
         pass
 
+    # dict operations
     def keys(self) -> Iterable:
         pass
 
     def update(self, kws: Dict[str, Any]) -> None:
         return None
 
+    def clear(self):
+        pass
+
+    def __iter__(self):
+        pass
+
+    # kv operations
     def get(self, name: str) -> Any:
         return None
 
     def put(self, name: str, value: Any) -> None:
         return None
 
-    def __iter__(self):
+    # context operations
+    def enter(self):
+        pass
+
+    def exit(self):
+        pass
+
+    @staticmethod
+    def current():
         pass
 
 
@@ -38,20 +55,16 @@ class TLSKVStorage(Storage):
         self._parent = parent
         self._accessor = accessor
         super().__init__()
-        # super().__init__(parent, accessor)
 
         if hasattr(TLSKVStorage.tls, "his") and len(TLSKVStorage.tls.his) > 0:
             parent = TLSKVStorage.tls.his[-1]
-            # super().__init__(parent, accessor)
             self.update(parent._storage)
-        # else:
-        #     super().__init__(None, accessor)
 
     def __iter__(self):
         return iter(self._storage.items())
 
     def child(self) -> "Storage":
-        obj = KVStorage(self, self._accessor)
+        obj = TLSKVStorage(self, self._accessor)
         obj.update(self._storage)
         return obj
 
@@ -77,6 +90,9 @@ class TLSKVStorage(Storage):
 
         return _update(kws, prefix=None)
 
+    def clear(self):
+        self._storage.clear()
+
     def get(self, name: str) -> Any:
         if name in self.__slots__:
             return self.__dict__[name]
@@ -100,3 +116,9 @@ class TLSKVStorage(Storage):
 
     def exit(self):
         TLSKVStorage.tls.his.pop()
+
+    @staticmethod
+    def current():
+        if not hasattr(TLSKVStorage.tls, "his") or len(TLSKVStorage.tls.his) == 0:
+            TLSKVStorage.tls.his = [TLSKVStorage()]
+        return TLSKVStorage.tls.his[-1]

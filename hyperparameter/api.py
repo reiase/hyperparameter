@@ -17,10 +17,15 @@ class _DynamicDispatch:
         self._func = func
         self._name = name
 
+    def __current__(self):
+        if hasattr(self._func, "current"):
+            return self._func.current()
+        return self._func()
+
     def __call__(self, *args, **kws) -> Any:
         if self._name is None:
             return self._func(*args, **kws)
-        return self._func().__getattr__(self._name)(*args, **kws)
+        return self.__current__().__getattr__(self._name)(*args, **kws)
 
     def __repr__(self) -> str:
         """
@@ -30,7 +35,7 @@ class _DynamicDispatch:
         >>> debug_print.a.b.c # doctest: +ELLIPSIS
         <a.b.c in <...._HyperParameter object at ...>>
         """
-        return repr(self._func().__getattr__(self._name))
+        return repr(self.__current__().__getattr__(self._name))
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -66,11 +71,11 @@ class _DynamicDispatch:
         """
         if name in self.__slots__:
             return self.__dict__.__setitem__(name, value)
-        target = self._func().__getattr__(self._name)
+        target = self.__current__().__getattr__(self._name)
         target.__setattr__(name, value)
 
     def __or__(self, default: Any) -> Any:
-        return _ParamAccessor(self._func(), self._name) | default
+        return _ParamAccessor(self.__current__(), self._name) | default
 
 
 def _dynamic_dispatch(func, name=None):
@@ -160,8 +165,16 @@ class _HyperParameter:
         self.__dict__["_storage"] = storage
         self.update(kws)
 
+    def keys(self):
+        return self.storage().keys()
+
     def update(self, kws: Dict[str, Any]) -> None:
-        return self._storage.update(kws)
+        self._storage.update(kws)
+        return self
+
+    def clear(self):
+        self._storage.clear()
+        return self
 
     def get(self, name: str) -> Any:
         return self._storage.get(name)
@@ -171,9 +184,6 @@ class _HyperParameter:
 
     def storage(self):
         return self._storage
-
-    def keys(self):
-        return self.storage().keys()
 
     def __getitem__(self, key: str) -> Any:
         """get parameter with dict-style api
@@ -274,7 +284,7 @@ class param_scope(_HyperParameter):
     'a'
 
     **modify parameters in nested scopes**
-    >>> with param_scope(**{'a': 1, 'b': 2}) as ps:
+    >>> with param_scope.empty(**{'a': 1, 'b': 2}) as ps:
     ...     ps.storage().storage()
     ...     with param_scope(**{'b': 3}) as ps:
     ...         ps.storage().storage()
@@ -293,14 +303,17 @@ class param_scope(_HyperParameter):
     >>> with param_scope(x=1):
     ...     param_scope.x(2) # read parameter
     ...     param_scope.y(2) # read a missing parameter with default value
-    ...     param_scope.z | 3
+    ...     param_scope.y | 2
+    ...     param_scope.z = 3
+    ...     param_scope.z | 0
     1
+    2
     2
     3
 
     **convert param_scope to dict**:
-    >>> ps = param_scope(a=1, b=2)
-    >>> dict(iter(ps))
+    >>> ps = param_scope.empty(a=1, b=2)
+    >>> dict(ps)
     {'a': 1, 'b': 2}
     """
 
@@ -313,7 +326,8 @@ class param_scope(_HyperParameter):
                 self.put(k, v)
 
     def __enter__(self):
-        """
+        """ enter a `param_scope` context
+        
         Examples
         --------
         >>> param_scope.p = "origin"
@@ -340,6 +354,48 @@ class param_scope(_HyperParameter):
 
     def __call__(self) -> Any:
         return _ParamAccessor(self)
+
+    @staticmethod
+    def empty(*args, **kwargs):
+        """ create an empty `param_scope`.
+        
+        Examples
+        --------
+        >>> with param_scope(a="not empty") as ps: # start a new param_scope `a` = 'not empty'
+        ...     param_scope.a("empty")             # read parameter `a`
+        ...     with param_scope.empty() as ps2:   # parameter `a` is cleared in ps2
+        ...         param_scope.a("empty")         # read parameter `a` = 'empty'
+        'not empty'
+        'empty'
+        """
+        retval = param_scope().clear().update(kwargs)
+        for line in args:
+            if "=" in line:
+                k, v = line.split("=", 1)
+                retval.put(k, v)
+        return retval
+
+    @staticmethod
+    def current():
+        """ get current `param_scope`
+        
+        Examples
+        --------
+        >>> with param_scope(a=1) as ps:
+        ...     param_scope.current().a("empty") # read `a` from current `param_scope`
+        1
+        
+        >>> with param_scope() as ps1:
+        ...     with param_scope(a=1) as ps2:
+        ...         param_scope.current().a = 2  # set parameter `a` = 2
+        ...         param_scope.a("empty")       # read `a` in `ps2`
+        ...     param_scope.a("empty")           # read `a` in `ps1`, where `a` is not set
+        2
+        'empty'
+        """
+        retval = param_scope()
+        retval._storage = TLSKVStorage.current()
+        return retval
 
     @staticmethod
     def init(params=None):
@@ -389,6 +445,11 @@ def auto_param(name_or_func):
     >>> with param_scope('myns.foo.params.b=3'):
     ...     foo(2)
     2 3 c None
+
+    >>> with param_scope('myns.foo.params.b=3'):
+    ...     param_scope.myns.foo.params.b = 4
+    ...     foo(2)
+    2 4 c None
     """
 
     if callable(name_or_func):
