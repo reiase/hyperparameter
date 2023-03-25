@@ -1,5 +1,5 @@
 import threading
-from typing import Any, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable
 
 
 class Storage:
@@ -16,7 +16,7 @@ class Storage:
     def keys(self) -> Iterable:
         pass
 
-    def update(self, kws: Dict[str, Any]) -> None:
+    def update(self, kws: Dict[str, Any] = {}) -> None:
         return None
 
     def clear(self):
@@ -26,7 +26,7 @@ class Storage:
         pass
 
     # kv operations
-    def get(self, name: str) -> Any:
+    def get(self, name: str, accessor: Callable = None) -> Any:
         return None
 
     def put(self, name: str, value: Any) -> None:
@@ -47,13 +47,12 @@ class Storage:
 class TLSKVStorage(Storage):
     """Pure Python implementation of a key-value storage"""
 
-    __slots__ = ("_storage", "_parent", "_accessor")
+    __slots__ = ("_storage", "_parent")
     tls = threading.local()
 
-    def __init__(self, parent=None, accessor=None) -> None:
+    def __init__(self, parent=None) -> None:
         self._storage = None
         self._parent = parent
-        self._accessor = accessor
         super().__init__()
 
         if hasattr(TLSKVStorage.tls, "his") and len(TLSKVStorage.tls.his) > 0:
@@ -64,7 +63,7 @@ class TLSKVStorage(Storage):
         return iter(self._storage.items())
 
     def child(self) -> "Storage":
-        obj = TLSKVStorage(self, self._accessor)
+        obj = TLSKVStorage(self)
         obj.update(self._storage)
         return obj
 
@@ -74,7 +73,7 @@ class TLSKVStorage(Storage):
     def keys(self) -> Iterable:
         return self._storage.keys()
 
-    def update(self, kws: Dict[str, Any]) -> None:
+    def update(self, kws: Dict[str, Any] = {}) -> None:
         if self._storage is None:
             self._storage = {}
 
@@ -87,21 +86,21 @@ class TLSKVStorage(Storage):
                     _update(v, prefix=key)
                 else:
                     storage[key] = v
-
-        return _update(kws, prefix=None)
+        if kws is not None:
+            return _update(kws, prefix=None)
 
     def clear(self):
         self._storage.clear()
 
-    def get(self, name: str) -> Any:
+    def get(self, name: str, accessor: Callable = None) -> Any:
         if name in self.__slots__:
             return self.__dict__[name]
         curr = self
-        while curr is not None:
+        while curr is not None and curr._storage is not None:
             if name in curr._storage:
                 return curr._storage[name]
             curr = curr._parent
-        return self._accessor(self, name)
+        return accessor(self, name)
 
     def put(self, name: str, value: Any) -> None:
         if name in self.__slots__:

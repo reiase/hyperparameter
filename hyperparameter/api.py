@@ -114,7 +114,43 @@ class _ParamAccessor:
 
     def get_or_else(self, default: Any = None):
         value = self._root.get(self._name)
-        return default if isinstance(value, _ParamAccessor) else value
+        if isinstance(value, _ParamAccessor):
+            return default
+        if type(default) is bool and isinstance(value, str):
+            if value is None:
+                return False
+            if isinstance(value, str):
+                if value.lower() in ("y", "yes", "t", "true", "on", "1"):
+                    return True
+                elif value.lower() in ("n", "no", "f", "false", "off", "0"):
+                    return False
+                else:
+                    print(f"invalid bool value {value}")
+                    return False
+            if isinstance(value, int):
+                return value != 0
+            if value is None:
+                return False
+            else:
+                print(f"invalid bool value {value}")
+                return True
+        if default is None:
+            return value
+        if type(default) is int:
+            if value is None:
+                return 0
+            try:
+                return int(value)
+            except ValueError:
+                try:
+                    return float(value)
+                except Exception as exc:
+                    return value
+        try:
+            return type(default)(value)
+        except Exception as exc:
+            # raise exc
+            return value
 
     def __getitem__(self, index: str) -> Any:
         return self.__getattr__(index)
@@ -161,7 +197,7 @@ class _HyperParameter:
 
     def __init__(self, storage=None, /, **kws):
         if storage is None:
-            storage = TLSKVStorage(None, _ParamAccessor)
+            storage = TLSKVStorage(None)
         self.__dict__["_storage"] = storage
         self.update(kws)
 
@@ -177,7 +213,7 @@ class _HyperParameter:
         return self
 
     def get(self, name: str) -> Any:
-        return self._storage.get(name)
+        return self._storage.get(name, _ParamAccessor)
 
     def put(self, name: str, value: Any) -> None:
         return self._storage.put(name, value)
@@ -195,7 +231,7 @@ class _HyperParameter:
         >>> hp["obj1.prop1"]
         'a'
         """
-        return self._storage.get(key)
+        return self._storage.get(key, _ParamAccessor)
 
     def __setitem__(self, key: str, value: Any) -> None:
         """set parameter with dict-style api
@@ -326,8 +362,8 @@ class param_scope(_HyperParameter):
                 self.put(k, v)
 
     def __enter__(self):
-        """ enter a `param_scope` context
-        
+        """enter a `param_scope` context
+
         Examples
         --------
         >>> param_scope.p = "origin"
@@ -357,8 +393,8 @@ class param_scope(_HyperParameter):
 
     @staticmethod
     def empty(*args, **kwargs):
-        """ create an empty `param_scope`.
-        
+        """create an empty `param_scope`.
+
         Examples
         --------
         >>> with param_scope(a="not empty") as ps: # start a new param_scope `a` = 'not empty'
@@ -377,20 +413,20 @@ class param_scope(_HyperParameter):
 
     @staticmethod
     def current():
-        """ get current `param_scope`
-        
+        """get current `param_scope`
+
         Examples
         --------
         >>> with param_scope(a=1) as ps:
         ...     param_scope.current().a("empty") # read `a` from current `param_scope`
-        1
-        
+        '1'
+
         >>> with param_scope() as ps1:
         ...     with param_scope(a=1) as ps2:
         ...         param_scope.current().a = 2  # set parameter `a` = 2
         ...         param_scope.a("empty")       # read `a` in `ps2`
         ...     param_scope.a("empty")           # read `a` in `ps1`, where `a` is not set
-        2
+        '2'
         'empty'
         """
         retval = param_scope()
