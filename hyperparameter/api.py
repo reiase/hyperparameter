@@ -117,16 +117,28 @@ class _ParamAccessor:
         if isinstance(value, _ParamAccessor):
             return default
         if type(default) is bool and isinstance(value, str):
-            if value.lower() in ("y", "yes", "t", "true", "on", "1"):
-                return True
-            elif value.lower() in ("n", "no", "f", "false", "off", "0"):
+            if value is None:
+                return False
+            if isinstance(value, str):
+                if value.lower() in ("y", "yes", "t", "true", "on", "1"):
+                    return True
+                elif value.lower() in ("n", "no", "f", "false", "off", "0"):
+                    return False
+                else:
+                    print(f"invalid bool value {value}")
+                    return False
+            if isinstance(value, int):
+                return value != 0
+            if value is None:
                 return False
             else:
                 print(f"invalid bool value {value}")
-                return False
+                return True
         if default is None:
             return value
         if type(default) is int:
+            if value is None:
+                return 0
             try:
                 return int(value)
             except ValueError:
