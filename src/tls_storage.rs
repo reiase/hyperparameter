@@ -8,25 +8,38 @@ use crate::{
 };
 
 pub struct StorageManager {
-    base: Rc<RefCell<TreeStorage>>,
+    pub base: Rc<RefCell<TreeStorage>>,
+    pub current: Vec<*mut Storage>,
 }
 
 impl StorageManager {
     pub fn new() -> StorageManager {
         StorageManager {
             base: Rc::new(RefCell::new(TreeStorage::new())),
+            current: Vec::new(),
         }
     }
 }
 
 thread_local! {
-    static MGR: RefCell<StorageManager> = RefCell::new(StorageManager::new());
+    pub static EMPTY: RefCell<Storage> = RefCell::new(Storage::init());
+    pub static MGR: RefCell<StorageManager> = init_tls_storage();
+}
+
+pub fn init_tls_storage() -> RefCell<StorageManager> {
+    let sm = RefCell::new(StorageManager::new());
+    EMPTY.with(|s| {
+        let ptr: *mut Storage = &mut *s.borrow_mut();
+        sm.borrow_mut().current.push(ptr);
+    });
+    sm
 }
 
 pub struct Storage {
     pub parent: Rc<RefCell<TreeStorage>>,
     pub tree: TreeStorage,
 }
+unsafe impl Send for Storage {}
 
 impl Storage {
     pub fn new() -> Storage {
@@ -36,10 +49,17 @@ impl Storage {
         }
     }
 
-    pub fn enter(&self) {
+    pub fn init() -> Storage {
+        Storage {
+            parent: Rc::new(RefCell::new(TreeStorage::new())),
+            tree: TreeStorage::new(),
+        }
+    }
+
+    pub fn enter(&mut self) {
         // commit into storage manager
         MGR.with(|mgr| {
-            let storage = mgr.borrow_mut();
+            let mut storage = mgr.borrow_mut();
             for (k, v) in self.tree.storage.iter() {
                 if storage.base.borrow_mut().storage.contains_key(&k) {
                     storage
@@ -51,15 +71,18 @@ impl Storage {
                     storage.base.borrow_mut().put_by_hash(*k, v);
                 }
             }
+            let ptr: *mut Storage = &mut *self;
+            storage.current.push(ptr);
         });
     }
 
-    pub fn exit(&self) {
+    pub fn exit(&mut self) {
         MGR.with(|mgr| {
-            let storage = mgr.borrow_mut();
+            let mut storage = mgr.borrow_mut();
             for (k, _) in self.tree.storage.iter() {
                 storage.base.borrow_mut().rollback_by_hash(*k);
             }
+            storage.current.pop();
         });
     }
 
@@ -122,7 +145,7 @@ impl Storage {
     pub fn keys(&self) -> Vec<String> {
         // let mut res = Vec::<String>::new();
         let mut allkey = HashSet::<String>::new();
-        for v in self.parent.borrow().storage.values() {
+        for v in self.parent.borrow_mut().storage.values() {
             allkey.insert(v.key.clone());
         }
         for v in self.tree.storage.values() {

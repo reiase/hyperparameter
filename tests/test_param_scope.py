@@ -28,7 +28,7 @@ class TestParamScopeCreate(TestCase):
 
 
 class TestParamScopeDirectAccess(TestCase):
-    def test_param_scope_undefined(self):
+    def test_param_scope_undefined_short_name(self):
         assert param_scope.a | 0 == 0
         assert param_scope.a(1) == 1
         assert param_scope().a(1) == 1

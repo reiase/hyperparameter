@@ -197,7 +197,7 @@ class _HyperParameter:
 
     def __init__(self, storage=None, /, **kws):
         if storage is None:
-            storage = TLSKVStorage(None)
+            storage = TLSKVStorage()
         self.__dict__["_storage"] = storage
         self.update(kws)
 
@@ -213,7 +213,10 @@ class _HyperParameter:
         return self
 
     def get(self, name: str) -> Any:
-        return self._storage.get(name, _ParamAccessor)
+        try:
+            return self._storage.get(name)
+        except ValueError:
+            return _ParamAccessor(self, name)
 
     def put(self, name: str, value: Any) -> None:
         return self._storage.put(name, value)
@@ -231,7 +234,10 @@ class _HyperParameter:
         >>> hp["obj1.prop1"]
         'a'
         """
-        return self._storage.get(key, _ParamAccessor)
+        try:
+            return self._storage.get(key)
+        except ValueError:
+            return _ParamAccessor(self._storage, key)
 
     def __setitem__(self, key: str, value: Any) -> None:
         """set parameter with dict-style api

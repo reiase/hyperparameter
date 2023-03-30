@@ -100,7 +100,8 @@ class TLSKVStorage(Storage):
             if name in curr._storage:
                 return curr._storage[name]
             curr = curr._parent
-        return accessor(self, name)
+        raise ValueError()
+        # return accessor(self, name)
 
     def put(self, name: str, value: Any) -> None:
         if name in self.__slots__:
@@ -121,3 +122,11 @@ class TLSKVStorage(Storage):
         if not hasattr(TLSKVStorage.tls, "his") or len(TLSKVStorage.tls.his) == 0:
             TLSKVStorage.tls.his = [TLSKVStorage()]
         return TLSKVStorage.tls.his[-1]
+
+try:
+    from hyperparameter.rbackend import KVStorage 
+    TLSKVStorage = KVStorage
+except:
+    import traceback
+    traceback.print_exc()
+    pass
