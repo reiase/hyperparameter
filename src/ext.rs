@@ -1,3 +1,5 @@
+use std::ffi::c_void;
+
 use pyo3::prelude::*;
 use pyo3::types::PyBool;
 use pyo3::types::PyDict;
@@ -5,6 +7,7 @@ use pyo3::types::PyFloat;
 use pyo3::types::PyInt;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
+use pyo3::FromPyPointer;
 
 use pyo3::exceptions::PyValueError;
 
@@ -49,6 +52,9 @@ impl KVStorage {
                 Value::Text(v) => res.set_item(k, v.as_str()),
                 Value::Boolen(v) => res.set_item(k, v),
                 Value::UserDefined(v) => res.set_item(k, v as u64),
+                Value::PyObject(v) => {
+                    res.set_item(k, PyAny::from_owned_ptr(py, v as *mut pyo3::ffi::PyObject))
+                }
             }
             .unwrap();
         }
@@ -98,6 +104,9 @@ impl KVStorage {
                 Value::Text(v) => Ok(Some(v.into_py(py))),
                 Value::Boolen(v) => Ok(Some(v.into_py(py))),
                 Value::UserDefined(v) => Ok(Some((v as u64).into_py(py))),
+                Value::PyObject(v) => Ok(Some(
+                    PyAny::from_owned_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
+                )),
             },
             None => Err(PyValueError::new_err("not found")),
         }
@@ -117,7 +126,12 @@ impl KVStorage {
         } else if val.is_instance_of::<PyInt>().unwrap() {
             (*s).put(key, val.extract::<i64>().unwrap());
         } else {
-            return Err(PyValueError::new_err("bad parameter value!"));
+            (*s).put(key, Value::PyObject(val.into_ptr() as *mut c_void));
+            // return Err(PyValueError::new_err(format!(
+            //     "bad parameter value {}, {} is not supported",
+            //     val.to_string(),
+            //     val.get_type().to_string()
+            // )));
         }
         Ok(())
     }

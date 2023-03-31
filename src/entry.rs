@@ -9,6 +9,7 @@ pub enum Value {
     Text(CacheString),
     Boolen(bool),
     UserDefined(*mut c_void),
+    PyObject(*mut c_void),
 }
 
 impl From<i64> for Value {

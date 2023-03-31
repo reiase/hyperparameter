@@ -22,7 +22,7 @@ impl StorageManager {
 }
 
 thread_local! {
-    pub static EMPTY: RefCell<Storage> = RefCell::new(Storage::init());
+    pub static EMPTY: RefCell<Storage> = RefCell::new(Storage::new_empty());
     pub static MGR: RefCell<StorageManager> = init_tls_storage();
 }
 
@@ -49,9 +49,16 @@ impl Storage {
         }
     }
 
-    pub fn init() -> Storage {
+    pub fn new_empty() -> Storage {
         Storage {
             parent: Rc::new(RefCell::new(TreeStorage::new())),
+            tree: TreeStorage::new(),
+        }
+    }
+
+    pub fn new_view() -> Storage {
+        Storage {
+            parent: MGR.with(|mgr| mgr.borrow().base.clone()),
             tree: TreeStorage::new(),
         }
     }

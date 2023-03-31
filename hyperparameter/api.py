@@ -5,6 +5,12 @@ from typing import Any, Callable, Dict
 from hyperparameter.storage import TLSKVStorage
 
 
+def _repr_dict(d):
+    d = [(k, v) for k, v in d.items()]
+    d.sort()
+    return d
+
+
 class _DynamicDispatch:
     """Dynamic call dispatcher"""
 
@@ -280,8 +286,8 @@ class _HyperParameter:
         >>> hp = _HyperParameter()
         >>> hp.param1 = 1
         >>> hp.obj1.prop1 = 'a'
-        >>> hp.storage().storage()
-        {'param1': 1, 'obj1.prop1': 'a'}
+        >>> _repr_dict(hp.storage().storage())
+        [('obj1.prop1', 'a'), ('param1', 1)]
         """
         if name in self.__dict__:
             return self.__dict__.__setitem__(name, value)
@@ -327,14 +333,14 @@ class param_scope(_HyperParameter):
 
     **modify parameters in nested scopes**
     >>> with param_scope.empty(**{'a': 1, 'b': 2}) as ps:
-    ...     ps.storage().storage()
+    ...     _repr_dict(ps.storage().storage())
     ...     with param_scope(**{'b': 3}) as ps:
-    ...         ps.storage().storage()
+    ...         _repr_dict(ps.storage().storage())
     ...     with param_scope() as ps:
-    ...         ps.storage().storage()
-    {'a': 1, 'b': 2}
-    {'a': 1, 'b': 3}
-    {'a': 1, 'b': 2}
+    ...         _repr_dict(ps.storage().storage())
+    [('a', 1), ('b', 2)]
+    [('a', 1), ('b', 3)]
+    [('a', 1), ('b', 2)]
 
     **use object-style parameter key in param_scope**
     >>> with param_scope(**{"a.b.c": [1,2]}) as ps:
