@@ -361,8 +361,8 @@ class param_scope(_HyperParameter):
 
     **convert param_scope to dict**:
     >>> ps = param_scope.empty(a=1, b=2)
-    >>> dict(ps)
-    {'a': 1, 'b': 2}
+    >>> _repr_dict(dict(ps))
+    [('a', 1), ('b', 2)]
     """
 
     def __init__(self, *args, **kwargs):

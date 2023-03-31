@@ -1,8 +1,8 @@
-pub unsafe extern "C" fn test() {}
+#![feature(local_key_cell_methods)]
+#![feature(let_chains)]
 
 pub mod entry;
-pub mod tls_storage;
-pub mod tree_storage;
+pub mod storage;
 
 pub mod ext;
 

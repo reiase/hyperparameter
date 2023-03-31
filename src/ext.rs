@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyBool;
 use pyo3::types::PyDict;
@@ -9,12 +10,9 @@ use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::FromPyPointer;
 
-use pyo3::exceptions::PyValueError;
-
 use crate::entry::Value;
-use crate::tls_storage::Storage;
-
-use crate::tls_storage::MGR;
+use crate::storage::Storage;
+use crate::storage::MGR;
 
 #[pyclass]
 pub struct KVStorage {
@@ -25,7 +23,7 @@ pub struct KVStorage {
 impl KVStorage {
     pub fn _storage(&mut self) -> *mut Storage {
         match self.isview {
-            true => MGR.with(|mgr| mgr.borrow_mut().current.last().unwrap().clone()),
+            true => MGR.with(|mgr| mgr.borrow_mut().stack.last().unwrap().clone()),
             false => &mut self.storage,
         }
     }
@@ -90,7 +88,7 @@ impl KVStorage {
     pub unsafe fn clear(&mut self) {
         let s = self._storage();
         for k in (*s).keys().iter() {
-            self.storage.tree.put(k, Value::Empty);
+            self.storage.put(k, Value::Empty);
         }
     }
 
@@ -127,11 +125,6 @@ impl KVStorage {
             (*s).put(key, val.extract::<i64>().unwrap());
         } else {
             (*s).put(key, Value::PyObject(val.into_ptr() as *mut c_void));
-            // return Err(PyValueError::new_err(format!(
-            //     "bad parameter value {}, {} is not supported",
-            //     val.to_string(),
-            //     val.get_type().to_string()
-            // )));
         }
         Ok(())
     }

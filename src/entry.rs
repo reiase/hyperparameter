@@ -88,6 +88,19 @@ impl Entry {
         self.val.get()
     }
 
+    pub fn clone_value(&self) -> Value {
+        self.val.get().clone()
+    }
+
+    pub fn update<V: Into<Value>>(&mut self, val: V) {
+        let his = self.val.history();
+        if his.is_none() {
+            self.val = EntryValue::Single(val.into());
+        } else {
+            self.val = EntryValue::Versioned(val.into(), (*his.unwrap()).clone());
+        }
+    }
+
     pub fn revision<V: Into<Value>>(&mut self, val: V) {
         let value = &self.val;
         self.val = EntryValue::Versioned(val.into(), Box::new(value.clone()));
@@ -100,7 +113,7 @@ impl Entry {
             Some(h) => {
                 self.val = *h.clone();
                 Ok(())
-            },
+            }
         }
     }
 }

@@ -113,7 +113,7 @@ class TestRBackend(TestCase):
         KVStorage.current().put("a", 11)
         s2 = KVStorage()
         self.assertEqual(s1.get("a"), 11)
-        self.assertEqual(s2.get("a"), 1)
+        self.assertEqual(s2.get("a"), 11)
         self.assertEqual(s2.get("b"), 2.0)
         self.assertEqual(s2.get("c"), "3")
         self.assertEqual(s2.get("d"), True)
