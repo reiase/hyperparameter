@@ -5,14 +5,13 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 use crate::entry::{Entry, EntryValue, Value};
+use crate::xxh::xxhstr;
 
 type Tree = BTreeMap<u64, Entry>;
 
 fn hashstr<T: Into<String>>(s: T) -> u64 {
     let s: String = s.into();
-    let mut h = DefaultHasher::new();
-    s.hash(&mut h);
-    h.finish()
+    xxhstr(&s)
 }
 
 fn tree_update<T: Into<Value>>(mut tree: RefMut<Tree>, key: u64, val: T) {
@@ -170,6 +169,19 @@ impl Storage {
             allkey.insert(v.key.clone());
         }
         allkey.iter().cloned().collect()
+    }
+}
+
+impl Storage {
+    pub fn get_or_else<T: Into<Value> + TryFrom<Value>>(&self, key: u64, dval: T) -> T {
+        if let Some(val) = self.get_by_hash(key) {
+            match val.try_into() {
+                Ok(v) => v,
+                Err(_) => dval,
+            }
+        } else {
+            dval
+        }
     }
 }
 
