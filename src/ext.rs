@@ -111,10 +111,11 @@ impl KVStorage {
     }
 
     pub unsafe fn put(&mut self, key: String, val: &PyAny) -> PyResult<()> {
+        let s = self._storage();
         if val.is_none() {
+            (*s).put(key, Value::Empty);
             return Ok(());
         }
-        let s = self._storage();
         if val.is_instance_of::<PyBool>().unwrap() {
             (*s).put(key, val.extract::<bool>().unwrap());
         } else if val.is_instance_of::<PyFloat>().unwrap() {

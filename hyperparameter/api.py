@@ -171,7 +171,10 @@ class _ParamAccessor:
         if name in ("_root", "_name"):
             return self.__dict__.__setitem__(name, value)
         name = f"{self._name}.{name}" if self._name else name
-        self._root.put(name, value)
+        if isinstance(value, dict):
+            self._root.update({name: value})
+        else:
+            self._root.put(name, value)
 
     def __repr__(self) -> str:
         return f"<{self._name} in {repr(self._root)}>"
@@ -263,6 +266,8 @@ class _HyperParameter:
         >>> hp["obj2.prop2"]
         'b'
         """
+        if isinstance(value, dict):
+            return self.update({key: value})
         return self._storage.put(key, value)
 
     def __getattr__(self, name: str) -> Any:
