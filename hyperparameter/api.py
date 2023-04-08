@@ -152,11 +152,7 @@ class _ParamAccessor:
                     return float(value)
                 except Exception as exc:
                     return value
-        try:
-            return type(default)(value)
-        except Exception as exc:
-            # raise exc
-            return value
+        return value
 
     def __getitem__(self, index: str) -> Any:
         return self.__getattr__(index)
