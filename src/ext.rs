@@ -20,15 +20,6 @@ pub struct KVStorage {
     isview: bool,
 }
 
-impl KVStorage {
-    pub fn _storage(&mut self) -> *mut Storage {
-        match self.isview {
-            true => MGR.with(|mgr| mgr.borrow_mut().stack.last().unwrap().clone()),
-            false => &mut self.storage,
-        }
-    }
-}
-
 #[pymethods]
 impl KVStorage {
     #[new]
@@ -41,9 +32,8 @@ impl KVStorage {
 
     pub unsafe fn storage(&mut self, py: Python<'_>) -> PyResult<PyObject> {
         let res = PyDict::new(py);
-        let s = self._storage();
-        for k in (*s).keys().iter() {
-            match (*s).get(k).unwrap() {
+        for k in self.storage.keys().iter() {
+            match self.storage.get(k).unwrap() {
                 Value::Empty => Ok(()),
                 Value::Int(v) => res.set_item(k, v),
                 Value::Float(v) => res.set_item(k, v),
@@ -60,8 +50,7 @@ impl KVStorage {
     }
 
     pub unsafe fn keys(&mut self, py: Python<'_>) -> PyResult<PyObject> {
-        let s = self._storage();
-        let res = PyList::new(py, (*s).keys());
+        let res = PyList::new(py, self.storage.keys());
         Ok(res.into())
     }
 
@@ -86,15 +75,13 @@ impl KVStorage {
     }
 
     pub unsafe fn clear(&mut self) {
-        let s = self._storage();
-        for k in (*s).keys().iter() {
+        for k in self.storage.keys().iter() {
             self.storage.put(k, Value::Empty);
         }
     }
 
     pub unsafe fn get(&mut self, py: Python<'_>, key: String) -> PyResult<Option<PyObject>> {
-        let s = self._storage();
-        match (*s).get(key) {
+        match self.storage.get(key) {
             Some(val) => match val {
                 Value::Empty => Err(PyValueError::new_err("not found")),
                 Value::Int(v) => Ok(Some(v.into_py(py))),
@@ -111,21 +98,24 @@ impl KVStorage {
     }
 
     pub unsafe fn put(&mut self, key: String, val: &PyAny) -> PyResult<()> {
-        let s = self._storage();
+        if self.isview {
+            MGR.with_borrow_mut(|mgr| mgr.put_key(key.clone()));
+        }
         if val.is_none() {
-            (*s).put(key, Value::Empty);
+            self.storage.put(key, Value::Empty);
             return Ok(());
         }
         if val.is_instance_of::<PyBool>().unwrap() {
-            (*s).put(key, val.extract::<bool>().unwrap());
+            self.storage.put(key, val.extract::<bool>().unwrap());
         } else if val.is_instance_of::<PyFloat>().unwrap() {
-            (*s).put(key, val.extract::<f64>().unwrap());
+            self.storage.put(key, val.extract::<f64>().unwrap());
         } else if val.is_instance_of::<PyString>().unwrap() {
-            (*s).put(key, val.extract::<&str>().unwrap());
+            self.storage.put(key, val.extract::<&str>().unwrap());
         } else if val.is_instance_of::<PyInt>().unwrap() {
-            (*s).put(key, val.extract::<i64>().unwrap());
+            self.storage.put(key, val.extract::<i64>().unwrap());
         } else {
-            (*s).put(key, Value::PyObject(val.into_ptr() as *mut c_void));
+            self.storage
+                .put(key, Value::PyObject(val.into_ptr() as *mut c_void));
         }
         Ok(())
     }
@@ -140,10 +130,12 @@ impl KVStorage {
 
     #[staticmethod]
     pub fn current() -> KVStorage {
-        KVStorage {
+        let mut kv = KVStorage {
             storage: Storage::new(),
-            isview: true,
-        }
+            isview: false,
+        };
+        kv.storage.isview = 1;
+        kv
     }
 }
 

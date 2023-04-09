@@ -122,7 +122,7 @@ impl TryFrom<Value> for bool {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum EntryValue {
     Single(Value),
     Versioned(Value, Box<EntryValue>),
@@ -144,7 +144,7 @@ impl EntryValue {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Entry {
     pub key: String,
     pub val: EntryValue,
