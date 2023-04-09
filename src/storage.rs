@@ -1,13 +1,13 @@
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::entry::{Entry, EntryValue, Value};
 use crate::xxh::xxhstr;
 
-// type Tree = BTreeMap<u64, Entry>;
-type Tree = HashMap<u64, Entry>;
+type Tree = BTreeMap<u64, Entry>;
+// type Tree = HashMap<u64, Entry>;
 
 fn hashstr<T: Into<String>>(s: T) -> u64 {
     let s: String = s.into();
