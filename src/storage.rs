@@ -1,5 +1,5 @@
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::{HashMap, BTreeMap};
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -7,7 +7,6 @@ use crate::entry::{Entry, EntryValue, Value};
 use crate::xxh::xxhstr;
 
 type Tree = BTreeMap<u64, Entry>;
-// type Tree = HashMap<u64, Entry>;
 
 fn hashstr<T: Into<String>>(s: T) -> u64 {
     let s: String = s.into();
@@ -43,7 +42,6 @@ impl StorageManager {
 }
 
 thread_local! {
-    pub static EMPTY: RefCell<Storage> = RefCell::new(Storage::new_empty());
     pub static MGR: RefCell<StorageManager> = init_storage_manager();
 }
 
@@ -52,9 +50,8 @@ pub fn init_storage_manager() -> RefCell<StorageManager> {
         tls: Rc::new(RefCell::new(Tree::new())),
         stack: Vec::new(),
     });
-    EMPTY.with(|s| {
-        sm.borrow_mut().stack.push(RefCell::new(HashSet::new()));
-    });
+    sm.borrow_mut().stack.push(RefCell::new(HashSet::new()));
+
     return sm;
 }
 
@@ -96,7 +93,6 @@ impl Storage {
                     m.tls.borrow_mut().insert(*k, v.clone());
                 }
             }
-            let ptr: *mut Storage = &mut *self;
             let keys = self.tree().keys().cloned().collect();
             m.stack.push(RefCell::new(keys));
         });

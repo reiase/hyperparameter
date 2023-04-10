@@ -132,7 +132,7 @@ impl KVStorage {
     pub fn current() -> KVStorage {
         let mut kv = KVStorage {
             storage: Storage::new(),
-            isview: false,
+            isview: true,
         };
         kv.storage.isview = 1;
         kv

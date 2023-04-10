@@ -152,6 +152,13 @@ class _ParamAccessor:
                     return float(value)
                 except Exception as exc:
                     return value
+        if type(default) is float:
+            try:
+                return float(value)
+            except:
+                return value
+        if type(default) is str:
+            return str(value)
         return value
 
     def __getitem__(self, index: str) -> Any:
