@@ -3,6 +3,7 @@ import inspect
 from typing import Any, Callable, Dict
 
 from hyperparameter.storage import TLSKVStorage
+from .tune import Suggester
 
 
 def _repr_dict(d):
@@ -16,7 +17,7 @@ class _DynamicDispatch:
 
     __slots__ = ("_func", "_name")
 
-    def __get__(self):  # a trick that let doctest descover this class
+    def __get__(self):  # a trick that let doctest discover this class
         pass
 
     def __init__(self, func: Callable, name=None):
@@ -91,7 +92,7 @@ def _dynamic_dispatch(func, name=None):
 
 
 class _ParamAccessor:
-    """Accessor that handles missing parameters and default values
+    """Missing parameter and default value handler for hyperparameters.
 
     Examples
     ---------
@@ -122,6 +123,8 @@ class _ParamAccessor:
         value = self._root.get(self._name)
         if isinstance(value, _ParamAccessor):
             return default
+        if isinstance(value, Suggester):
+            return value()
         if type(default) is bool and isinstance(value, str):
             if value is None:
                 return False
@@ -152,11 +155,14 @@ class _ParamAccessor:
                     return float(value)
                 except Exception as exc:
                     return value
-        try:
-            return type(default)(value)
-        except Exception as exc:
-            # raise exc
-            return value
+        if type(default) is float:
+            try:
+                return float(value)
+            except:
+                return value
+        if type(default) is str:
+            return str(value)
+        return value
 
     def __getitem__(self, index: str) -> Any:
         return self.__getattr__(index)
@@ -234,7 +240,7 @@ class _HyperParameter:
         return self._storage
 
     def __getitem__(self, key: str) -> Any:
-        """get parameter with dict-style api
+        """dict-style api for parameter reading.
         Examples
         ----------
         >>> hp = _HyperParameter(param1=1, obj1={"prop1": "a"})
@@ -249,7 +255,7 @@ class _HyperParameter:
             return _ParamAccessor(self._storage, key)
 
     def __setitem__(self, key: str, value: Any) -> None:
-        """set parameter with dict-style api
+        """dict-style api for parameter writing.
         Examples
         ----------
         >>> hp = _HyperParameter(param1=1, obj1={"prop1": "a"})
@@ -271,7 +277,7 @@ class _HyperParameter:
         return self._storage.put(key, value)
 
     def __getattr__(self, name: str) -> Any:
-        """get parameter with object-style api
+        """object-style api for parameter reading.
         Examples
         --------
         >>> hp = _HyperParameter(param1=1, obj1={"prop1": "a"})
@@ -285,7 +291,7 @@ class _HyperParameter:
         return _ParamAccessor(self, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """set parameter with object-style api
+        """object-style api for parameter writing.
         Examples
         --------
         >>> hp = _HyperParameter()
@@ -383,16 +389,17 @@ class param_scope(_HyperParameter):
 
         Examples
         --------
-        >>> param_scope.p = "origin"
-        >>> with param_scope(**{"p": "origin"}) as ps:
-        ...     ps.storage().storage()      # outer scope
-        ...     with param_scope() as ps:   # unmodified scope
-        ...         ps.storage().storage()  # inner scope
-        ...     with param_scope(**{"p": "modified"}) as ps: # modified scope
-        ...         ps.storage().storage()  # inner scope with modified params
-        ...     _ = param_scope(**{"p": "modified"}) # not used in with ctx
-        ...     with param_scope() as ps:   # unmodified scope
-        ...         ps.storage().storage()  # inner scope
+        >>> with param_scope():
+        ...     param_scope.p = "origin"
+        ...     with param_scope(**{"p": "origin"}) as ps:
+        ...         ps.storage().storage()      # outer scope
+        ...         with param_scope() as ps:   # unmodified scope
+        ...             ps.storage().storage()  # inner scope
+        ...         with param_scope(**{"p": "modified"}) as ps: # modified scope
+        ...             ps.storage().storage()  # inner scope with modified params
+        ...         _ = param_scope(**{"p": "modified"}) # not used in with ctx
+        ...         with param_scope() as ps:   # unmodified scope
+        ...             ps.storage().storage()  # inner scope
         {'p': 'origin'}
         {'p': 'origin'}
         {'p': 'modified'}

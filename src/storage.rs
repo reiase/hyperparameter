@@ -1,7 +1,6 @@
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, HashSet};
-use std::hash::{Hash, Hasher};
+use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::entry::{Entry, EntryValue, Value};
@@ -30,11 +29,19 @@ fn tree_rollback(mut tree: RefMut<Tree>, key: u64) {
 
 pub struct StorageManager {
     pub tls: Rc<RefCell<Tree>>,
-    pub stack: Vec<*mut Storage>,
+    pub stack: Vec<RefCell<HashSet<u64>>>,
+}
+
+impl StorageManager {
+    pub fn put_key<T: Into<String>>(&mut self, key: T) {
+        let key = hashstr(key);
+        if let Some(hash) = self.stack.last() {
+            hash.borrow_mut().insert(key);
+        }
+    }
 }
 
 thread_local! {
-    pub static EMPTY: RefCell<Storage> = RefCell::new(Storage::new_empty());
     pub static MGR: RefCell<StorageManager> = init_storage_manager();
 }
 
@@ -43,17 +50,16 @@ pub fn init_storage_manager() -> RefCell<StorageManager> {
         tls: Rc::new(RefCell::new(Tree::new())),
         stack: Vec::new(),
     });
-    EMPTY.with(|s| {
-        let ptr: *mut Storage = &mut *s.borrow_mut();
-        sm.borrow_mut().stack.push(ptr);
-    });
+    sm.borrow_mut().stack.push(RefCell::new(HashSet::new()));
+
     return sm;
 }
 
+#[derive(Debug)]
 pub struct Storage {
     pub parent: Rc<RefCell<Tree>>,
     pub tree: RefCell<Tree>,
-    isview: i32,
+    pub isview: i32,
 }
 unsafe impl Send for Storage {}
 
@@ -87,27 +93,34 @@ impl Storage {
                     m.tls.borrow_mut().insert(*k, v.clone());
                 }
             }
-            let ptr: *mut Storage = &mut *self;
-            m.stack.push(ptr);
+            let keys = self.tree().keys().cloned().collect();
+            m.stack.push(RefCell::new(keys));
         });
         self.isview += 1;
     }
 
     pub fn exit(&mut self) {
         MGR.with_borrow_mut(|m| {
-            self.tree()
-                .keys()
-                .for_each(|k| tree_rollback(m.tls.borrow_mut(), *k));
-            m.stack.pop();
+            if let Some(keys) = m.stack.pop() {
+                keys.borrow()
+                    .iter()
+                    .for_each(|k| tree_rollback(m.tls.borrow_mut(), *k));
+            }
         });
         self.isview -= 1;
     }
 
     pub fn get_by_hash(&self, key: u64) -> Option<Value> {
-        if let Some(e) = self.tree().get(&key) {
-            return Some(e.clone_value());
-        } else if let Some(e) = self.parent.borrow().get(&key) {
-            return Some(e.clone_value());
+        if self.isview == 0 {
+            if let Some(e) = self.tree().get(&key) {
+                return Some(e.clone_value());
+            } else if let Some(e) = self.parent.borrow().get(&key) {
+                return Some(e.clone_value());
+            }
+        } else {
+            if let Some(e) = self.parent.borrow().get(&key) {
+                return Some(e.clone_value());
+            }
         }
         return None;
     }

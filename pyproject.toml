@@ -1,21 +1,20 @@
 [build-system]
-requires = ["setuptools", "setuptools-scm", "wheel", "setuptools-rust"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=0.14,<0.15"]
+build-backend = "maturin"
 
 [project]
 name = "hyperparameter"
+version = "0.5.0"
 authors = [{ name = "Reiase", email = "reiase@gmail.com" }]
 description = "A hyper-parameter library for researchers, data scientists and machine learning engineers."
 requires-python = ">=3.7"
 readme = "README.md"
 license = { text = "Apache License Version 2.0" }
-dynamic = ["version"]
 
-[tool.setuptools]
-packages = ["hyperparameter", "hparam"]
-
-[tool.setuptools.dynamic]
-version = { attr = "hyperparameter.VERSION" }
+[tool.maturin]
+module-name = "hyperparameter.rbackend"
+features = ["pyo3/extension-module"]
+include = ["hyperparameter/hyperparameter.h"]
 
 [tool.black]
 line-length = 88

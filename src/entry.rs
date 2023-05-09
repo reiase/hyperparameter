@@ -9,7 +9,7 @@ pub enum Value {
     Text(CacheString),
     Boolen(bool),
     UserDefined(*mut c_void),
-    PyObject(*mut c_void),
+    PyObject(*mut c_void, unsafe fn(*mut c_void)),
 }
 
 impl From<i64> for Value {
@@ -67,7 +67,7 @@ impl TryFrom<Value> for i64 {
                 .or_else(|_| Err(format!("error convert {} into i64", v))),
             Value::Boolen(v) => Ok(v.into()),
             Value::UserDefined(_) => Err("data type not matched, `Userdefined` and i64".into()),
-            Value::PyObject(_) => Err("data type not matched, `PyObject` and i64".into()),
+            Value::PyObject(_, _) => Err("data type not matched, `PyObject` and i64".into()),
         }
     }
 }
@@ -85,7 +85,7 @@ impl TryFrom<Value> for f64 {
                 .or_else(|_| Err(format!("error convert {} into i64", v))),
             Value::Boolen(_) => Err("data type not matched, `Boolen` and i64".into()),
             Value::UserDefined(_) => Err("data type not matched, `Userdefined` and f64".into()),
-            Value::PyObject(_) => Err("data type not matched, `PyObject` and f64".into()),
+            Value::PyObject(_, _) => Err("data type not matched, `PyObject` and f64".into()),
         }
     }
 }
@@ -101,7 +101,7 @@ impl TryFrom<Value> for String {
             Value::Text(v) => Ok(v.to_string()),
             Value::Boolen(v) => Ok(format!("{}", v)),
             Value::UserDefined(_) => Err("data type not matched, `Userdefined` and str".into()),
-            Value::PyObject(_) => Err("data type not matched, `PyObject` and str".into()),
+            Value::PyObject(_, _) => Err("data type not matched, `PyObject` and str".into()),
         }
     }
 }
@@ -117,12 +117,12 @@ impl TryFrom<Value> for bool {
             Value::Text(_) => Err("data type not matched, `Text` and bool".into()),
             Value::Boolen(v) => Ok(v),
             Value::UserDefined(_) => Err("data type not matched, `Userdefined` and str".into()),
-            Value::PyObject(_) => Err("data type not matched, `PyObject` and str".into()),
+            Value::PyObject(_, _) => Err("data type not matched, `PyObject` and str".into()),
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum EntryValue {
     Single(Value),
     Versioned(Value, Box<EntryValue>),
@@ -144,7 +144,7 @@ impl EntryValue {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Entry {
     pub key: String,
     pub val: EntryValue,
@@ -181,10 +181,17 @@ impl Entry {
     }
 
     pub fn rollback(&mut self) -> Result<(), ()> {
+        let val = self.val.get();
         let his = self.val.history();
         match his {
             None => Err(()),
             Some(h) => {
+                match val {
+                    Value::PyObject(obj, free) => unsafe {
+                        free(*obj);
+                    },
+                    _ => {}
+                }
                 self.val = *h.clone();
                 Ok(())
             }
