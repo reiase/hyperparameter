@@ -13,7 +13,7 @@ pip install hyperparameter
 ```python
 >>> from hyperparameter import param_scope
 >>> with param_scope(param1=1) as ps:
-...     print(f"param1={ps.param1}, param2={ps.param2('undefined')}")
+...     print(f"param1={ps.param1()}, param2={ps.param2('undefined')}")
 param1=1, param2=undefined
 
 ```
