@@ -22,8 +22,10 @@ fn tree_revision<T: Into<Value>>(mut tree: RefMut<Tree>, key: u64, val: T) {
 }
 
 fn tree_rollback(mut tree: RefMut<Tree>, key: u64) {
-    if let Some(need_del) = tree.get_mut(&key).map(|e| e.rollback().is_err()) && need_del{
-        tree.remove(&key);
+    if let Some(need_del) = tree.get_mut(&key).map(|e| e.rollback().is_err()) {
+        if need_del {
+            tree.remove(&key);
+        }
     }
 }
 
@@ -85,28 +87,46 @@ impl Storage {
     }
 
     pub fn enter(&mut self) {
-        MGR.with_borrow_mut(|m| {
+        MGR.with(|m| {
             for (k, v) in self.tree().iter() {
-                if m.tls.borrow().contains_key(&k) {
-                    tree_revision(m.tls.borrow_mut(), *k, v.clone_value());
+                if m.borrow_mut().tls.borrow().contains_key(&k) {
+                    tree_revision(m.borrow_mut().tls.borrow_mut(), *k, v.clone_value());
                 } else {
-                    m.tls.borrow_mut().insert(*k, v.clone());
+                    m.borrow_mut().tls.borrow_mut().insert(*k, v.clone());
                 }
             }
             let keys = self.tree().keys().cloned().collect();
-            m.stack.push(RefCell::new(keys));
+            m.borrow_mut().stack.push(RefCell::new(keys));
         });
+        // MGR.with_borrow_mut(|m| {
+        //     for (k, v) in self.tree().iter() {
+        //         if m.tls.borrow().contains_key(&k) {
+        //             tree_revision(m.tls.borrow_mut(), *k, v.clone_value());
+        //         } else {
+        //             m.tls.borrow_mut().insert(*k, v.clone());
+        //         }
+        //     }
+        //     let keys = self.tree().keys().cloned().collect();
+        //     m.stack.push(RefCell::new(keys));
+        // });
         self.isview += 1;
     }
 
     pub fn exit(&mut self) {
-        MGR.with_borrow_mut(|m| {
-            if let Some(keys) = m.stack.pop() {
+        MGR.with(|m| {
+            if let Some(keys) = m.borrow_mut().stack.pop() {
                 keys.borrow()
                     .iter()
-                    .for_each(|k| tree_rollback(m.tls.borrow_mut(), *k));
+                    .for_each(|k| tree_rollback(m.borrow_mut().tls.borrow_mut(), *k));
             }
         });
+        // MGR.with_borrow_mut(|m| {
+        //     if let Some(keys) = m.stack.pop() {
+        //         keys.borrow()
+        //             .iter()
+        //             .for_each(|k| tree_rollback(m.tls.borrow_mut(), *k));
+        //     }
+        // });
         self.isview -= 1;
     }
 

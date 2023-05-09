@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ffi::c_void;
 
 use pyo3::exceptions::PyValueError;
@@ -15,6 +16,7 @@ use pyo3::FromPyPointer;
 use crate::entry::Value;
 use crate::storage::Storage;
 use crate::storage::MGR;
+use crate::storage::StorageManager;
 
 #[pyclass]
 pub struct KVStorage {
@@ -101,7 +103,8 @@ impl KVStorage {
 
     pub unsafe fn put(&mut self, key: String, val: &PyAny) -> PyResult<()> {
         if self.isview {
-            MGR.with_borrow_mut(|mgr| mgr.put_key(key.clone()));
+            MGR.with(|mgr: &RefCell<StorageManager>| mgr.borrow_mut().put_key(key.clone()));
+            // MGR.with_borrow_mut(|mgr| mgr.put_key(key.clone()));
         }
         if val.is_none() {
             self.storage.put(key, Value::Empty);
