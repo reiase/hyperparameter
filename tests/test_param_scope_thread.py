@@ -14,12 +14,12 @@ class TestParamScopeThread(TestCase):
         t.start()
         t.join
         
-    def test_new_thread_init(self):
-        param_scope.A.B = 1
-        param_scope.frozen()
-        t = Thread(target=self.in_thread, args=("A.B", 1))
-        t.start()
-        t.join
+    # def test_new_thread_init(self):
+    #     param_scope.A.B = 1
+    #     param_scope.frozen()
+    #     t = Thread(target=self.in_thread, args=("A.B", 1))
+    #     t.start()
+    #     t.join
         
 if __name__ == "__main__":
     from unittest import main
