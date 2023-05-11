@@ -17,9 +17,10 @@ pyo3 = { version = "0.18.1", features = [
     "abi3",
     "abi3-py37",
 ] }
+lazy_static = "1.4.0"
 
-[dev_dependencies]
-rspec = "1.0"
+# [dev_dependencies]
+# rspec = "1.0"
 
 [profile.dev]
 overflow-checks=false

@@ -14,9 +14,10 @@ use pyo3::types::PyString;
 use pyo3::FromPyPointer;
 
 use crate::entry::Value;
+use crate::storage::frozen_as_global_storage;
 use crate::storage::Storage;
-use crate::storage::MGR;
 use crate::storage::StorageManager;
+use crate::storage::MGR;
 
 #[pyclass]
 pub struct KVStorage {
@@ -147,6 +148,11 @@ impl KVStorage {
         };
         kv.storage.isview = 1;
         kv
+    }
+
+    #[staticmethod]
+    pub fn frozen() {
+        frozen_as_global_storage();
     }
 }
 

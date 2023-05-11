@@ -1,5 +1,9 @@
+import os
 import threading
 from typing import Any, Callable, Dict, Iterable
+
+
+GLOBAL_STORAGE = {}
 
 
 class Storage:
@@ -55,7 +59,13 @@ class TLSKVStorage(Storage):
         self._parent = parent
         super().__init__()
 
-        if hasattr(TLSKVStorage.tls, "his") and len(TLSKVStorage.tls.his) > 0:
+        if not hasattr(TLSKVStorage.tls, "his"):
+            TLSKVStorage.tls.his = [TLSKVStorage.__new__(TLSKVStorage)]
+            TLSKVStorage.tls.his[-1]._storage = GLOBAL_STORAGE
+            TLSKVStorage.tls.his[-1]._parent = None
+            self.update(GLOBAL_STORAGE)
+
+        elif hasattr(TLSKVStorage.tls, "his") and len(TLSKVStorage.tls.his) > 0:
             parent = TLSKVStorage.tls.his[-1]
             self.update(parent._storage)
 
@@ -86,6 +96,7 @@ class TLSKVStorage(Storage):
                     _update(v, prefix=key)
                 else:
                     storage[key] = v
+
         if kws is not None:
             return _update(kws, prefix=None)
 
@@ -123,10 +134,19 @@ class TLSKVStorage(Storage):
             TLSKVStorage.tls.his = [TLSKVStorage()]
         return TLSKVStorage.tls.his[-1]
 
+    @staticmethod
+    def frozen():
+        GLOBAL_STORAGE.update(TLSKVStorage.tls.his[-1].storage())
+
+
 try:
-    from hyperparameter.rbackend import KVStorage 
-    TLSKVStorage = KVStorage
+    if os.environ.get("HYPERPARAMETER_BACKEND", "RUST") == "RUST":
+        from hyperparameter.rbackend import KVStorage
+        TLSKVStorage = KVStorage
+        print("using native hyperparameter backend")
+    else:
+        print("using python hyperparameter backend")
 except:
     import traceback
     traceback.print_exc()
-    pass
+    print("using python hyperparameter backend")

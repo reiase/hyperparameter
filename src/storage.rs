@@ -2,6 +2,9 @@ use std::cell::{Ref, RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::rc::Rc;
+use std::sync::Mutex;
+
+use lazy_static::lazy_static;
 
 use crate::entry::{Entry, EntryValue, Value};
 use crate::xxh::xxhstr;
@@ -48,13 +51,63 @@ thread_local! {
 }
 
 pub fn init_storage_manager() -> RefCell<StorageManager> {
+    let mut tree = Tree::new();
+    global_storage_get(&mut tree);
     let sm = RefCell::new(StorageManager {
-        tls: Rc::new(RefCell::new(Tree::new())),
+        tls: Rc::new(RefCell::new(tree)),
         stack: Vec::new(),
     });
     sm.borrow_mut().stack.push(RefCell::new(HashSet::new()));
 
     return sm;
+}
+
+lazy_static! {
+    static ref GLOBAL_STORAGE: Mutex<u64> = {
+        let tree = Box::new(Tree::new());
+        Mutex::new(Box::into_raw(tree) as u64)
+    };
+}
+
+fn global_storage_set(t: &Tree) {
+    GLOBAL_STORAGE
+        .lock()
+        .and_then(|v| unsafe {
+            let ptr = v.clone() as *mut Tree;
+            match ptr.as_mut() {
+                Some(tree) => {
+                    tree.clear();
+                    tree.clone_from(t);
+                }
+                None => todo!(),
+            };
+            Ok(())
+        })
+        .unwrap();
+}
+
+pub fn frozen_as_global_storage() {
+    MGR.with(|mgr| {
+        let t = mgr.borrow().tls.borrow().clone();
+        global_storage_set(&t);
+    });
+}
+
+fn global_storage_get(t: &mut Tree) {
+    GLOBAL_STORAGE
+        .lock()
+        .and_then(|v| unsafe {
+            let ptr = v.clone() as *mut Tree;
+            match ptr.as_mut() {
+                Some(tree) => {
+                    t.clear();
+                    t.clone_from(tree);
+                }
+                None => todo!(),
+            };
+            Ok(())
+        })
+        .unwrap();
 }
 
 #[derive(Debug)]
@@ -114,10 +167,11 @@ impl Storage {
 
     pub fn exit(&mut self) {
         MGR.with(|m| {
-            if let Some(keys) = m.borrow_mut().stack.pop() {
+            let mut m = m.borrow_mut();
+            if let Some(keys) = m.stack.pop() {
                 keys.borrow()
                     .iter()
-                    .for_each(|k| tree_rollback(m.borrow_mut().tls.borrow_mut(), *k));
+                    .for_each(|k| tree_rollback(m.tls.borrow_mut(), *k));
             }
         });
         // MGR.with_borrow_mut(|m| {

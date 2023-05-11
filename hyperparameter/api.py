@@ -461,6 +461,11 @@ class param_scope(_HyperParameter):
     def init(params=None):
         """init param_scope for a new thread."""
         param_scope(**params).__enter__()
+        
+    @staticmethod
+    def frozen():
+        with param_scope():
+            TLSKVStorage.frozen()
 
 
 _param_scope = param_scope._func
