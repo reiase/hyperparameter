@@ -15,12 +15,7 @@ jobs:
       with:
         python-version: '3.9'
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ inputs.rust }}
-        targets: ${{ inputs.rust-target }}
-        # needed to correctly format errors, see #1865
-        components: rust-src
+      uses: dtolnay/rust-toolchain@stable
     - name: Install requirements
       run: |
         pip install pytest pytest-cov && pip install -e .
