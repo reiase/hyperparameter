@@ -44,7 +44,7 @@ impl KVStorage {
                 Value::Float(v) => res.set_item(k, v),
                 Value::Text(v) => res.set_item(k, v.as_str()),
                 Value::Boolen(v) => res.set_item(k, v),
-                Value::UserDefined(v) => res.set_item(k, v as u64),
+                Value::UserDefined(v, _) => res.set_item(k, v as u64),
                 Value::PyObject(v, _) => {
                     res.set_item(k, PyAny::from_owned_ptr(py, v as *mut pyo3::ffi::PyObject))
                 }
@@ -93,9 +93,9 @@ impl KVStorage {
                 Value::Float(v) => Ok(Some(v.into_py(py))),
                 Value::Text(v) => Ok(Some(v.into_py(py))),
                 Value::Boolen(v) => Ok(Some(v.into_py(py))),
-                Value::UserDefined(v) => Ok(Some((v as u64).into_py(py))),
+                Value::UserDefined(v, _) => Ok(Some((v as u64).into_py(py))),
                 Value::PyObject(v, _) => Ok(Some(
-                    PyAny::from_owned_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
+                    PyAny::from_borrowed_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
                 )),
             },
             None => Err(PyValueError::new_err("not found")),
@@ -124,7 +124,7 @@ impl KVStorage {
             Py_IncRef(val.into_ptr());
             self.storage.put(
                 key,
-                Value::PyObject(val.into_ptr() as *mut c_void, |obj: *mut c_void| {
+                Value::pyobj(val.into_ptr() as *mut c_void, |obj: *mut c_void| {
                     Py_DecRef(obj as *mut pyo3::ffi::PyObject);
                 }),
             );

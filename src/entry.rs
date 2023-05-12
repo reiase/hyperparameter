@@ -1,15 +1,24 @@
 use arraystring::CacheString;
-use std::ffi::c_void;
+use std::{ffi::c_void, sync::Arc};
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeferUnsafe(pub *mut c_void, pub unsafe fn(*mut c_void));
+
+impl Drop for DeferUnsafe {
+    fn drop(&mut self) {
+        unsafe { self.1(self.0) }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Empty,
     Int(i64),
     Float(f64),
     Text(CacheString),
     Boolen(bool),
-    UserDefined(*mut c_void),
-    PyObject(*mut c_void, unsafe fn(*mut c_void)),
+    UserDefined(*mut c_void, Option<Arc<DeferUnsafe>>),
+    PyObject(*mut c_void, Arc<DeferUnsafe>),
 }
 
 impl From<i64> for Value {
@@ -50,7 +59,13 @@ impl From<bool> for Value {
 
 impl From<*mut c_void> for Value {
     fn from(value: *mut c_void) -> Self {
-        Value::UserDefined(value)
+        Value::UserDefined(value, None)
+    }
+}
+
+impl Value {
+    pub fn pyobj(ptr: *mut c_void, free: unsafe fn(*mut c_void)) -> Value {
+        Value::PyObject(ptr, Arc::new(DeferUnsafe(ptr, free)))
     }
 }
 
@@ -66,7 +81,7 @@ impl TryFrom<Value> for i64 {
                 .parse::<i64>()
                 .or_else(|_| Err(format!("error convert {} into i64", v))),
             Value::Boolen(v) => Ok(v.into()),
-            Value::UserDefined(_) => Err("data type not matched, `Userdefined` and i64".into()),
+            Value::UserDefined(_, _) => Err("data type not matched, `Userdefined` and i64".into()),
             Value::PyObject(_, _) => Err("data type not matched, `PyObject` and i64".into()),
         }
     }
@@ -84,7 +99,7 @@ impl TryFrom<Value> for f64 {
                 .parse::<f64>()
                 .or_else(|_| Err(format!("error convert {} into i64", v))),
             Value::Boolen(_) => Err("data type not matched, `Boolen` and i64".into()),
-            Value::UserDefined(_) => Err("data type not matched, `Userdefined` and f64".into()),
+            Value::UserDefined(_, _) => Err("data type not matched, `Userdefined` and f64".into()),
             Value::PyObject(_, _) => Err("data type not matched, `PyObject` and f64".into()),
         }
     }
@@ -100,7 +115,7 @@ impl TryFrom<Value> for String {
             Value::Float(v) => Ok(format!("{}", v)),
             Value::Text(v) => Ok(v.to_string()),
             Value::Boolen(v) => Ok(format!("{}", v)),
-            Value::UserDefined(_) => Err("data type not matched, `Userdefined` and str".into()),
+            Value::UserDefined(_, _) => Err("data type not matched, `Userdefined` and str".into()),
             Value::PyObject(_, _) => Err("data type not matched, `PyObject` and str".into()),
         }
     }
@@ -116,7 +131,7 @@ impl TryFrom<Value> for bool {
             Value::Float(_) => Err("data type not matched, `Float` and bool".into()),
             Value::Text(_) => Err("data type not matched, `Text` and bool".into()),
             Value::Boolen(v) => Ok(v),
-            Value::UserDefined(_) => Err("data type not matched, `Userdefined` and str".into()),
+            Value::UserDefined(_, _) => Err("data type not matched, `Userdefined` and str".into()),
             Value::PyObject(_, _) => Err("data type not matched, `PyObject` and str".into()),
         }
     }
@@ -181,17 +196,10 @@ impl Entry {
     }
 
     pub fn rollback(&mut self) -> Result<(), ()> {
-        let val = self.val.get();
         let his = self.val.history();
         match his {
             None => Err(()),
             Some(h) => {
-                match val {
-                    Value::PyObject(obj, free) => unsafe {
-                        free(*obj);
-                    },
-                    _ => {}
-                }
                 self.val = *h.clone();
                 Ok(())
             }

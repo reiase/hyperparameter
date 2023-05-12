@@ -143,10 +143,6 @@ try:
     if os.environ.get("HYPERPARAMETER_BACKEND", "RUST") == "RUST":
         from hyperparameter.rbackend import KVStorage
         TLSKVStorage = KVStorage
-        print("using native hyperparameter backend")
-    else:
-        print("using python hyperparameter backend")
 except:
     import traceback
     traceback.print_exc()
-    print("using python hyperparameter backend")
