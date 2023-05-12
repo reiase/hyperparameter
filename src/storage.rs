@@ -44,6 +44,11 @@ impl StorageManager {
             hash.borrow_mut().insert(key);
         }
     }
+    pub fn put_hkey(&mut self, key: u64) {
+        if let Some(hash) = self.stack.last() {
+            hash.borrow_mut().insert(key);
+        }
+    }
 }
 
 thread_local! {
@@ -233,6 +238,7 @@ impl Storage {
                         val: EntryValue::Single(val.clone().into()),
                     },
                 );
+                MGR.with(|mgr: &RefCell<StorageManager>| mgr.borrow_mut().put_hkey(hkey));
             }
         }
     }
