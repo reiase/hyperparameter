@@ -28,12 +28,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build
-    - name: Build manylinux Python wheels
-      uses: tmtenbrink/python-wheels-manylinux-build@1.0.0
+        pip install build maturin
+    - uses: PyO3/maturin-action@v1
       with:
-        python-versions: 'cp38-cp38 cp39-cp39 cp310-cp310 cp311-cp311'
-        build-requirements: 'build'
+        command: build
+        args: --release --sdist -o dist
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
       with:
