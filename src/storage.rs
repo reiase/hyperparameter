@@ -156,17 +156,6 @@ impl Storage {
             let keys = self.tree().keys().cloned().collect();
             m.borrow_mut().stack.push(RefCell::new(keys));
         });
-        // MGR.with_borrow_mut(|m| {
-        //     for (k, v) in self.tree().iter() {
-        //         if m.tls.borrow().contains_key(&k) {
-        //             tree_revision(m.tls.borrow_mut(), *k, v.clone_value());
-        //         } else {
-        //             m.tls.borrow_mut().insert(*k, v.clone());
-        //         }
-        //     }
-        //     let keys = self.tree().keys().cloned().collect();
-        //     m.stack.push(RefCell::new(keys));
-        // });
         self.isview += 1;
     }
 
@@ -179,13 +168,6 @@ impl Storage {
                     .for_each(|k| tree_rollback(m.tls.borrow_mut(), *k));
             }
         });
-        // MGR.with_borrow_mut(|m| {
-        //     if let Some(keys) = m.stack.pop() {
-        //         keys.borrow()
-        //             .iter()
-        //             .for_each(|k| tree_rollback(m.tls.borrow_mut(), *k));
-        //     }
-        // });
         self.isview -= 1;
     }
 

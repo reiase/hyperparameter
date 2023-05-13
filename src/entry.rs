@@ -17,8 +17,11 @@ pub enum Value {
     Float(f64),
     Text(CacheString),
     Boolen(bool),
-    UserDefined(*mut c_void, Option<Arc<DeferUnsafe>>),
-    PyObject(*mut c_void, Arc<DeferUnsafe>),
+    UserDefined(
+        *mut c_void,              //data
+        i32,                      //kind
+        Option<Arc<DeferUnsafe>>, // de-allocator
+    ),
 }
 
 impl From<i64> for Value {
@@ -59,13 +62,13 @@ impl From<bool> for Value {
 
 impl From<*mut c_void> for Value {
     fn from(value: *mut c_void) -> Self {
-        Value::UserDefined(value, None)
+        Value::UserDefined(value, 0, None)
     }
 }
 
 impl Value {
-    pub fn pyobj(ptr: *mut c_void, free: unsafe fn(*mut c_void)) -> Value {
-        Value::PyObject(ptr, Arc::new(DeferUnsafe(ptr, free)))
+    pub fn managed(ptr: *mut c_void, kind: i32, free: unsafe fn(*mut c_void)) -> Value {
+        Value::UserDefined(ptr, kind, Arc::new(DeferUnsafe(ptr, free)).into())
     }
 }
 
@@ -75,14 +78,15 @@ impl TryFrom<Value> for i64 {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::Empty => Err("empty value error".into()),
-            Value::Int(v) => Ok(v),
+            Value::Int(v) => Ok(v.into()),
             Value::Float(v) => Ok(v as i64),
             Value::Text(v) => v
                 .parse::<i64>()
                 .or_else(|_| Err(format!("error convert {} into i64", v))),
             Value::Boolen(v) => Ok(v.into()),
-            Value::UserDefined(_, _) => Err("data type not matched, `Userdefined` and i64".into()),
-            Value::PyObject(_, _) => Err("data type not matched, `PyObject` and i64".into()),
+            Value::UserDefined(_, _, _) => {
+                Err("data type not matched, `UserDefined` and i64".into())
+            }
         }
     }
 }
@@ -99,8 +103,9 @@ impl TryFrom<Value> for f64 {
                 .parse::<f64>()
                 .or_else(|_| Err(format!("error convert {} into i64", v))),
             Value::Boolen(_) => Err("data type not matched, `Boolen` and i64".into()),
-            Value::UserDefined(_, _) => Err("data type not matched, `Userdefined` and f64".into()),
-            Value::PyObject(_, _) => Err("data type not matched, `PyObject` and f64".into()),
+            Value::UserDefined(_, _, _) => {
+                Err("data type not matched, `UserDefined` and f64".into())
+            }
         }
     }
 }
@@ -115,8 +120,9 @@ impl TryFrom<Value> for String {
             Value::Float(v) => Ok(format!("{}", v)),
             Value::Text(v) => Ok(v.to_string()),
             Value::Boolen(v) => Ok(format!("{}", v)),
-            Value::UserDefined(_, _) => Err("data type not matched, `Userdefined` and str".into()),
-            Value::PyObject(_, _) => Err("data type not matched, `PyObject` and str".into()),
+            Value::UserDefined(_, _, _) => {
+                Err("data type not matched, `UserDefined` and str".into())
+            }
         }
     }
 }
@@ -131,8 +137,9 @@ impl TryFrom<Value> for bool {
             Value::Float(_) => Err("data type not matched, `Float` and bool".into()),
             Value::Text(_) => Err("data type not matched, `Text` and bool".into()),
             Value::Boolen(v) => Ok(v),
-            Value::UserDefined(_, _) => Err("data type not matched, `Userdefined` and str".into()),
-            Value::PyObject(_, _) => Err("data type not matched, `PyObject` and str".into()),
+            Value::UserDefined(_, _, _) => {
+                Err("data type not matched, `UserDefined` and str".into())
+            }
         }
     }
 }
@@ -182,11 +189,10 @@ impl Entry {
     }
 
     pub fn update<V: Into<Value>>(&mut self, val: V) {
-        let his = self.val.history();
-        if his.is_none() {
-            self.val = EntryValue::Single(val.into());
+        if let Some(his) = self.val.history() {
+            self.val = EntryValue::Versioned(val.into(), his.clone());
         } else {
-            self.val = EntryValue::Versioned(val.into(), (*his.unwrap()).clone());
+            self.val = EntryValue::Single(val.into());
         }
     }
 
@@ -196,13 +202,10 @@ impl Entry {
     }
 
     pub fn rollback(&mut self) -> Result<(), ()> {
-        let his = self.val.history();
-        match his {
-            None => Err(()),
-            Some(h) => {
-                self.val = *h.clone();
-                Ok(())
-            }
+        if let Some(h) = self.val.history() {
+            self.val = *h.clone();
+            return Ok(());
         }
+        return Err(());
     }
 }
