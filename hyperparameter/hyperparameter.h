@@ -32,7 +32,7 @@ namespace hyperparameter
         {
             return finalize((len >= 32 ? h32bytes(p, len, seed) : seed + PRIME5) + len, p + (len & ~0x1F), len & 0x1F);
         }
-
+        
     private:
         static constexpr uint64_t PRIME1 = 11400714785074694791ULL;
         static constexpr uint64_t PRIME2 = 14029467366897019727ULL;
@@ -191,6 +191,21 @@ namespace hyperparameter
     {
         return storage_put_str(_storage, key, val);
     }
+
+    std::shared_ptr<hyperparameter::Hyperparameter> get_hp() {
+      static std::shared_ptr<Hyperparameter> hp;
+      if (!hp) {
+        hp = hyperparameter::create_shared();
+      }
+      return hp;
+    }
 }
+
+#define GETHP hyperparameter::get_hp()  
+
+// Implicit create hyperparameter object
+#define GETPARAM(p, default_val)                                              \
+  (GETHP->get(([](){ constexpr uint64_t x = hyperparameter::xxhash(#p,sizeof(#p)-1); return x;})(), default_val))
+#define PUTPARAM(p, default_val) (GETHP->put(#p, default_val))
 
 #endif

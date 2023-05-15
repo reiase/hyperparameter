@@ -36,6 +36,23 @@ int main()
               << "returned: "
               << hp->get("x.y.z", "false") << std::endl;
 
+    // ======= opt api test =======
+
+    PUTPARAM(xacc.eager, false);
+    PUTPARAM(xacc.lazy.device, "xla");
+
+    std::string device_type = GETPARAM(xacc.lazy.device, "xpu");
+    std::cout << "\n:: (opt api) test put parameter" << std::endl
+              << "expected: xla" << std::endl
+              << "returned: " << device_type << std::endl
+              << "expected: 0" << std::endl
+              << "returned: " << GETPARAM(xacc.eager, true) << std::endl;
+
+    std::cout << "\n:: (opt api) test undefined" << std::endl
+              << "expected: 100" << std::endl
+              << "returned: " << GETPARAM(xacc.dynamo.time, 100) << std::endl;
+
     std::cout << "in main" << std::endl;
+
     return 0;
 }
