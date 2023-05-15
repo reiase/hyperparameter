@@ -38,19 +38,19 @@ int main()
 
     // ======= opt api test =======
 
-    PUTPARAMS(xacc.eager, false);
-    PUTPARAMS(xacc.lazy.device, "xla");
+    PUTPARAM(xacc.eager, false);
+    PUTPARAM(xacc.lazy.device, "xla");
 
-    std::string device_type = GETPARAMS(xacc.lazy.device, "xpu");
+    std::string device_type = GETPARAM(xacc.lazy.device, "xpu");
     std::cout << "\n:: (opt api) test put parameter" << std::endl
               << "expected: xla" << std::endl
               << "returned: " << device_type << std::endl
               << "expected: 0" << std::endl
-              << "returned: " << GETPARAMS(xacc.eager, true) << std::endl;
+              << "returned: " << GETPARAM(xacc.eager, true) << std::endl;
 
     std::cout << "\n:: (opt api) test undefined" << std::endl
               << "expected: 100" << std::endl
-              << "returned: " << GETPARAMS(xacc.dynamo.time, 100) << std::endl;
+              << "returned: " << GETPARAM(xacc.dynamo.time, 100) << std::endl;
 
     std::cout << "in main" << std::endl;
 

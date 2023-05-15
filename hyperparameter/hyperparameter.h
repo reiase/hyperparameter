@@ -32,21 +32,7 @@ namespace hyperparameter
         {
             return finalize((len >= 32 ? h32bytes(p, len, seed) : seed + PRIME5) + len, p + (len & ~0x1F), len & 0x1F);
         }
-
-        template <uint64_t len,
-                  typename std::enable_if<len >= 32, uint64_t>::type = true>
-        static constexpr uint64_t hash(const char *p, uint64_t seed = 42) {
-          return finalize(h32bytes<len>(p, seed) + len, p + (len & ~0x1F),
-                          len & 0x1F);
-        }
-
-        template <uint64_t len,
-                  typename std::enable_if<len<32, uint64_t>::type =
-                                              true> static constexpr uint64_t
-                      hash(const char *p, uint64_t seed = 42) {
-          return finalize(seed + PRIME5 + len, p + (len & ~0x1F), len & 0x1F);
-        }
-
+        
     private:
         static constexpr uint64_t PRIME1 = 11400714785074694791ULL;
         static constexpr uint64_t PRIME2 = 14029467366897019727ULL;
@@ -94,33 +80,6 @@ namespace hyperparameter
         {
             return (len >= 8) ? (finalize(rotl(h ^ fetch64(p), 27) * PRIME1 + PRIME4, p + 8, len - 8)) : ((len >= 4) ? (finalize(rotl(h ^ fetch32(p), 23) * PRIME2 + PRIME3, p + 4, len - 4)) : ((len > 0) ? (finalize(rotl(h ^ fetch8(p), 11) * PRIME1, p + 1, len - 1)) : (mix1(mix1(mix1(h, PRIME2, 33), PRIME3, 29), 1, 32))));
         }
-
-        template <uint64_t len,
-                  typename std::enable_if<len >= 8, uint64_t>::type = true>
-        static constexpr uint64_t finalize(const uint64_t h, const char *p) {
-          return finalize<len - 8>(rotl(h ^ fetch64(p), 27) * PRIME1 + PRIME4,
-                                   p + 8);
-        }
-
-        template <uint64_t len, typename std::enable_if<(len < 8) && (len >= 4),
-                                                        uint64_t>::type = true>
-        static constexpr uint64_t finalize(const uint64_t h, const char *p) {
-          return finalize<len - 4>(rotl(h ^ fetch32(p), 23) * PRIME2 + PRIME3,
-                                   p + 4);
-        }
-
-        template <uint64_t len, typename std::enable_if<(len < 4) && (len > 0),
-                                                        uint64_t>::type = true>
-        static constexpr uint64_t finalize(const uint64_t h, const char *p) {
-          return finalize<len - 1>(rotl(h ^ fetch8(p), 11) * PRIME1, p + 1);
-        }
-
-        template <uint64_t len,
-                  typename std::enable_if<(len == 0), uint64_t>::type = true>
-        static constexpr uint64_t finalize(const uint64_t h, const char *p) {
-          return mix1(mix1(mix1(h, PRIME2, 33), PRIME3, 29), 1, 32);
-        }
-
         static constexpr uint64_t h32bytes(const char *p, uint64_t len, const uint64_t v1, const uint64_t v2, const uint64_t v3, const uint64_t v4)
         {
             return (len >= 32) ? h32bytes(p + 32, len - 32, fetch64(p, v1), fetch64(p + 8, v2), fetch64(p + 16, v3), fetch64(p + 24, v4)) : mix3(mix3(mix3(mix3(rotl(v1, 1) + rotl(v2, 7) + rotl(v3, 12) + rotl(v4, 18), v1), v2), v3), v4);
@@ -129,34 +88,9 @@ namespace hyperparameter
         {
             return h32bytes(p, len, seed + PRIME1 + PRIME2, seed + PRIME2, seed, seed - PRIME1);
         }
-
-        template <uint64_t len>
-        static constexpr uint64_t h32bytes(const char *p, const uint64_t v1,
-                                           const uint64_t v2, const uint64_t v3,
-                                           const uint64_t v4) {
-          return (len >= 32)
-                     ? h32bytes<len - 32>(
-                           p + 32, fetch64(p, v1), fetch64(p + 8, v2),
-                           fetch64(p + 16, v3), fetch64(p + 24, v4))
-                     : mix3(mix3(mix3(mix3(rotl(v1, 1) + rotl(v2, 7) +
-                                               rotl(v3, 12) + rotl(v4, 18),
-                                           v1),
-                                      v2),
-                                 v3),
-                            v4);
-        }
-
-        template <uint64_t len>
-        static constexpr uint64_t h32bytes(const char *p, const uint64_t seed) {
-          return h32bytes<len>(p, seed + PRIME1 + PRIME2, seed + PRIME2, seed,
-                               seed - PRIME1);
-        }
     };
 
     constexpr uint64_t xxhash(const char *p, int len) { return xxh64::hash(p, len, 42); }
-
-    template <uint64_t len>
-    constexpr uint64_t xxhash(const char *p) { return xxh64::hash<len>(p, (uint64_t)42); }
 
     struct Hyperparameter
     {
@@ -267,11 +201,11 @@ namespace hyperparameter
     }
 }
 
-#define GETHP hyperparameter::get_hp()
+#define GETHP hyperparameter::get_hp()  
 
 // Implicit create hyperparameter object
-#define GETPARAMS(p, default_val)                                              \
-  (GETHP->get(hyperparameter::xxhash<sizeof(#p) - 1>(#p), default_val))
-#define PUTPARAMS(p, default_val) (GETHP->put(#p, default_val))
+#define GETPARAM(p, default_val)                                              \
+  (GETHP->get(([](){ constexpr uint64_t x = hyperparameter::xxhash(#p,sizeof(#p)-1); return x;})(), default_val))
+#define PUTPARAM(p, default_val) (GETHP->put(#p, default_val))
 
 #endif
