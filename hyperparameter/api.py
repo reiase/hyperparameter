@@ -2,7 +2,8 @@ import functools
 import inspect
 from typing import Any, Callable, Dict
 
-from hyperparameter.storage import TLSKVStorage
+from hyperparameter.storage import TLSKVStorage, has_rust_backend
+from hyperparameter.storage import xxh64
 from .tune import Suggester
 
 
@@ -461,7 +462,7 @@ class param_scope(_HyperParameter):
     def init(params=None):
         """init param_scope for a new thread."""
         param_scope(**params).__enter__()
-        
+
     @staticmethod
     def frozen():
         with param_scope():
@@ -519,6 +520,38 @@ def auto_param(name_or_func):
 
     if callable(name_or_func):
         return auto_param(None)(name_or_func)
+
+    if has_rust_backend:
+
+        def hashed_wrapper(func):
+            predef_kws = {}
+
+            if name_or_func is None:
+                namespace = func.__name__
+            else:
+                namespace = name_or_func
+
+            signature = inspect.signature(func)
+            for k, v in signature.parameters.items():
+                if v.default != v.empty:
+                    name = "{}.{}".format(namespace, k)
+                    predef_kws[k] = xxh64(name)
+
+            @functools.wraps(func)
+            def inner(*arg, **kws):
+                with param_scope() as hp:
+                    for k, v in predef_kws.items():
+                        if k not in kws:
+                            try:
+                                val = hp._storage.get_by_hash(v)
+                                kws[k] = val
+                            except ValueError:
+                                pass
+                    return func(*arg, **kws)
+
+            return inner
+
+        return hashed_wrapper
 
     def wrapper(func):
         predef_kws = {}

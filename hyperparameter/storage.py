@@ -102,6 +102,9 @@ class TLSKVStorage(Storage):
 
     def clear(self):
         self._storage.clear()
+        
+    def get_by_hash(self, *args, **kwargs):
+        raise RuntimeError("hyperparameter is not build with rust backend")
 
     def get(self, name: str, accessor: Callable = None) -> Any:
         if name in self.__slots__:
@@ -139,10 +142,21 @@ class TLSKVStorage(Storage):
         GLOBAL_STORAGE.update(TLSKVStorage.tls.his[-1].storage())
 
 
+has_rust_backend = False
+
+
+def xxh64(*args, **kwargs):
+    raise RuntimeError("hyperparameter is not build with rust backend")
+
+
 try:
     if os.environ.get("HYPERPARAMETER_BACKEND", "RUST") == "RUST":
         from hyperparameter.rbackend import KVStorage
+        from hyperparameter.rbackend import xxh64
+
         TLSKVStorage = KVStorage
+        has_rust_backend = True
 except:
     import traceback
+
     traceback.print_exc()

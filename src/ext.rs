@@ -18,6 +18,7 @@ use crate::storage::frozen_as_global_storage;
 use crate::storage::Storage;
 use crate::storage::StorageManager;
 use crate::storage::MGR;
+use crate::xxh::xxhstr;
 
 #[repr(C)]
 enum UserDefinedType {
@@ -127,6 +128,28 @@ impl KVStorage {
         }
     }
 
+    pub unsafe fn get_by_hash(&mut self, py: Python<'_>, hkey: u64) -> PyResult<Option<PyObject>> {
+        match self.storage.get_by_hash(hkey) {
+            Some(val) => match val {
+                Value::Empty => Err(PyValueError::new_err("not found")),
+                Value::Int(v) => Ok(Some(v.into_py(py))),
+                Value::Float(v) => Ok(Some(v.into_py(py))),
+                Value::Text(v) => Ok(Some(v.into_py(py))),
+                Value::Boolen(v) => Ok(Some(v.into_py(py))),
+                Value::UserDefined(v, k, _) => {
+                    if k == UserDefinedType::PyObjectType as i32 {
+                        Ok(Some(
+                            PyAny::from_borrowed_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
+                        ))
+                    } else {
+                        Ok(Some((v as u64).into_py(py)))
+                    }
+                }
+            },
+            None => Err(PyValueError::new_err("not found")),
+        }
+    }
+
     pub unsafe fn put(&mut self, key: String, val: &PyAny) -> PyResult<()> {
         if self.isview {
             MGR.with(|mgr: &RefCell<StorageManager>| mgr.borrow_mut().put_key(key.clone()));
@@ -172,8 +195,14 @@ impl KVStorage {
     }
 }
 
+#[pyfunction]
+pub fn xxh64(s: &str) -> u64 {
+    xxhstr(s)
+}
+
 #[pymodule]
 fn rbackend(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<KVStorage>()?;
+    m.add_function(wrap_pyfunction!(xxh64, m)?)?;
     Ok(())
 }
