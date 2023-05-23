@@ -1,4 +1,3 @@
-use arraystring::CacheString;
 use std::{ffi::c_void, sync::Arc};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -15,7 +14,7 @@ pub enum Value {
     Empty,
     Int(i64),
     Float(f64),
-    Text(CacheString),
+    Text(String),
     Boolen(bool),
     UserDefined(
         *mut c_void,              //data
@@ -38,19 +37,19 @@ impl From<f64> for Value {
 
 impl From<String> for Value {
     fn from(value: String) -> Self {
-        Value::Text(CacheString::from_str_truncate(value))
+        Value::Text(value)
     }
 }
 
 impl From<&String> for Value {
     fn from(value: &String) -> Self {
-        Value::Text(CacheString::from_str_truncate(value))
+        Value::Text(value.clone())
     }
 }
 
 impl From<&str> for Value {
     fn from(value: &str) -> Self {
-        Value::Text(CacheString::from_str_truncate(value))
+        Value::Text(value.to_string())
     }
 }
 
