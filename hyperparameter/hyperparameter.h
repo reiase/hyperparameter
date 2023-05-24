@@ -32,7 +32,7 @@ namespace hyperparameter
         {
             return finalize((len >= 32 ? h32bytes(p, len, seed) : seed + PRIME5) + len, p + (len & ~0x1F), len & 0x1F);
         }
-        
+
     private:
         static constexpr uint64_t PRIME1 = 11400714785074694791ULL;
         static constexpr uint64_t PRIME2 = 14029467366897019727ULL;
@@ -98,114 +98,116 @@ namespace hyperparameter
         Hyperparameter() : _storage(hyper_create_storage()) {}
         ~Hyperparameter() { hyper_destory_storage(_storage); }
 
-        void enter() { storage_enter(_storage); }
-        void exit() { storage_exit(_storage); }
+        inline void enter() { storage_enter(_storage); }
+        inline void exit() { storage_exit(_storage); }
 
         template <typename T>
-        T get(uint64_t key, T def);
+        inline T get(uint64_t key, T def);
 
         template <typename T>
-        T get(const std::string &key, T def) { return get(key.c_str(), key.size(), def); }
+        inline T get(const std::string &key, T def) { return get(key.c_str(), key.size(), def); }
 
         template <typename T>
-        T get(const char *key, int keylen, T def) { return get(xxhash(key, keylen), def); }
+        inline T get(const char *key, int keylen, T def) { return get(xxhash(key, keylen), def); }
 
         template <typename T>
-        void put(const std::string &key, T val) { put(key.c_str(), val); }
+        inline void put(const std::string &key, T val) { put(key.c_str(), val); }
 
         template <typename T>
-        void put(const char *key, T val);
+        inline void put(const char *key, T val);
     };
 
-    Hyperparameter *create() { return new Hyperparameter(); }
-    std::shared_ptr<Hyperparameter> create_shared() { return std::make_shared<Hyperparameter>(); }
+    inline Hyperparameter *create() { return new Hyperparameter(); }
+    inline std::shared_ptr<Hyperparameter> create_shared() { return std::make_shared<Hyperparameter>(); }
 
     template <>
-    int64_t Hyperparameter::get<int64_t>(uint64_t key, int64_t def)
+    inline int64_t Hyperparameter::get<int64_t>(uint64_t key, int64_t def)
     {
         return storage_hget_or_i64(_storage, key, def);
     }
 
     template <>
-    int32_t Hyperparameter::get<int32_t>(uint64_t key, int32_t def)
+    inline int32_t Hyperparameter::get<int32_t>(uint64_t key, int32_t def)
     {
         return storage_hget_or_i64(_storage, key, def);
     }
 
     template <>
-    double Hyperparameter::get<double>(uint64_t key, double def)
+    inline double Hyperparameter::get<double>(uint64_t key, double def)
     {
         return storage_hget_or_f64(_storage, key, def);
     }
 
     template <>
-    bool Hyperparameter::get<bool>(uint64_t key, bool def)
+    inline bool Hyperparameter::get<bool>(uint64_t key, bool def)
     {
         return storage_hget_or_bool(_storage, key, def);
     }
 
     template <>
-    std::string Hyperparameter::get<std::string>(uint64_t key, std::string def)
+    inline std::string Hyperparameter::get<std::string>(uint64_t key, std::string def)
     {
         return std::string(storage_hget_or_str(_storage, key, def.c_str()));
     }
 
     template <>
-    const char *Hyperparameter::get<const char *>(uint64_t key, const char *def)
+    inline const char *Hyperparameter::get<const char *>(uint64_t key, const char *def)
     {
         return storage_hget_or_str(_storage, key, def);
     }
 
     template <>
-    void Hyperparameter::put<int64_t>(const char *key, int64_t val)
+    inline void Hyperparameter::put<int64_t>(const char *key, int64_t val)
     {
         return storage_put_i64(_storage, key, val);
     }
 
     template <>
-    void Hyperparameter::put<int32_t>(const char *key, int32_t val)
+    inline void Hyperparameter::put<int32_t>(const char *key, int32_t val)
     {
         return storage_put_i64(_storage, key, val);
     }
 
     template <>
-    void Hyperparameter::put<double>(const char *key, double val)
+    inline void Hyperparameter::put<double>(const char *key, double val)
     {
         return storage_put_f64(_storage, key, val);
     }
 
     template <>
-    void Hyperparameter::put<bool>(const char *key, bool val)
+    inline void Hyperparameter::put<bool>(const char *key, bool val)
     {
         return storage_put_bool(_storage, key, val);
     }
 
     template <>
-    void Hyperparameter::put<const std::string &>(const char *key, const std::string &val)
+    inline void Hyperparameter::put<const std::string &>(const char *key, const std::string &val)
     {
         return storage_put_str(_storage, key, val.c_str());
     }
 
     template <>
-    void Hyperparameter::put<const char *>(const char *key, const char *val)
+    inline void Hyperparameter::put<const char *>(const char *key, const char *val)
     {
         return storage_put_str(_storage, key, val);
     }
 
-    std::shared_ptr<hyperparameter::Hyperparameter> get_hp() {
-      static std::shared_ptr<Hyperparameter> hp;
-      if (!hp) {
-        hp = hyperparameter::create_shared();
-      }
-      return hp;
+    inline std::shared_ptr<hyperparameter::Hyperparameter> get_hp()
+    {
+        static std::shared_ptr<Hyperparameter> hp;
+        if (!hp)
+        {
+            hp = hyperparameter::create_shared();
+        }
+        return hp;
     }
 }
 
-#define GETHP hyperparameter::get_hp()  
+#define GETHP hyperparameter::get_hp()
 
 // Implicit create hyperparameter object
-#define GETPARAM(p, default_val)                                              \
-  (GETHP->get(([](){ constexpr uint64_t x = hyperparameter::xxhash(#p,sizeof(#p)-1); return x;})(), default_val))
+#define GETPARAM(p, default_val) \
+    (GETHP->get(([]() { constexpr uint64_t x = hyperparameter::xxhash(#p,sizeof(#p)-1); return x; })(), default_val))
 #define PUTPARAM(p, default_val) (GETHP->put(#p, default_val))
 
 #endif

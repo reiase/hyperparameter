@@ -46,7 +46,9 @@ int main()
               << "expected: abc" << std::endl
               << "returned: " << abc << std::endl
               << "expected: 0" << std::endl
-              << "returned: " << GETPARAM(a.b, 1) << std::endl;
+              << "returned: " << GETPARAM(a.b, 1) << std::endl
+              << "expected: false" << std::endl
+              << "returned: " << GETPARAM(a.b, "true") << std::endl;
 
     std::cout << "\n:: (opt api) test undefined" << std::endl
               << "expected: 100" << std::endl
@@ -56,5 +58,15 @@ int main()
 
     std::cout << "test1.test2: " << GETPARAM(test1.test2, 100) << std::endl;
 
+    // ===== bool test ====
+    std::cout << "\n:: test bool parameter" << std::endl
+              << "expected: true" << std::endl
+              << "returned: " << GETPARAM(test1.bool1, false) << std::endl
+              << "expected: true" << std::endl
+              << "returned: " << GETPARAM(test1.bool2, false) << std::endl
+              << "expected: false" << std::endl
+              << "returned: " << GETPARAM(test1.bool3, true) << std::endl
+              << "expected: false" << std::endl
+              << "returned: " << GETPARAM(test1.bool4, true) << std::endl;
     return 0;
 }

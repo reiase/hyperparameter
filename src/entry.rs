@@ -1,4 +1,5 @@
 use std::{ffi::c_void, sync::Arc};
+use phf::phf_map;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeferUnsafe(pub *mut c_void, pub unsafe fn(*mut c_void));
@@ -126,6 +127,34 @@ impl TryFrom<Value> for String {
     }
 }
 
+static STR2BOOL: phf::Map<&'static str, bool> = phf_map! {
+    "true" => true,
+    "True" => true,
+    "TRUE" => true,
+    "T" => true,
+    "yes" => true,
+    "y" => true,
+    "Yes" => true,
+    "YES" => true,
+    "Y" => true,
+    "on" => true,
+    "On" => true,
+    "ON" => true,
+
+    "false" => false,
+    "False" => false,
+    "FALSE" => false,
+    "F" => false,
+    "no" => false,
+    "n" => false,
+    "No" => false,
+    "NO" => false,
+    "N" => false,
+    "off" => false,
+    "Off" => false,
+    "OFF" => false,
+};
+
 impl TryFrom<Value> for bool {
     type Error = String;
 
@@ -134,7 +163,12 @@ impl TryFrom<Value> for bool {
             Value::Empty => Err("empty value error".into()),
             Value::Int(v) => Ok(v != 0),
             Value::Float(_) => Err("data type not matched, `Float` and bool".into()),
-            Value::Text(_) => Err("data type not matched, `Text` and bool".into()),
+            Value::Text(s) => {
+                match STR2BOOL.get(&s) {
+                    Some(v) => Ok(v.clone()),
+                    None => Err("data type not matched, `Text` and bool".into()),
+                }
+            },
             Value::Boolen(v) => Ok(v),
             Value::UserDefined(_, _, _) => {
                 Err("data type not matched, `UserDefined` and str".into())

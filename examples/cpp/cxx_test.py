@@ -10,4 +10,8 @@ with param_scope() as ps:
     
     with param_scope():
         param_scope.test1.test2 = 2
+        param_scope.test1.bool1 = "true"
+        param_scope.test1.bool2 = "YES"
+        param_scope.test1.bool3 = "FALSE"
+        param_scope.test1.bool4 = "NO"
         a.main()
