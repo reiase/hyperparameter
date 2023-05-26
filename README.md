@@ -1,4 +1,4 @@
-**H**_yper_**P**_arameter_
+Hyperparameter
 ===========================
 
 <h3 align="center">
@@ -7,88 +7,99 @@
   </p>
 </h3>
 
-HyperParameter is a pythonic configuration framework designed to simplify the massive configuration in complex applications. The key feature is a dynamic hierarchical parameter tree composited with scopes. HyperParameter is particularly well suited for machine learning experiments and related systems, which have many parameters and nested codes.
+<p align="center">
 
-Key Conceptions
----------------
+**Hyperparameter, Make configurable AI applications.Build for Python hackers.**
 
-1. `parameter tree`, a nested python dict with support for default values and object-style API;
-1. `param_scope`, a context manager for compositing the ` parameter tree` with nested `param_scope`;
-2. `auto_param`, a decorator allowing default parameters of a function or class to be supplied from `param_scope`;
-
+</p>
 
 Quick Start
 -----------
 
-A quick example for defining a model with HyperParameter:
+`Hyperparameter` uses `auto _ param` decorator to convert keywords arguments into configurable parameters:
 
 ```python
-@auto_param
-def dnn(input, layers=3, activation="relu"):
-  	"""
-  	build a DNN model with the following configurations:
-  		- dnn.layers(default: 3)
-  		- dnn.activation(default: "relu")
-  	"""
-    for i in range(layers):
-        input = Linear(input)
-        input = activation_fn(
-            activation,
-            input
-        )
-    return input
+from hyperparameter import auto_param
 
-# call dnn with default configuration 
-# and create a 3 layer dnn with relu activation
-dnn(x)
-
-# passing parameter using param_scope
-with param_scope(**{
-        "dnn.layers": 4, 
-        "dnn.activation": "sigmoid"}):
-    # create a 4 layer dnn with sigmoid activation
-    dnn()
+@auto_param("foo")
+def foo(x, y=1, z="a"):
+    return f"x={x}, y={y}, z={z}"
 ```
 
-Another example for building ML system:
+The parameters can be controlled with `param_scope`
 
 ```python
-@auto_param
-def inference(x, backend="tvm"):
-    ...
+from hyperparameter import param_scope
 
-with param_scope(backend="onnx"):
-    inference(x)
+foo(1) # x=1, y=1, z='a'
+with param_scope(**{"foo.y":2}):
+    foo(1) # x=1, y=2, z='a'
 ```
 
 Advanced Usage
 --------------
-### Nested Scope and Configuration Composition
 
-HyperParameter uses nested  `param_scope` for configuration composition :
+### Read/Write Parameters
+
+```python
+from hyperparameter import param_scope
+
+# create param_scope
+with param_scope():
+    pass
+
+with param_scope("foo.y=1", "foo.z=b"):
+    pass
+
+with param_scope(**{"foo.y":1, "foo.z":2}):
+    pass
+
+# read param with default value
+with param_scope(**{"foo.y":2}) as ps:
+    y = ps.foo.y(1)  
+    y = ps.foo.y | 1
+    y = param_scope.foo.y(1)
+    y = param_scope.foo.y | 1
+    foo(1) # x=1, y=2, z='a'
+
+# wite values to param_scope
+with param_scope(**{"foo.y":2}) as ps:
+    ps.foo.y = 2
+    param_scope.foo.y = 2
+```
+
+### Nested Scope
+
+`Hyperparameter` support nested `param_scope`:
 
 ``` python
 from hyperparameter import param_scope
-# on initialization, the parameter tree is empty: {}
-with param_scope(a=1) as ps:
-    # in the with context, the composited parameter tree is {"a": 1}
-    ps == {"a": 1}
-    with param_scope(a=2, b=3) as ps2:
-        # in the nested scope, the composited parameter tree is {"a": 2, "b": 3}
-        # param `b` is a new, and param `a` is overwrite by new value
-        ps2 == {"a": 2, "b": 3}
-    # when exit the inner scope, the modification of inner scope is cleaned up
-    # the composited parameter tree is {"a": 1}
-    ps == {"a": 1}
+
+# no param_scope, use the default value defined in foo
+foo(1) # x=1, y=1, z='a'
+
+# start a new param_scope
+# and set the default value of `foo.y` to `2`
+with param_scope(**{"foo.y":2}) as ps:
+    # found one param_scope `ps`, 
+    # and receive default value of `foo.y` from `ps`
+    foo(1) # x=1, y=2, z='a'
+
+    # start another param_scope
+    # and set the default value of `foo.y` to `3`
+    with param_scope(**{"foo.z": "b"}) as ps2:
+        # found nested param_scope `ps2`, 
+        # and receive default values of `foo.z` from `ps2`
+        foo(1) # x=1, y=2, z='b'
+    # `ps2` ends here, and `foo.y` is restored to `2`
+    foo(1) # x=1, y=2, z='a'
+# `ps` ends here, and `foo.y` is restored to `1`
+foo(1) # x=1, y=1, z='a'
 ```
 
-### Manage Parameters from CMD Line
+### CMD Line Arguments
 
-It is recommended to use three-layer configuration for complex programmes:
-
-1. `inline default values`;
-2. `config file`, which will override `inline default values`;
-3. `cmdline arguments` that override both `config file` and `inline default values`;
+An example CLI app: 
 
 ```python
 from hyperparameter import param_scope, auto_param
@@ -99,17 +110,13 @@ def main(a=0, b=1): # `inline default values`
 
 if __name__ == "__main__":
     import argparse
-    import json
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default=None)
+
     parser.add_argument("-D", "--define", nargs="*", default=[], action="extend")
     args = parser.parse_args()
 
-    with open(args.config) as f:
-        cfg = json.load(f) # read config file
-    with param_scope(**cfg): # scope for `config file`
-        with param_scope(*args.define): # scope for `cmdline args`
-            main()
+    with param_scope(*args.define):
+        main()
 ```
 
 Examples
