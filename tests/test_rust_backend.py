@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from hyperparameter.rbackend import KVStorage
+from hyperparameter.librbackend import KVStorage
 
 
 class TestRBackend(TestCase):

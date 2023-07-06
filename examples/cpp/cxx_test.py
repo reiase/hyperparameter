@@ -1,4 +1,4 @@
-from hyperparameter.rbackend import KVStorage
+from hyperparameter.librbackend import KVStorage
 from hyperparameter import param_scope
 import ctypes
 

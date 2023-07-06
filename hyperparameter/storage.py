@@ -151,8 +151,8 @@ def xxh64(*args, **kwargs):
 
 try:
     if os.environ.get("HYPERPARAMETER_BACKEND", "RUST") == "RUST":
-        from hyperparameter.rbackend import KVStorage
-        from hyperparameter.rbackend import xxh64
+        from hyperparameter.librbackend import KVStorage
+        from hyperparameter.librbackend import xxh64
 
         TLSKVStorage = KVStorage
         has_rust_backend = True

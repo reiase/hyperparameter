@@ -12,7 +12,7 @@ readme = "README.md"
 license = { text = "Apache License Version 2.0" }
 
 [tool.maturin]
-module-name = "hyperparameter.rbackend"
+module-name = "hyperparameter.librbackend"
 features = ["pyo3/extension-module"]
 include = ["hyperparameter/hyperparameter.h"]
 

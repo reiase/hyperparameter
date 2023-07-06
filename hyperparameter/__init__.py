@@ -8,7 +8,7 @@ VERSION = importlib.metadata.version("hyperparameter")
 import os
 include = os.path.dirname(__file__)
 try:
-    import hyperparameter.rbackend
-    lib = hyperparameter.rbackend.__file__
+    import hyperparameter.librbackend
+    lib = hyperparameter.librbackend.__file__
 except:
     lib = ""

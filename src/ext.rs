@@ -201,7 +201,7 @@ pub fn xxh64(s: &str) -> u64 {
 }
 
 #[pymodule]
-fn rbackend(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn librbackend(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<KVStorage>()?;
     m.add_function(wrap_pyfunction!(xxh64, m)?)?;
     Ok(())
