@@ -33,6 +33,7 @@ pub unsafe extern "C" fn storage_hget_or_f64(this: *mut Storage, hkey: u64, def:
     (*this).get_or_else(hkey, def)
 }
 
+#[cfg(target_arch = "x86_64")]
 #[no_mangle]
 pub unsafe extern "C" fn storage_hget_or_str(
     this: *mut Storage,
@@ -44,32 +45,77 @@ pub unsafe extern "C" fn storage_hget_or_str(
     CString::new(s).unwrap().into_raw()
 }
 
+#[cfg(target_arch = "aarch64")]
+#[no_mangle]
+pub unsafe extern "C" fn storage_hget_or_str(
+    this: *mut Storage,
+    hkey: u64,
+    def: *mut i8,
+) -> *mut u8 {
+    let raw = CStr::from_ptr(def as *const u8).to_str().unwrap().to_string();
+    let s = (*this).get_or_else(hkey, raw);
+    CString::new(s).unwrap().into_raw()
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn storage_hget_or_bool(this: *mut Storage, hkey: u64, def: bool) -> bool {
     (*this).get_or_else(hkey, def)
 }
 
+#[cfg(target_arch = "x86_64")]
 #[no_mangle]
 pub unsafe extern "C" fn storage_put_i64(this: *mut Storage, key: *const i8, val: i64) {
     let key = CStr::from_ptr(key);
     (*this).put(key.to_string_lossy(), val)
 }
 
+#[cfg(target_arch = "aarch64")]
+#[no_mangle]
+pub unsafe extern "C" fn storage_put_i64(this: *mut Storage, key: *const i8, val: i64) {
+    let key = CStr::from_ptr(key as *const u8);
+    (*this).put(key.to_string_lossy(), val)
+}
+
+#[cfg(target_arch = "x86_64")]
 #[no_mangle]
 pub unsafe extern "C" fn storage_put_f64(this: *mut Storage, key: *const i8, val: f64) {
     let key = CStr::from_ptr(key);
     (*this).put(key.to_string_lossy(), val)
 }
 
+#[cfg(target_arch = "aarch64")]
+#[no_mangle]
+pub unsafe extern "C" fn storage_put_f64(this: *mut Storage, key: *const i8, val: f64) {
+    let key = CStr::from_ptr(key as *const u8);
+    (*this).put(key.to_string_lossy(), val)
+}
+
+#[cfg(target_arch = "x86_64")]
 #[no_mangle]
 pub unsafe extern "C" fn storage_put_bool(this: *mut Storage, key: *const i8, val: bool) {
     let key = CStr::from_ptr(key);
     (*this).put(key.to_string_lossy(), val)
 }
 
+#[cfg(target_arch = "aarch64")]
+#[no_mangle]
+pub unsafe extern "C" fn storage_put_bool(this: *mut Storage, key: *const i8, val: bool) {
+    let key = CStr::from_ptr(key as *const u8);
+    (*this).put(key.to_string_lossy(), val)
+}
+
+#[cfg(target_arch = "x86_64")]
 #[no_mangle]
 pub unsafe extern "C" fn storage_put_str(this: *mut Storage, key: *const i8, val: *const i8) {
     let key = CStr::from_ptr(key);
     let val = CStr::from_ptr(val);
+    (*this).put(key.to_string_lossy(), val.to_string_lossy().to_string())
+}
+
+#[cfg(target_arch = "aarch64")]
+#[no_mangle]
+pub unsafe extern "C" fn storage_put_str(this: *mut Storage, key: *const i8, val: *const i8) {
+    let key = CStr::from_ptr(key as *const u8);
+    let val = CStr::from_ptr(val as *const u8);
     (*this).put(key.to_string_lossy(), val.to_string_lossy().to_string())
 }
