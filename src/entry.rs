@@ -1,14 +1,15 @@
-use std::{ffi::c_void, sync::Arc};
 use phf::phf_map;
+use std::{ffi::c_void, sync::Arc};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeferUnsafe(pub *mut c_void, pub unsafe fn(*mut c_void));
-
 impl Drop for DeferUnsafe {
     fn drop(&mut self) {
         unsafe { self.1(self.0) }
     }
 }
+
+pub type DeferSafe = Arc<DeferUnsafe>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -18,9 +19,9 @@ pub enum Value {
     Text(String),
     Boolen(bool),
     UserDefined(
-        *mut c_void,              //data
-        i32,                      //kind
-        Option<Arc<DeferUnsafe>>, // de-allocator
+        *mut c_void,       //data
+        i32,               //kind
+        Option<DeferSafe>, // de-allocator
     ),
 }
 
@@ -163,11 +164,9 @@ impl TryFrom<Value> for bool {
             Value::Empty => Err("empty value error".into()),
             Value::Int(v) => Ok(v != 0),
             Value::Float(_) => Err("data type not matched, `Float` and bool".into()),
-            Value::Text(s) => {
-                match STR2BOOL.get(&s) {
-                    Some(v) => Ok(v.clone()),
-                    None => Err("data type not matched, `Text` and bool".into()),
-                }
+            Value::Text(s) => match STR2BOOL.get(&s) {
+                Some(v) => Ok(v.clone()),
+                None => Err("data type not matched, `Text` and bool".into()),
             },
             Value::Boolen(v) => Ok(v),
             Value::UserDefined(_, _, _) => {

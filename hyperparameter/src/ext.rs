@@ -13,28 +13,38 @@ use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::FromPyPointer;
 
-use crate::entry::Value;
-use crate::storage::frozen_as_global_storage;
-use crate::storage::Storage;
-use crate::storage::StorageManager;
-use crate::storage::MGR;
-use crate::xxh::xxhstr;
+use hyperparameter::entry::Value;
+use hyperparameter::storage::frozen_as_global_storage;
+use hyperparameter::storage::Storage;
+use hyperparameter::storage::StorageManager;
+use hyperparameter::storage::MGR;
+use hyperparameter::xxh::xxhstr;
 
 #[repr(C)]
 enum UserDefinedType {
     PyObjectType = 1,
 }
 
-impl Into<Value> for *mut pyo3::ffi::PyObject {
-    fn into(self) -> Value {
-        Value::managed(
-            self as *mut c_void,
-            UserDefinedType::PyObjectType as i32,
-            |obj: *mut c_void| unsafe {
-                Py_DecRef(obj as *mut pyo3::ffi::PyObject);
-            },
-        )
-    }
+// impl Into<Value> for *mut pyo3::ffi::PyObject {
+//     fn into(self) -> Value {
+//         Value::managed(
+//             self as *mut c_void,
+//             UserDefinedType::PyObjectType as i32,
+//             |obj: *mut c_void| unsafe {
+//                 Py_DecRef(obj as *mut pyo3::ffi::PyObject);
+//             },
+//         )
+//     }
+// }
+
+fn make_value_from_pyobject(obj: *mut pyo3::ffi::PyObject) -> Value {
+    Value::managed(
+        obj as *mut c_void,
+        UserDefinedType::PyObjectType as i32,
+        |obj: *mut c_void| unsafe {
+            Py_DecRef(obj as *mut pyo3::ffi::PyObject);
+        },
+    )
 }
 
 #[pyclass]
@@ -166,7 +176,7 @@ impl KVStorage {
             self.storage.put(key, val.extract::<i64>().unwrap());
         } else {
             Py_IncRef(val.into_ptr());
-            self.storage.put(key, val.into_ptr());
+            self.storage.put(key, make_value_from_pyobject(val.into_ptr()));
         }
         Ok(())
     }

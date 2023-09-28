@@ -1,21 +1,15 @@
 [package]
 name = "hyperparameter"
 version = "0.5.6"
+authors = ["reiase <reiase@gmail.com>"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+keywords = ["config", "env"]
 
 [lib]
 name = "hyperparameter"
-crate-type = ["cdylib"]
+crate-type = ["rlib"]
 
 [dependencies]
-cxx = "1.0"
-pyo3 = { version = "0.18.1", features = [
-    "extension-module",
-    "abi3",
-    "abi3-py37",
-] }
 lazy_static = "1.4.0"
 phf = { version = "0.11", features = ["macros"] }
 
