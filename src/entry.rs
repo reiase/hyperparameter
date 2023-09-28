@@ -11,6 +11,13 @@ impl Drop for DeferUnsafe {
 
 pub type DeferSafe = Arc<DeferUnsafe>;
 
+/// The value type for hyperparameter values
+///
+/// ```
+/// use hyperparameter::entry::Value;
+/// let v: Value = 1i32.into();
+/// println!("{:?}", v);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Empty,
@@ -25,9 +32,21 @@ pub enum Value {
     ),
 }
 
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        Value::Int(value as i64)
+    }
+}
+
 impl From<i64> for Value {
     fn from(value: i64) -> Self {
         Value::Int(value)
+    }
+}
+
+impl From<f32> for Value {
+    fn from(value: f32) -> Self {
+        Value::Float(value.into())
     }
 }
 
@@ -177,23 +196,23 @@ impl TryFrom<Value> for bool {
 }
 
 #[derive(Debug, Clone)]
-pub enum EntryValue {
+pub enum VersionedValue {
     Single(Value),
-    Versioned(Value, Box<EntryValue>),
+    Versioned(Value, Box<VersionedValue>),
 }
 
-impl EntryValue {
+impl VersionedValue {
     pub fn get(&self) -> &Value {
         match self {
-            EntryValue::Single(val) => val,
-            EntryValue::Versioned(val, _) => val,
+            VersionedValue::Single(val) => val,
+            VersionedValue::Versioned(val, _) => val,
         }
     }
 
-    pub fn history(&self) -> Option<&Box<EntryValue>> {
+    pub fn history(&self) -> Option<&Box<VersionedValue>> {
         match self {
-            EntryValue::Single(_) => None,
-            EntryValue::Versioned(_, his) => Some(his),
+            VersionedValue::Single(_) => None,
+            VersionedValue::Versioned(_, his) => Some(his),
         }
     }
 }
@@ -201,14 +220,14 @@ impl EntryValue {
 #[derive(Debug, Clone)]
 pub struct Entry {
     pub key: String,
-    pub val: EntryValue,
+    pub val: VersionedValue,
 }
 
 impl Entry {
-    pub fn new<T: Into<String>>(key: T, val: Value) -> Entry {
+    pub fn new<T: Into<String>, V: Into<Value>>(key: T, val: V) -> Entry {
         Entry {
             key: key.into(),
-            val: EntryValue::Single(val),
+            val: VersionedValue::Single(val.into()),
         }
     }
 
@@ -222,15 +241,15 @@ impl Entry {
 
     pub fn update<V: Into<Value>>(&mut self, val: V) {
         if let Some(his) = self.val.history() {
-            self.val = EntryValue::Versioned(val.into(), his.clone());
+            self.val = VersionedValue::Versioned(val.into(), his.clone());
         } else {
-            self.val = EntryValue::Single(val.into());
+            self.val = VersionedValue::Single(val.into());
         }
     }
 
     pub fn revision<V: Into<Value>>(&mut self, val: V) {
         let value = &self.val;
-        self.val = EntryValue::Versioned(val.into(), Box::new(value.clone()));
+        self.val = VersionedValue::Versioned(val.into(), Box::new(value.clone()));
     }
 
     pub fn rollback(&mut self) -> Result<(), ()> {
@@ -239,5 +258,112 @@ impl Entry {
             return Ok(());
         }
         return Err(());
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::ffi::c_void;
+
+    use crate::entry::Value;
+    proptest! {
+        #[test]
+        fn create_int_value_from_i32(x in 0i32..100) {
+            let y: Value = x.into();
+            let y: i64 = y.try_into().unwrap();
+            assert_eq!(y, x as i64);
+        }
+
+        #[test]
+        fn create_int_value_from_i64(x in 0i64..100) {
+            let y: Value = x.into();
+            let y: i64 = y.try_into().unwrap();
+            assert_eq!(y, x as i64);
+        }
+
+        #[test]
+        fn create_float_value_from_f32(x in 0f32..100.0) {
+            let y: Value = x.into();
+            let y: f64 = y.try_into().unwrap();
+            assert_eq!(y, x as f64);
+        }
+
+        #[test]
+        fn create_float_value_from_f64(x in 0f64..100.0) {
+            let y: Value = x.into();
+            let y: f64 = y.try_into().unwrap();
+            assert_eq!(y, x as f64);
+        }
+
+        #[test]
+        fn int_value_into_string(x in 0i32..100) {
+            let y: Value = x.into();
+            let y: String = y.try_into().unwrap();
+            assert_eq!(y, format!("{}", x));
+        }
+
+        #[test]
+        fn float_value_into_string(x in 0f64..100.0) {
+            let y: Value = x.into();
+            let y: String = y.try_into().unwrap();
+            assert_eq!(y, format!("{}", x));
+        }
+
+        #[test]
+        fn bool_value_into_string(x: bool) {
+            let y: Value = x.into();
+            let y: String = y.try_into().unwrap();
+            assert_eq!(y, format!("{}", x));
+        }
+    }
+
+    #[test]
+    fn test_user_defined_value() {
+        let ptr: *mut c_void = 0x00abcd as *mut c_void;
+        let ptr: Value = ptr.into();
+        assert_eq!(
+            format!("{:?}", ptr),
+            "UserDefined(0xabcd, 0, None)".to_string()
+        );
+    }
+}
+
+#[cfg(test)]
+mod test_versioned_value {
+    use super::Entry;
+
+    #[test]
+    fn test_versioned_value() {
+        let mut v = Entry::new("0", 0);
+        assert_eq!(format!("{:?}", v.val), "Single(Int(0))");
+
+        v.revision(1.0);
+        assert_eq!(
+            format!("{:?}", v.val),
+            "Versioned(Float(1.0), Single(Int(0)))"
+        );
+
+        v.update("2.0");
+        assert_eq!(
+            format!("{:?}", v.val),
+            "Versioned(Text(\"2.0\"), Single(Int(0)))"
+        );
+
+        let _ = v.rollback();
+        assert_eq!(format!("{:?}", v.val), "Single(Int(0))");
+
+        let check = v.rollback();
+        assert_eq!(format!("{:?}", v.val), "Single(Int(0))");
+        assert!(check.is_err());
+    }
+
+    proptest! {
+        #[test]
+        fn test_versioned_value_long_history(x in 0i32..100) {
+            let mut v = Entry::new("0", 0);
+            for i in 0..x {
+                v.revision(i);
+            }
+        }
     }
 }

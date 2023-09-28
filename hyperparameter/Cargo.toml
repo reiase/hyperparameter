@@ -20,8 +20,5 @@ pyo3 = { version = "0.18.1", features = [
 lazy_static = "1.4.0"
 phf = { version = "0.11", features = ["macros"] }
 
-[dev_dependencies]
-rspec = "1.0"
-
 [profile.dev]
 overflow-checks=false
