@@ -543,7 +543,7 @@ def auto_param(name_or_func):
                     for k, v in predef_kws.items():
                         if k not in kws:
                             try:
-                                val = hp._storage.get_by_hash(v)
+                                val = hp._storage.get_entry(v)
                                 kws[k] = val
                             except ValueError:
                                 pass
