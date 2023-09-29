@@ -138,8 +138,8 @@ impl KVStorage {
         }
     }
 
-    pub unsafe fn get_by_hash(&mut self, py: Python<'_>, hkey: u64) -> PyResult<Option<PyObject>> {
-        match self.storage.get_by_hash(hkey) {
+    pub unsafe fn get_entry(&mut self, py: Python<'_>, hkey: u64) -> PyResult<Option<PyObject>> {
+        match self.storage.get_entry(hkey) {
             Some(val) => match val {
                 Value::Empty => Err(PyValueError::new_err("not found")),
                 Value::Int(v) => Ok(Some(v.into_py(py))),

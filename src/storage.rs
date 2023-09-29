@@ -9,7 +9,31 @@ use lazy_static::lazy_static;
 use crate::entry::{Entry, VersionedValue, Value};
 use crate::xxh::xxhstr;
 
+trait MultipleVersion<K> {
+    fn update<V: Into<Value>>(&mut self, key: K, val: V);
+    fn revision<V: Into<Value>>(&mut self, key: K, val: V);
+    fn rollback(&mut self, key: K);
+}
+
 type Tree = BTreeMap<u64, Entry>;
+
+impl MultipleVersion<u64> for Tree{
+    fn update<V: Into<Value>>(&mut self, key: u64, val: V) {
+        self.entry(key).and_modify(|e| e.update(val));
+    }
+
+    fn revision<V: Into<Value>>(&mut self, key: u64, val: V) {
+        self.entry(key).and_modify(|e| e.revision(val));
+    }
+
+    fn rollback(&mut self, key: u64) {
+        if let Some(need_del) = self.get_mut(&key).map(|e| e.rollback().is_err()) {
+            if need_del {
+                self.remove(&key);
+            }
+        }
+    }
+}
 
 fn hashstr<T: Into<String>>(s: T) -> u64 {
     let s: String = s.into();
@@ -171,7 +195,7 @@ impl Storage {
         self.isview -= 1;
     }
 
-    pub fn get_by_hash(&self, key: u64) -> Option<Value> {
+    pub fn get_entry(&self, key: u64) -> Option<Value> {
         if self.isview == 0 {
             if let Some(e) = self.tree().get(&key) {
                 return Some(e.clone_value());
@@ -186,23 +210,23 @@ impl Storage {
         return None;
     }
 
-    pub fn put_by_hash(&mut self, key: u64, val: Entry) {
+    pub fn put_entry(&mut self, key: u64, val: Entry) {
         self.tree.borrow_mut().insert(key, val);
     }
 
-    pub fn del_by_hash(&mut self, key: u64) {
+    pub fn del_entry(&mut self, key: u64) {
         self.tree.borrow_mut().remove(&key);
     }
 
     pub fn get<T: Into<String>>(&self, key: T) -> Option<Value> {
         let hkey = hashstr(key);
-        self.get_by_hash(hkey)
+        self.get_entry(hkey)
     }
 
     pub fn put<T: Into<String>, V: Into<Value> + Clone>(&mut self, key: T, val: V) {
         let key: String = key.into();
         let hkey = hashstr(&key);
-        self.put_by_hash(
+        self.put_entry(
             hkey,
             Entry {
                 key: key.clone(),
@@ -227,7 +251,7 @@ impl Storage {
 
     pub fn del<T: Into<String>>(&mut self, key: T) {
         let hkey = hashstr(key);
-        self.del_by_hash(hkey);
+        self.del_entry(hkey);
     }
 
     pub fn rollback<T: Into<String>>(&mut self, key: T) {
@@ -249,7 +273,7 @@ impl Storage {
 
 impl Storage {
     pub fn get_or_else<T: Into<Value> + TryFrom<Value>>(&self, key: u64, dval: T) -> T {
-        if let Some(val) = self.get_by_hash(key) {
+        if let Some(val) = self.get_entry(key) {
             match val.try_into() {
                 Ok(v) => v,
                 Err(_) => dval,

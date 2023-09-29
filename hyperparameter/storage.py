@@ -103,7 +103,7 @@ class TLSKVStorage(Storage):
     def clear(self):
         self._storage.clear()
         
-    def get_by_hash(self, *args, **kwargs):
+    def get_entry(self, *args, **kwargs):
         raise RuntimeError("hyperparameter is not build with rust backend")
 
     def get(self, name: str, accessor: Callable = None) -> Any:
