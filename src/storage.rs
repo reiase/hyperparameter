@@ -1,12 +1,13 @@
-use std::cell::{Ref, RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::rc::Rc;
 use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 
-use crate::entry::{Entry, VersionedValue, Value};
+use crate::entry::Entry;
+use crate::entry::Value;
+use crate::entry::VersionedValue;
+use crate::entry::EMPTY;
 use crate::xxh::xxhstr;
 
 trait MultipleVersion<K> {
@@ -17,7 +18,7 @@ trait MultipleVersion<K> {
 
 type Tree = BTreeMap<u64, Entry>;
 
-impl MultipleVersion<u64> for Tree{
+impl MultipleVersion<u64> for Tree {
     fn update<V: Into<Value>>(&mut self, key: u64, val: V) {
         self.entry(key).and_modify(|e| e.update(val));
     }
@@ -40,241 +41,141 @@ fn hashstr<T: Into<String>>(s: T) -> u64 {
     xxhstr(&s)
 }
 
-fn tree_update<T: Into<Value>>(mut tree: RefMut<Tree>, key: u64, val: T) {
-    tree.entry(key).and_modify(|e| e.update(val));
-}
-
-fn tree_revision<T: Into<Value>>(mut tree: RefMut<Tree>, key: u64, val: T) {
-    tree.entry(key).and_modify(|e| e.revision(val));
-}
-
-fn tree_rollback(mut tree: RefMut<Tree>, key: u64) {
-    if let Some(need_del) = tree.get_mut(&key).map(|e| e.rollback().is_err()) {
-        if need_del {
-            tree.remove(&key);
-        }
-    }
-}
-
-pub struct StorageManager {
-    pub tls: Rc<RefCell<Tree>>,
-    pub stack: Vec<RefCell<HashSet<u64>>>,
-}
-
-impl StorageManager {
-    pub fn put_key<T: Into<String>>(&mut self, key: T) {
-        let key = hashstr(key);
-        if let Some(hash) = self.stack.last() {
-            hash.borrow_mut().insert(key);
-        }
-    }
-    pub fn put_hkey(&mut self, key: u64) {
-        if let Some(hash) = self.stack.last() {
-            hash.borrow_mut().insert(key);
-        }
-    }
-}
-
 thread_local! {
-    pub static MGR: RefCell<StorageManager> = init_storage_manager();
+    pub static THREAD_STORAGE: Box<Storage> = create_thread_storage();
 }
 
-pub fn init_storage_manager() -> RefCell<StorageManager> {
-    let mut tree = Tree::new();
-    global_storage_get(&mut tree);
-    let sm = RefCell::new(StorageManager {
-        tls: Rc::new(RefCell::new(tree)),
-        stack: Vec::new(),
-    });
-    sm.borrow_mut().stack.push(RefCell::new(HashSet::new()));
-
-    return sm;
+pub fn create_thread_storage() -> Box<Storage> {
+    let mut ts = Box::new(Storage::new());
+    ts.tree.clone_from(&GLOBAL_STORAGE.lock().unwrap().tree);
+    ts
 }
 
 lazy_static! {
-    static ref GLOBAL_STORAGE: Mutex<u64> = {
-        let tree = Box::new(Tree::new());
-        Mutex::new(Box::into_raw(tree) as u64)
-    };
+    static ref GLOBAL_STORAGE: Mutex<Storage> = Mutex::new(Storage::new());
 }
 
-fn global_storage_set(t: &Tree) {
-    GLOBAL_STORAGE
-        .lock()
-        .and_then(|v| unsafe {
-            let ptr = v.clone() as *mut Tree;
-            match ptr.as_mut() {
-                Some(tree) => {
-                    tree.clear();
-                    tree.clone_from(t);
-                }
-                None => todo!(),
-            };
-            Ok(())
-        })
-        .unwrap();
-}
-
-pub fn frozen_as_global_storage() {
-    MGR.with(|mgr| {
-        let t = mgr.borrow().tls.borrow().clone();
-        global_storage_set(&t);
+pub fn frozen_global_storage() {
+    THREAD_STORAGE.with(|ts| {
+        GLOBAL_STORAGE.lock().unwrap().tree.clone_from(&ts.tree);
     });
-}
-
-fn global_storage_get(t: &mut Tree) {
-    GLOBAL_STORAGE
-        .lock()
-        .and_then(|v| unsafe {
-            let ptr = v.clone() as *mut Tree;
-            match ptr.as_mut() {
-                Some(tree) => {
-                    t.clear();
-                    t.clone_from(tree);
-                }
-                None => todo!(),
-            };
-            Ok(())
-        })
-        .unwrap();
 }
 
 #[derive(Debug)]
 pub struct Storage {
-    pub parent: Rc<RefCell<Tree>>,
-    pub tree: RefCell<Tree>,
-    pub isview: i32,
+    pub tree: Tree,
+    pub history: Vec<HashSet<u64>>,
 }
 unsafe impl Send for Storage {}
 
 impl Storage {
     pub fn new() -> Storage {
-        Storage {
-            parent: MGR.with(|mgr| mgr.borrow().tls.clone()),
-            tree: RefCell::new(Tree::new()),
-            isview: 0,
-        }
-    }
-
-    pub fn new_empty() -> Storage {
-        Storage {
-            parent: Rc::new(RefCell::new(Tree::new())),
-            tree: RefCell::new(Tree::new()),
-            isview: 0,
-        }
-    }
-
-    fn tree(&self) -> Ref<Tree> {
-        self.tree.borrow()
+        let mut ret = Storage {
+            tree: Tree::new(),
+            history: Vec::new(),
+        };
+        ret.history.push(HashSet::new());
+        ret
     }
 
     pub fn enter(&mut self) {
-        MGR.with(|m| {
-            for (k, v) in self.tree().iter() {
-                if m.borrow_mut().tls.borrow().contains_key(&k) {
-                    tree_revision(m.borrow_mut().tls.borrow_mut(), *k, v.clone_value());
-                } else {
-                    m.borrow_mut().tls.borrow_mut().insert(*k, v.clone());
-                }
-            }
-            let keys = self.tree().keys().cloned().collect();
-            m.borrow_mut().stack.push(RefCell::new(keys));
-        });
-        self.isview += 1;
+        self.history.push(HashSet::new());
     }
 
     pub fn exit(&mut self) {
-        MGR.with(|m| {
-            let mut m = m.borrow_mut();
-            if let Some(keys) = m.stack.pop() {
-                keys.borrow()
-                    .iter()
-                    .for_each(|k| tree_rollback(m.tls.borrow_mut(), *k));
-            }
-        });
-        self.isview -= 1;
-    }
-
-    pub fn get_entry(&self, key: u64) -> Option<Value> {
-        if self.isview == 0 {
-            if let Some(e) = self.tree().get(&key) {
-                return Some(e.clone_value());
-            } else if let Some(e) = self.parent.borrow().get(&key) {
-                return Some(e.clone_value());
-            }
-        } else {
-            if let Some(e) = self.parent.borrow().get(&key) {
-                return Some(e.clone_value());
-            }
+        for key in self.history.last().unwrap().iter() {
+            self.tree.rollback(*key);
         }
-        return None;
+        self.history.pop();
     }
 
-    pub fn put_entry(&mut self, key: u64, val: Entry) {
-        self.tree.borrow_mut().insert(key, val);
+    pub fn get_entry(&self, key: u64) -> Option<&Entry> {
+        self.tree.get(&key)
+    }
+
+    pub fn put_entry(&mut self, key: u64, entry: Entry) -> Option<Entry> {
+        self.tree.insert(key, entry)
     }
 
     pub fn del_entry(&mut self, key: u64) {
-        self.tree.borrow_mut().remove(&key);
+        self.tree.remove(&key);
     }
 
-    pub fn get<T: Into<String>>(&self, key: T) -> Option<Value> {
+    pub fn get<T: Into<String>>(&self, key: T) -> &Value {
         let hkey = hashstr(key);
-        self.get_entry(hkey)
+        if let Some(e) = self.tree.get(&hkey) {
+            return e.get();
+        }
+        return &EMPTY;
     }
 
     pub fn put<T: Into<String>, V: Into<Value> + Clone>(&mut self, key: T, val: V) {
         let key: String = key.into();
         let hkey = hashstr(&key);
-        self.put_entry(
-            hkey,
-            Entry {
-                key: key.clone(),
-                val: VersionedValue::Single(val.clone().into()),
-            },
-        );
-        if self.isview > 0 {
-            if self.parent.borrow().contains_key(&hkey) {
-                tree_update(self.parent.borrow_mut(), hkey, val.clone())
+        if self.history.last().unwrap().contains(&hkey) {
+            self.tree.update(hkey, val);
+        } else {
+            if self.tree.contains_key(&hkey) {
+                self.tree.revision(hkey, val);
             } else {
-                self.parent.borrow_mut().insert(
+                self.tree.insert(
                     hkey,
                     Entry {
-                        key: key.clone(),
-                        val: VersionedValue::Single(val.clone().into()),
+                        key: key,
+                        val: VersionedValue::Single(val.into()),
                     },
                 );
-                MGR.with(|mgr: &RefCell<StorageManager>| mgr.borrow_mut().put_hkey(hkey));
             }
+            self.history.last_mut().unwrap().insert(hkey);
         }
     }
 
     pub fn del<T: Into<String>>(&mut self, key: T) {
         let hkey = hashstr(key);
-        self.del_entry(hkey);
+        if self.history.last().unwrap().contains(&hkey) {
+            self.tree.update(hkey, None::<i32>);
+        } else {
+            self.tree.revision(hkey, None::<i32>);
+            self.history.last_mut().unwrap().insert(hkey);
+        }
     }
 
     pub fn rollback<T: Into<String>>(&mut self, key: T) {
         let hkey = hashstr(key);
-        tree_rollback(self.tree.borrow_mut(), hkey);
+        self.tree.rollback(hkey);
     }
 
     pub fn keys(&self) -> Vec<String> {
-        let mut allkey = HashSet::<String>::new();
-        for v in self.parent.borrow().values() {
-            allkey.insert(v.key.clone());
-        }
-        for v in self.tree.borrow().values() {
-            allkey.insert(v.key.clone());
-        }
-        allkey.iter().cloned().collect()
+        self.tree
+            .values()
+            .filter(|x| match x.get() {
+                Value::Empty => false,
+                _ => true,
+            })
+            .map(|x| x.key.clone())
+            .collect()
     }
 }
 
-impl Storage {
-    pub fn get_or_else<T: Into<Value> + TryFrom<Value>>(&self, key: u64, dval: T) -> T {
-        if let Some(val) = self.get_entry(key) {
-            match val.try_into() {
+trait Hashable {}
+
+impl Hashable for String {}
+
+impl Hashable for &String {}
+
+impl Hashable for &str {}
+
+pub trait GetOrElse<K, T> {
+    fn get_or_else(&self, key: K, dval: T) -> T;
+}
+
+impl<T> GetOrElse<u64, T> for Storage
+where
+    T: Into<Value> + TryFrom<Value>,
+{
+    fn get_or_else(&self, key: u64, dval: T) -> T {
+        if let Some(val) = self.tree.get(&key) {
+            match val.get().clone().try_into() {
                 Ok(v) => v,
                 Err(_) => dval,
             }
@@ -284,40 +185,87 @@ impl Storage {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::entry::Value;
+impl<K, T> GetOrElse<K, T> for Storage
+where
+    K: Into<String> + Hashable,
+    T: Into<Value> + TryFrom<Value>,
+{
+    fn get_or_else(&self, key: K, dval: T) -> T {
+        let hkey = hashstr(key);
+        self.get_or_else(hkey, dval)
+    }
+}
 
-//     use super::Storage;
+#[cfg(test)]
+mod tests {
+    use super::GetOrElse;
+    use super::Storage;
 
-//     #[test]
-//     fn test() {
-//         rspec::run(&rspec::describe("basic storage operations", (), |ctx| {
-//             ctx.specify("create storage", |ctx| {
-//                 ctx.it("create from None", |_| {
-//                     let _ = Storage::new();
-//                 });
-//             });
-//         }));
+    #[test]
+    fn test_storage_create() {
+        let _ = Storage::new();
+    }
 
-//         rspec::run(&rspec::describe("enter/exit operations", (), |ctx| {
-//             ctx.specify("enter", |ctx| {
-//                 let mut s0 = Storage::new();
-//                 s0.put("a", 1);
-//                 s0.put("b", 2);
-//                 s0.enter();
+    #[test]
+    fn test_storage_put_get() {
+        let mut s = Storage::new();
+        s.put("1", 1);
+        s.put("2.0", 2.0);
+        s.put("str", "str");
+        s.put("bool", true);
 
-//                 // storage after enter
-//                 let s1 = Storage::new();
-//                 assert_eq!(s1.get("a").unwrap(), Value::from(1));
-//                 assert_eq!(s1.get("b").unwrap(), Value::from(2));
-//                 assert_eq!(s1.get("c"), None);
+        let v: i64 = s.get("1").clone().try_into().unwrap();
+        assert_eq!(1, v);
 
-//                 s0.exit();
-//                 let s1 = Storage::new();
-//                 assert_eq!(s1.get("a"), None);
-//                 assert_eq!(s1.get("b"), None);
-//             });
-//         }));
-//     }
-// }
+        let v: f64 = s.get("2.0").clone().try_into().unwrap();
+        assert_eq!(2.0, v);
+
+        let v: String = s.get("str").clone().try_into().unwrap();
+        assert_eq!("str", v);
+    }
+
+    #[test]
+    fn test_storage_get_or_else() {
+        let mut s = Storage::new();
+        s.put("1", 1);
+        s.put("2.0", 2.0);
+        s.put("str", "str");
+        s.put("bool", true);
+
+        assert_eq!(1, s.get_or_else("1", 0));
+        assert_eq!(2.0, s.get_or_else("2.0", 0.0));
+        assert_eq!("str", s.get_or_else("str".to_string(), "".to_string()));
+        assert_eq!(true, s.get_or_else("bool", false));
+    }
+
+    #[test]
+    fn test_storage_enter_exit() {
+        let mut s0 = Storage::new();
+        s0.put("a", 1);
+        s0.put("b", 2.0);
+        s0.enter();
+
+        // check parameter "a" and "b"
+        let v: i64 = s0.get("a").clone().try_into().unwrap();
+        assert_eq!(1, v);
+
+        let v: f64 = s0.get("b").clone().try_into().unwrap();
+        assert_eq!(2.0, v);
+
+        s0.put("a", 2);
+        s0.put("b", 3.0);
+        let v: i64 = s0.get("a").clone().try_into().unwrap();
+        assert_eq!(2, v);
+
+        let v: f64 = s0.get("b").clone().try_into().unwrap();
+        assert_eq!(3.0, v);
+
+        s0.exit();
+        // check parameter "a" and "b"
+        let v: i64 = s0.get("a").clone().try_into().unwrap();
+        assert_eq!(1, v);
+
+        let v: f64 = s0.get("b").clone().try_into().unwrap();
+        assert_eq!(2.0, v);
+    }
+}

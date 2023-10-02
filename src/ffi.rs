@@ -1,6 +1,7 @@
 use std::ffi::{CStr, CString};
 
 use super::storage::Storage;
+use super::storage::GetOrElse;
 
 #[no_mangle]
 pub unsafe extern "C" fn hyper_create_storage() -> *mut Storage {

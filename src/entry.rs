@@ -32,6 +32,20 @@ pub enum Value {
     ),
 }
 
+pub const EMPTY: Value = Value::Empty;
+
+impl<T: Into<Value>> From<Option<T>> for Value {
+    fn from(value: Option<T>) -> Self {
+        match value {
+            Some(x) => {
+                let y: Value = x.into();
+                y
+            }
+            None => Value::Empty,
+        }
+    }
+}
+
 impl From<i32> for Value {
     fn from(value: i32) -> Self {
         Value::Int(value as i64)
@@ -98,7 +112,7 @@ impl TryFrom<Value> for i64 {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::Empty => Err("empty value error".into()),
-            Value::Int(v) => Ok(v.into()),
+            Value::Int(v) => Ok(v),
             Value::Float(v) => Ok(v as i64),
             Value::Text(v) => v
                 .parse::<i64>()
