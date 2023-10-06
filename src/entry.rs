@@ -261,7 +261,10 @@ impl Entry {
     }
 
     pub fn shallow_copy(&self) -> Entry {
-        Entry { key: self.key.clone(), val: self.val.shallow_copy() }
+        Entry {
+            key: self.key.clone(),
+            val: self.val.shallow_copy(),
+        }
     }
 
     pub fn update<V: Into<Value>>(&mut self, val: V) {

@@ -1,5 +1,5 @@
 use crate::entry::{Entry, Value, EMPTY};
-use crate::storage::{hashstr, GetOrElse, Hashable, MultipleVersion, Tree, THREAD_STORAGE};
+use crate::storage::{hashstr, GetOrElse, Hashable, MultipleVersion, Tree, THREAD_STORAGE, frozen_global_storage};
 
 pub enum ParamScope {
     Nothing,
@@ -118,6 +118,10 @@ where
     }
 }
 
+pub fn frozen_global_params() {
+    frozen_global_storage();
+}
+
 #[macro_export]
 macro_rules! get_param {
     ($name:expr, $default:expr) => {{
@@ -128,19 +132,58 @@ macro_rules! get_param {
 #[macro_export]
 macro_rules! with_params {
     (
-    where
-        $($key:expr => $val:expr);*;
-    in
-    $($body:tt)*
-    ) => {{
+        set $($key:ident).+ = $val:expr;
+        
+        $($body:tt)*
+    ) =>{
         let mut ps = ParamScope::new();
-        $(ps.put(stringify!($key).replace(";", ""), $val);)*
-        ps.enter();
-        let ret = {$($body)*};
-        ps.exit();
-        ret
-        }
+        ps.put(stringify!($($key).+).replace(";", ""), $val);
+
+        with_params!(params ps; $($body)*)
     };
+
+    (
+        params $ps:expr;
+        set $($key:ident).+ = $val:expr;
+
+        $($body:tt)*
+    ) => {
+        $ps.put(stringify!($($key).+).replace(";", ""), $val);
+
+        with_params!(params $ps; $($body)*)
+    };
+
+    (
+        get $name:ident = $($key:ident).+ or $default:expr;
+
+        $($body:tt)*
+    ) => {
+        let mut ps = ParamScope::new();
+        let $name = get_param!($($key).+, $default);
+        with_params!(params ps; $($body)*)
+    };
+
+    (
+        params $ps:expr;
+        get $name:ident = $($key:ident).+ or $default:expr;
+
+        $($body:tt)*
+    ) => {
+        let $name = get_param!($($key).+, $default);
+
+        with_params!(params $ps; $($body)*)
+    };
+
+    (
+        params $ps:expr;
+
+        $($body:tt)*
+    ) => {{
+            $ps.enter();
+            let ret = {$($body)*};
+            $ps.exit();
+            ret
+    }};
 }
 
 #[cfg(test)]
@@ -236,23 +279,54 @@ mod tests {
     }
 
     #[test]
-    fn test_param_scope_with_param() {
+    fn test_param_scope_with_param_set() {
         with_params! {
-            where
-                a.b.c=>1;
-                a.b=>2;
-            in
+            set a.b.c=1;
+            set a.b =2;
+
             assert_eq!(1, get_param!(a.b.c, 0));
+            assert_eq!(2, get_param!(a.b, 0));
 
             with_params! {
-                where
-                    a.b.c=>2.0;
-                in
+                set a.b.c=2.0;
+
                 assert_eq!(2.0, get_param!(a.b.c, 0.0));
+                assert_eq!(2, get_param!(a.b, 0));
             };
 
             assert_eq!(1, get_param!(a.b.c, 0));
+            assert_eq!(2, get_param!(a.b, 0));
         };
         assert_eq!(0, get_param!(a.b.c, 0));
+        assert_eq!(0, get_param!(a.b, 0));
+    }
+
+    #[test]
+    fn test_param_scope_with_param_get() {
+        with_params! {
+            set a.b.c=1;
+
+            with_params! {
+                get a_b_c = a.b.c or 0;
+
+                assert_eq!(1, a_b_c);
+            };
+        };
+    }
+
+    #[test]
+    fn test_param_scope_with_param_set_get() {
+        with_params! {
+            set a.b.c = 1;
+            set a.b = 2;
+
+            with_params! {
+                get a_b_c = a.b.c or 0;
+                get a_b = a.b or 0;
+
+                assert_eq!(1, a_b_c);
+                assert_eq!(2, a_b);
+            };
+        };
     }
 }

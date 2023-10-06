@@ -1,7 +1,7 @@
 use std::ffi::{CStr, CString};
 
-use super::storage::Storage;
 use super::storage::GetOrElse;
+use super::storage::Storage;
 
 #[no_mangle]
 pub unsafe extern "C" fn hyper_create_storage() -> *mut Storage {
@@ -53,7 +53,10 @@ pub unsafe extern "C" fn storage_hget_or_str(
     hkey: u64,
     def: *mut i8,
 ) -> *mut u8 {
-    let raw = CStr::from_ptr(def as *const u8).to_str().unwrap().to_string();
+    let raw = CStr::from_ptr(def as *const u8)
+        .to_str()
+        .unwrap()
+        .to_string();
     let s = (*this).get_or_else(hkey, raw);
     CString::new(s).unwrap().into_raw()
 }
