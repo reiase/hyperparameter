@@ -229,6 +229,13 @@ impl VersionedValue {
             VersionedValue::Versioned(_, his) => Some(his),
         }
     }
+
+    pub fn shallow_copy(&self) -> VersionedValue {
+        match self {
+            VersionedValue::Single(v) => Self::Single(v.clone()),
+            VersionedValue::Versioned(v, _) => Self::Single(v.clone()),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -253,6 +260,10 @@ impl Entry {
         self.val.get().clone()
     }
 
+    pub fn shallow_copy(&self) -> Entry {
+        Entry { key: self.key.clone(), val: self.val.shallow_copy() }
+    }
+
     pub fn update<V: Into<Value>>(&mut self, val: V) {
         if let Some(his) = self.val.history() {
             self.val = VersionedValue::Versioned(val.into(), his.clone());
@@ -271,6 +282,7 @@ impl Entry {
             self.val = *h.clone();
             return Ok(());
         }
+        self.val = VersionedValue::Single(EMPTY);
         return Err(());
     }
 }
@@ -367,7 +379,7 @@ mod test_versioned_value {
         assert_eq!(format!("{:?}", v.val), "Single(Int(0))");
 
         let check = v.rollback();
-        assert_eq!(format!("{:?}", v.val), "Single(Int(0))");
+        assert_eq!(format!("{:?}", v.val), "Single(Empty)");
         assert!(check.is_err());
     }
 

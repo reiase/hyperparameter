@@ -21,7 +21,7 @@ pub unsafe extern "C" fn storage_enter(this: *mut Storage) {
 
 #[no_mangle]
 pub unsafe extern "C" fn storage_exit(this: *mut Storage) {
-    (*this).exit()
+    (*this).exit();
 }
 
 #[no_mangle]

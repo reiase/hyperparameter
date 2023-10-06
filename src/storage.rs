@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -10,13 +11,13 @@ use crate::entry::VersionedValue;
 use crate::entry::EMPTY;
 use crate::xxh::xxhstr;
 
-trait MultipleVersion<K> {
+pub trait MultipleVersion<K> {
     fn update<V: Into<Value>>(&mut self, key: K, val: V);
     fn revision<V: Into<Value>>(&mut self, key: K, val: V);
     fn rollback(&mut self, key: K);
 }
 
-type Tree = BTreeMap<u64, Entry>;
+pub type Tree = BTreeMap<u64, Entry>;
 
 impl MultipleVersion<u64> for Tree {
     fn update<V: Into<Value>>(&mut self, key: u64, val: V) {
@@ -36,18 +37,20 @@ impl MultipleVersion<u64> for Tree {
     }
 }
 
-fn hashstr<T: Into<String>>(s: T) -> u64 {
+pub fn hashstr<T: Into<String>>(s: T) -> u64 {
     let s: String = s.into();
     xxhstr(&s)
 }
 
 thread_local! {
-    pub static THREAD_STORAGE: Box<Storage> = create_thread_storage();
+    pub static THREAD_STORAGE: RefCell<Storage> = create_thread_storage();
 }
 
-pub fn create_thread_storage() -> Box<Storage> {
-    let mut ts = Box::new(Storage::new());
-    ts.tree.clone_from(&GLOBAL_STORAGE.lock().unwrap().tree);
+pub fn create_thread_storage() -> RefCell<Storage> {
+    let ts = RefCell::new(Storage::new());
+    ts.borrow_mut()
+        .tree
+        .clone_from(&GLOBAL_STORAGE.lock().unwrap().tree);
     ts
 }
 
@@ -57,7 +60,11 @@ lazy_static! {
 
 pub fn frozen_global_storage() {
     THREAD_STORAGE.with(|ts| {
-        GLOBAL_STORAGE.lock().unwrap().tree.clone_from(&ts.tree);
+        GLOBAL_STORAGE
+            .lock()
+            .unwrap()
+            .tree
+            .clone_from(&ts.borrow().tree);
     });
 }
 
@@ -82,11 +89,13 @@ impl Storage {
         self.history.push(HashSet::new());
     }
 
-    pub fn exit(&mut self) {
-        for key in self.history.last().unwrap().iter() {
-            self.tree.rollback(*key);
+    pub fn exit(&mut self) -> Tree {
+        let mut changes = Tree::new();
+        for key in self.history.pop().unwrap() {
+            changes.insert(key, self.tree.get(&key).unwrap().shallow_copy());
+            self.tree.rollback(key);
         }
-        self.history.pop();
+        changes
     }
 
     pub fn get_entry(&self, key: u64) -> Option<&Entry> {
@@ -157,7 +166,7 @@ impl Storage {
     }
 }
 
-trait Hashable {}
+pub trait Hashable {}
 
 impl Hashable for String {}
 
