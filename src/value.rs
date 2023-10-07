@@ -1,8 +1,12 @@
+use std::{ffi::c_void, mem::replace, sync::Arc};
+
 use phf::phf_map;
-use std::{ffi::c_void, sync::Arc};
+
+use crate::value::VersionedValue::{Single, Versioned};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeferUnsafe(pub *mut c_void, pub unsafe fn(*mut c_void));
+
 impl Drop for DeferUnsafe {
     fn drop(&mut self) {
         unsafe { self.1(self.0) }
@@ -14,7 +18,7 @@ pub type DeferSafe = Arc<DeferUnsafe>;
 /// The value type for hyperparameter values
 ///
 /// ```
-/// use hyperparameter::entry::Value;
+/// use hyperparameter::value::Value;
 /// let v: Value = 1i32.into();
 /// println!("{:?}", v);
 /// ```
@@ -24,7 +28,7 @@ pub enum Value {
     Int(i64),
     Float(f64),
     Text(String),
-    Boolen(bool),
+    Boolean(bool),
     UserDefined(
         *mut c_void,       //data
         i32,               //kind
@@ -90,7 +94,7 @@ impl From<&str> for Value {
 
 impl From<bool> for Value {
     fn from(value: bool) -> Self {
-        Value::Boolen(value)
+        Value::Boolean(value)
     }
 }
 
@@ -116,8 +120,8 @@ impl TryFrom<Value> for i64 {
             Value::Float(v) => Ok(v as i64),
             Value::Text(v) => v
                 .parse::<i64>()
-                .or_else(|_| Err(format!("error convert {} into i64", v))),
-            Value::Boolen(v) => Ok(v.into()),
+                .map_err(|_| format!("error convert {} into i64", v)),
+            Value::Boolean(v) => Ok(v.into()),
             Value::UserDefined(_, _, _) => {
                 Err("data type not matched, `UserDefined` and i64".into())
             }
@@ -135,8 +139,8 @@ impl TryFrom<Value> for f64 {
             Value::Float(v) => Ok(v),
             Value::Text(v) => v
                 .parse::<f64>()
-                .or_else(|_| Err(format!("error convert {} into i64", v))),
-            Value::Boolen(_) => Err("data type not matched, `Boolen` and i64".into()),
+                .map_err(|_| format!("error convert {} into i64", v)),
+            Value::Boolean(_) => Err("data type not matched, `Boolean` and i64".into()),
             Value::UserDefined(_, _, _) => {
                 Err("data type not matched, `UserDefined` and f64".into())
             }
@@ -152,8 +156,8 @@ impl TryFrom<Value> for String {
             Value::Empty => Err("empty value error".into()),
             Value::Int(v) => Ok(format!("{}", v)),
             Value::Float(v) => Ok(format!("{}", v)),
-            Value::Text(v) => Ok(v.to_string()),
-            Value::Boolen(v) => Ok(format!("{}", v)),
+            Value::Text(v) => Ok(v),
+            Value::Boolean(v) => Ok(format!("{}", v)),
             Value::UserDefined(_, _, _) => {
                 Err("data type not matched, `UserDefined` and str".into())
             }
@@ -198,10 +202,10 @@ impl TryFrom<Value> for bool {
             Value::Int(v) => Ok(v != 0),
             Value::Float(_) => Err("data type not matched, `Float` and bool".into()),
             Value::Text(s) => match STR2BOOL.get(&s) {
-                Some(v) => Ok(v.clone()),
+                Some(v) => Ok(*v),
                 None => Err("data type not matched, `Text` and bool".into()),
             },
-            Value::Boolen(v) => Ok(v),
+            Value::Boolean(v) => Ok(v),
             Value::UserDefined(_, _, _) => {
                 Err("data type not matched, `UserDefined` and str".into())
             }
@@ -216,77 +220,44 @@ pub enum VersionedValue {
 }
 
 impl VersionedValue {
-    pub fn get(&self) -> &Value {
+    pub fn value(&self) -> &Value {
         match self {
-            VersionedValue::Single(val) => val,
-            VersionedValue::Versioned(val, _) => val,
+            Single(val) => val,
+            Versioned(val, _) => val,
         }
     }
 
-    pub fn history(&self) -> Option<&Box<VersionedValue>> {
+    pub fn shallow(&self) -> VersionedValue {
         match self {
-            VersionedValue::Single(_) => None,
-            VersionedValue::Versioned(_, his) => Some(his),
+            Single(v) => Single(v.clone()),
+            Versioned(v, _) => Single(v.clone()),
         }
     }
 
-    pub fn shallow_copy(&self) -> VersionedValue {
-        match self {
-            VersionedValue::Single(v) => Self::Single(v.clone()),
-            VersionedValue::Versioned(v, _) => Self::Single(v.clone()),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Entry {
-    pub key: String,
-    pub val: VersionedValue,
-}
-
-impl Entry {
-    pub fn new<T: Into<String>, V: Into<Value>>(key: T, val: V) -> Entry {
-        Entry {
-            key: key.into(),
-            val: VersionedValue::Single(val.into()),
-        }
-    }
-
-    pub fn get(&self) -> &Value {
-        self.val.get()
-    }
-
-    pub fn clone_value(&self) -> Value {
-        self.val.get().clone()
-    }
-
-    pub fn shallow_copy(&self) -> Entry {
-        Entry {
-            key: self.key.clone(),
-            val: self.val.shallow_copy(),
-        }
-    }
-
-    pub fn update<V: Into<Value>>(&mut self, val: V) {
-        if let Some(his) = self.val.history() {
-            self.val = VersionedValue::Versioned(val.into(), his.clone());
-        } else {
-            self.val = VersionedValue::Single(val.into());
-        }
+    pub fn update<V: Into<Value>>(&mut self, val: V) -> Value {
+        let mut val = val.into();
+        let old = match self {
+            Single(old) => old,
+            Versioned(old, _) => old,
+        };
+        replace(old, val)
     }
 
     pub fn revision<V: Into<Value>>(&mut self, val: V) {
-        let value = &self.val;
-        self.val = VersionedValue::Versioned(val.into(), Box::new(value.clone()));
+        *self = Versioned(val.into(), Box::new(self.clone()));
     }
 
-    pub fn rollback(&mut self) -> Result<(), ()> {
-        if let Some(h) = self.val.history() {
-            self.val = *h.clone();
-            return Ok(());
+    pub fn rollback(&mut self) -> bool {
+        match self {
+            Single(_) => {
+                *self = Single(EMPTY);
+                false
+            }
+            Versioned(_, his) => {
+                *self = *his.clone();
+                true
+            }
         }
-        self.val = VersionedValue::Single(EMPTY);
-        return Err(());
     }
 }
 
@@ -294,7 +265,8 @@ impl Entry {
 mod test {
     use std::ffi::c_void;
 
-    use crate::entry::Value;
+    use crate::value::Value;
+
     proptest! {
         #[test]
         fn create_int_value_from_i32(x in 0i32..100) {
@@ -307,7 +279,7 @@ mod test {
         fn create_int_value_from_i64(x in 0i64..100) {
             let y: Value = x.into();
             let y: i64 = y.try_into().unwrap();
-            assert_eq!(y, x as i64);
+            assert_eq!(y, x);
         }
 
         #[test]
@@ -321,7 +293,7 @@ mod test {
         fn create_float_value_from_f64(x in 0f64..100.0) {
             let y: Value = x.into();
             let y: f64 = y.try_into().unwrap();
-            assert_eq!(y, x as f64);
+            assert_eq!(y, x);
         }
 
         #[test]
@@ -359,37 +331,45 @@ mod test {
 
 #[cfg(test)]
 mod test_versioned_value {
-    use super::Entry;
+    use crate::value::VersionedValue::Single;
 
     #[test]
     fn test_versioned_value() {
-        let mut v = Entry::new("0", 0);
-        assert_eq!(format!("{:?}", v.val), "Single(Int(0))");
+        let mut val = Single(0.into());
+        assert_eq!(format!("{:?}", val), "Single(Int(0))");
 
-        v.revision(1.0);
+        val.update(2.0);
+        assert_eq!(format!("{:?}", val), "Single(Float(2.0))");
+
+        val.revision(true);
         assert_eq!(
-            format!("{:?}", v.val),
-            "Versioned(Float(1.0), Single(Int(0)))"
+            format!("{:?}", val),
+            "Versioned(Boolean(true), Single(Float(2.0)))"
         );
 
-        v.update("2.0");
+        val.revision("str");
         assert_eq!(
-            format!("{:?}", v.val),
-            "Versioned(Text(\"2.0\"), Single(Int(0)))"
+            format!("{:?}", val),
+            "Versioned(Text(\"str\"), Versioned(Boolean(true), Single(Float(2.0))))"
         );
 
-        let _ = v.rollback();
-        assert_eq!(format!("{:?}", v.val), "Single(Int(0))");
+        assert!(val.rollback());
+        assert_eq!(
+            format!("{:?}", val),
+            "Versioned(Boolean(true), Single(Float(2.0)))"
+        );
 
-        let check = v.rollback();
-        assert_eq!(format!("{:?}", v.val), "Single(Empty)");
-        assert!(check.is_err());
+        assert!(val.rollback());
+        assert_eq!(format!("{:?}", val), "Single(Float(2.0))");
+
+        assert!(!val.rollback());
+        assert_eq!(format!("{:?}", val), "Single(Empty)");
     }
 
     proptest! {
         #[test]
         fn test_versioned_value_long_history(x in 0i32..100) {
-            let mut v = Entry::new("0", 0);
+            let mut v = Single(0.into());
             for i in 0..x {
                 v.revision(i);
             }

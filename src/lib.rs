@@ -2,8 +2,8 @@
 #[macro_use]
 extern crate proptest;
 
-pub mod entry;
 pub mod storage;
+pub mod value;
 
 pub mod api;
 pub mod ffi;

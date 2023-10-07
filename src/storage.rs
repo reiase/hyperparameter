@@ -5,11 +5,42 @@ use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 
-use crate::entry::Entry;
-use crate::entry::Value;
-use crate::entry::VersionedValue;
-use crate::entry::EMPTY;
+use crate::value::EMPTY;
+use crate::value::Value;
+use crate::value::VersionedValue;
 use crate::xxh::xxhstr;
+
+#[derive(Debug, Clone)]
+pub struct Entry {
+    pub key: String,
+    pub val: VersionedValue,
+}
+
+impl Entry {
+    pub fn new<T: Into<String>, V: Into<Value>>(key: T, val: V) -> Entry {
+        Entry {
+            key: key.into(),
+            val: VersionedValue::Single(val.into()),
+        }
+    }
+
+    pub fn value(&self) -> &Value {
+        self.val.value()
+    }
+
+    pub fn clone_value(&self) -> Value {
+        self.val.value().clone()
+    }
+
+    pub fn shallow(&self) -> Entry {
+        Entry {
+            key: self.key.clone(),
+            val: self.val.shallow(),
+        }
+    }
+}
+
+pub type Tree = BTreeMap<u64, Entry>;
 
 pub trait MultipleVersion<K> {
     fn update<V: Into<Value>>(&mut self, key: K, val: V);
@@ -17,20 +48,20 @@ pub trait MultipleVersion<K> {
     fn rollback(&mut self, key: K);
 }
 
-pub type Tree = BTreeMap<u64, Entry>;
-
 impl MultipleVersion<u64> for Tree {
     fn update<V: Into<Value>>(&mut self, key: u64, val: V) {
-        self.entry(key).and_modify(|e| e.update(val));
+        self.entry(key).and_modify(|e| {
+            e.val.update(val);
+        });
     }
 
     fn revision<V: Into<Value>>(&mut self, key: u64, val: V) {
-        self.entry(key).and_modify(|e| e.revision(val));
+        self.entry(key).and_modify(|e| e.val.revision(val));
     }
 
     fn rollback(&mut self, key: u64) {
-        if let Some(need_del) = self.get_mut(&key).map(|e| e.rollback().is_err()) {
-            if need_del {
+        if let Some(e) = self.get_mut(&key) {
+            if !e.val.rollback() {
                 self.remove(&key);
             }
         }
@@ -47,7 +78,7 @@ thread_local! {
 }
 
 pub fn create_thread_storage() -> RefCell<Storage> {
-    let ts = RefCell::new(Storage::new());
+    let ts = RefCell::new(Storage::default());
     ts.borrow_mut()
         .tree
         .clone_from(&GLOBAL_STORAGE.lock().unwrap().tree);
@@ -55,7 +86,7 @@ pub fn create_thread_storage() -> RefCell<Storage> {
 }
 
 lazy_static! {
-    static ref GLOBAL_STORAGE: Mutex<Storage> = Mutex::new(Storage::new());
+    static ref GLOBAL_STORAGE: Mutex<Storage> = Mutex::new(Storage::default());
 }
 
 pub fn frozen_global_storage() {
@@ -73,18 +104,19 @@ pub struct Storage {
     pub tree: Tree,
     pub history: Vec<HashSet<u64>>,
 }
+
 unsafe impl Send for Storage {}
 
-impl Storage {
-    pub fn new() -> Storage {
-        let mut ret = Storage {
+impl Default for Storage {
+    fn default() -> Self {
+        Storage {
             tree: Tree::new(),
-            history: Vec::new(),
-        };
-        ret.history.push(HashSet::new());
-        ret
+            history: vec![HashSet::new()],
+        }
     }
+}
 
+impl Storage {
     pub fn enter(&mut self) {
         self.history.push(HashSet::new());
     }
@@ -92,7 +124,7 @@ impl Storage {
     pub fn exit(&mut self) -> Tree {
         let mut changes = Tree::new();
         for key in self.history.pop().unwrap() {
-            changes.insert(key, self.tree.get(&key).unwrap().shallow_copy());
+            changes.insert(key, self.tree.get(&key).unwrap().shallow());
             self.tree.rollback(key);
         }
         changes
@@ -113,7 +145,7 @@ impl Storage {
     pub fn get<T: Into<String>>(&self, key: T) -> &Value {
         let hkey = hashstr(key);
         if let Some(e) = self.tree.get(&hkey) {
-            return e.get();
+            return e.value();
         }
         return &EMPTY;
     }
@@ -149,15 +181,15 @@ impl Storage {
         }
     }
 
-    pub fn rollback<T: Into<String>>(&mut self, key: T) {
-        let hkey = hashstr(key);
-        self.tree.rollback(hkey);
-    }
+    // pub fn rollback<T: Into<String>>(&mut self, key: T) {
+    //     let hkey = hashstr(key);
+    //     self.tree.rollback(hkey);
+    // }
 
     pub fn keys(&self) -> Vec<String> {
         self.tree
             .values()
-            .filter(|x| match x.get() {
+            .filter(|x| match x.value() {
                 Value::Empty => false,
                 _ => true,
             })
@@ -174,17 +206,19 @@ impl Hashable for &String {}
 
 impl Hashable for &str {}
 
+impl Hashable for str {}
+
 pub trait GetOrElse<K, T> {
     fn get_or_else(&self, key: K, dval: T) -> T;
 }
 
 impl<T> GetOrElse<u64, T> for Storage
-where
-    T: Into<Value> + TryFrom<Value>,
+    where
+        T: Into<Value> + TryFrom<Value>,
 {
     fn get_or_else(&self, key: u64, dval: T) -> T {
         if let Some(val) = self.tree.get(&key) {
-            match val.get().clone().try_into() {
+            match val.value().clone().try_into() {
                 Ok(v) => v,
                 Err(_) => dval,
             }
@@ -195,9 +229,9 @@ where
 }
 
 impl<K, T> GetOrElse<K, T> for Storage
-where
-    K: Into<String> + Hashable,
-    T: Into<Value> + TryFrom<Value>,
+    where
+        K: Into<String> + Hashable,
+        T: Into<Value> + TryFrom<Value>,
 {
     fn get_or_else(&self, key: K, dval: T) -> T {
         let hkey = hashstr(key);
@@ -212,12 +246,12 @@ mod tests {
 
     #[test]
     fn test_storage_create() {
-        let _ = Storage::new();
+        let _ = Storage::default();
     }
 
     #[test]
     fn test_storage_put_get() {
-        let mut s = Storage::new();
+        let mut s = Storage::default();
         s.put("1", 1);
         s.put("2.0", 2.0);
         s.put("str", "str");
@@ -235,7 +269,7 @@ mod tests {
 
     #[test]
     fn test_storage_get_or_else() {
-        let mut s = Storage::new();
+        let mut s = Storage::default();
         s.put("1", 1);
         s.put("2.0", 2.0);
         s.put("str", "str");
@@ -249,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_storage_enter_exit() {
-        let mut s0 = Storage::new();
+        let mut s0 = Storage::default();
         s0.put("a", 1);
         s0.put("b", 2.0);
         s0.enter();

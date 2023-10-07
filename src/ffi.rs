@@ -5,7 +5,7 @@ use super::storage::Storage;
 
 #[no_mangle]
 pub unsafe extern "C" fn hyper_create_storage() -> *mut Storage {
-    let s = Box::new(Storage::new());
+    let s = Box::new(Storage::default());
     Box::leak(s)
 }
 

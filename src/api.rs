@@ -1,5 +1,8 @@
-use crate::entry::{Entry, Value, EMPTY};
-use crate::storage::{hashstr, GetOrElse, Hashable, MultipleVersion, Tree, THREAD_STORAGE, frozen_global_storage};
+use crate::storage::{
+    frozen_global_storage, hashstr, Entry, GetOrElse, Hashable, MultipleVersion, Tree,
+    THREAD_STORAGE,
+};
+use crate::value::{Value, EMPTY};
 
 pub enum ParamScope {
     Nothing,
@@ -11,10 +14,10 @@ impl ParamScope {
         ParamScope::Just(Tree::new())
     }
 
-    pub fn get_with_hash<'a, 'b>(&self, key: u64) -> Value {
+    pub fn get_with_hash(&self, key: u64) -> Value {
         if let ParamScope::Just(changes) = self {
             if let Some(e) = changes.get(&key) {
-                match e.get() {
+                match e.value() {
                     Value::Empty => {}
                     v => return v.clone(),
                 };
@@ -42,8 +45,8 @@ impl ParamScope {
             ts.borrow_mut().enter();
             if let ParamScope::Just(changes) = self {
                 let mut ts = ts.borrow_mut();
-                for (_, v) in changes {
-                    ts.put(v.key.clone(), v.get().clone());
+                for v in changes.values() {
+                    ts.put(v.key.clone(), v.value().clone());
                 }
             }
         });
@@ -70,7 +73,7 @@ where
     fn get_or_else(&self, key: u64, default: V) -> V {
         if let ParamScope::Just(changes) = self {
             if let Some(val) = changes.get(&key) {
-                let r = val.get().clone().try_into();
+                let r = val.value().clone().try_into();
                 if r.is_ok() {
                     return r.ok().unwrap();
                 };
@@ -129,11 +132,37 @@ macro_rules! get_param {
     }};
 }
 
+/// Define or use `hyperparameters` in a code block.
+///
+/// Hyperparameters are named parameters whose values control the learning process of
+/// an ML model or the behaviors of an underlying machine learning system.
+///
+/// Hyperparameter is designed as user-friendly as global variables but overcomes two major
+/// drawbacks of global variables: non-thread safety and global scope.
+///
+/// # A quick example
+/// ```
+/// use hyperparameter::*;
+///
+/// with_params! {   // with_params begins a new parameter scope
+///     set a.b = 1; // set the value of named parameter `a.b`
+///     set a.b.c = 2.0; // `a.b.c` is another parameter.
+///
+///     assert_eq!(1, get_param!(a.b, 0));
+///
+///     with_params! {   // start a new parameter scope that inherits parameters from the previous scope
+///         set a.b = 2; // override parameter `a.b`
+///
+///         let a_b = get_param!(a.b, 0); // read parameter `a.b`, return the default value (0) if not defined
+///         assert_eq!(2, a_b);
+///     }
+/// }
+/// ```
 #[macro_export]
 macro_rules! with_params {
     (
         set $($key:ident).+ = $val:expr;
-        
+
         $($body:tt)*
     ) =>{
         let mut ps = ParamScope::new();
@@ -296,7 +325,8 @@ mod tests {
 
             assert_eq!(1, get_param!(a.b.c, 0));
             assert_eq!(2, get_param!(a.b, 0));
-        };
+        }
+
         assert_eq!(0, get_param!(a.b.c, 0));
         assert_eq!(0, get_param!(a.b, 0));
     }
@@ -311,7 +341,7 @@ mod tests {
 
                 assert_eq!(1, a_b_c);
             };
-        };
+        }
     }
 
     #[test]
@@ -327,6 +357,6 @@ mod tests {
                 assert_eq!(1, a_b_c);
                 assert_eq!(2, a_b);
             };
-        };
+        }
     }
 }
