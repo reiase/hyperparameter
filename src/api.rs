@@ -1,19 +1,25 @@
+use std::collections::HashSet;
+use std::fmt::Debug;
+
 use crate::storage::{
     frozen_global_storage, hashstr, Entry, GetOrElse, Hashable, MultipleVersion, Tree,
     THREAD_STORAGE,
 };
 use crate::value::{Value, EMPTY};
 
+#[derive(Debug)]
 pub enum ParamScope {
     Nothing,
     Just(Tree),
 }
 
-impl ParamScope {
-    pub fn new() -> ParamScope {
+impl Default for ParamScope {
+    fn default() -> Self {
         ParamScope::Just(Tree::new())
     }
+}
 
+impl ParamScope {
     pub fn get_with_hash(&self, key: u64) -> Value {
         if let ParamScope::Just(changes) = self {
             if let Some(e) = changes.get(&key) {
@@ -38,6 +44,17 @@ impl ParamScope {
     {
         let hkey = hashstr(key);
         self.get_with_hash(hkey)
+    }
+
+    pub fn keys(&self) -> Vec<String> {
+        let mut retval: HashSet<String> = THREAD_STORAGE.with(|ts| {
+            let ts = ts.borrow();
+            ts.keys().iter().cloned().collect()
+        });
+        if let ParamScope::Just(changes) = self {
+            retval.extend(changes.values().map(|e| e.key.clone()));
+        };
+        retval.iter().cloned().collect()
     }
 
     pub fn enter(&mut self) {
@@ -100,8 +117,8 @@ where
 
 impl<K, V> ParamScopeOps<K, V> for ParamScope
 where
-    K: Into<String> + Clone + Hashable,
-    V: Into<Value> + TryFrom<Value>,
+    K: Into<String> + Clone + Hashable + Debug,
+    V: Into<Value> + TryFrom<Value> + Clone,
 {
     fn get_or_else(&self, key: K, default: V) -> V {
         let hkey = hashstr(key);
@@ -117,6 +134,8 @@ where
                 let key: String = key.into();
                 changes.insert(hkey, Entry::new(key, val));
             }
+        } else {
+            THREAD_STORAGE.with(|ts| ts.borrow_mut().put(key, val))
         }
     }
 }
@@ -128,7 +147,7 @@ pub fn frozen_global_params() {
 #[macro_export]
 macro_rules! get_param {
     ($name:expr, $default:expr) => {{
-        ParamScope::new().get_or_else(stringify!($name).replace(";", ""), $default)
+        ParamScope::default().get_or_else(stringify!($name).replace(";", ""), $default)
     }};
 }
 
@@ -165,7 +184,7 @@ macro_rules! with_params {
 
         $($body:tt)*
     ) =>{
-        let mut ps = ParamScope::new();
+        let mut ps = ParamScope::default();
         ps.put(stringify!($($key).+).replace(";", ""), $val);
 
         with_params!(params ps; $($body)*)
@@ -187,7 +206,7 @@ macro_rules! with_params {
 
         $($body:tt)*
     ) => {
-        let mut ps = ParamScope::new();
+        let mut ps = ParamScope::default();
         let $name = get_param!($($key).+, $default);
         with_params!(params ps; $($body)*)
     };
@@ -217,20 +236,20 @@ macro_rules! with_params {
 
 #[cfg(test)]
 mod tests {
+    use crate::get_param;
     use crate::storage::{GetOrElse, THREAD_STORAGE};
+    use crate::with_params;
 
     use super::{ParamScope, ParamScopeOps};
-    use crate::get_param;
-    use crate::with_params;
 
     #[test]
     fn test_param_scope_create() {
-        let _ = ParamScope::new();
+        let _ = ParamScope::default();
     }
 
     #[test]
     fn test_param_scope_put_get() {
-        let mut ps = ParamScope::new();
+        let mut ps = ParamScope::default();
         ps.put("1", 1);
         ps.put("2.0", 2.0);
 
@@ -248,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_param_scope_enter() {
-        let mut ps = ParamScope::new();
+        let mut ps = ParamScope::default();
         ps.put("1", 1);
         ps.put("2.0", 2.0);
 
@@ -289,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_param_scope_get_param() {
-        let mut ps = ParamScope::new();
+        let mut ps = ParamScope::default();
         ps.put("a.b.c", 1);
 
         // check thread storage is not affected

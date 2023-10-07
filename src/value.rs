@@ -5,11 +5,11 @@ use phf::phf_map;
 use crate::value::VersionedValue::{Single, Versioned};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DeferUnsafe(pub *mut c_void, pub unsafe fn(*mut c_void));
+pub struct DeferUnsafe(pub u64, pub unsafe fn(*mut c_void));
 
 impl Drop for DeferUnsafe {
     fn drop(&mut self) {
-        unsafe { self.1(self.0) }
+        unsafe { self.1(self.0 as *mut c_void) }
     }
 }
 
@@ -30,7 +30,7 @@ pub enum Value {
     Text(String),
     Boolean(bool),
     UserDefined(
-        *mut c_void,       //data
+        u64,               //data
         i32,               //kind
         Option<DeferSafe>, // de-allocator
     ),
@@ -100,13 +100,17 @@ impl From<bool> for Value {
 
 impl From<*mut c_void> for Value {
     fn from(value: *mut c_void) -> Self {
-        Value::UserDefined(value, 0, None)
+        Value::UserDefined(value as u64, 0, None)
     }
 }
 
 impl Value {
     pub fn managed(ptr: *mut c_void, kind: i32, free: unsafe fn(*mut c_void)) -> Value {
-        Value::UserDefined(ptr, kind, Arc::new(DeferUnsafe(ptr, free)).into())
+        Value::UserDefined(
+            ptr as u64,
+            kind,
+            Arc::new(DeferUnsafe(ptr as u64, free)).into(),
+        )
     }
 }
 

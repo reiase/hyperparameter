@@ -5,9 +5,9 @@ use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 
-use crate::value::EMPTY;
 use crate::value::Value;
 use crate::value::VersionedValue;
+use crate::value::EMPTY;
 use crate::xxh::xxhstr;
 
 #[derive(Debug, Clone)]
@@ -213,8 +213,8 @@ pub trait GetOrElse<K, T> {
 }
 
 impl<T> GetOrElse<u64, T> for Storage
-    where
-        T: Into<Value> + TryFrom<Value>,
+where
+    T: Into<Value> + TryFrom<Value>,
 {
     fn get_or_else(&self, key: u64, dval: T) -> T {
         if let Some(val) = self.tree.get(&key) {
@@ -229,9 +229,9 @@ impl<T> GetOrElse<u64, T> for Storage
 }
 
 impl<K, T> GetOrElse<K, T> for Storage
-    where
-        K: Into<String> + Hashable,
-        T: Into<Value> + TryFrom<Value>,
+where
+    K: Into<String> + Hashable,
+    T: Into<Value> + TryFrom<Value>,
 {
     fn get_or_else(&self, key: K, dval: T) -> T {
         let hkey = hashstr(key);

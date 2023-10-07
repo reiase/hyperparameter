@@ -1,6 +1,6 @@
-use std::cell::RefCell;
 use std::ffi::c_void;
 
+use hyperparameter::*;
 use pyo3::exceptions::PyValueError;
 use pyo3::ffi::Py_DecRef;
 use pyo3::ffi::Py_IncRef;
@@ -12,13 +12,6 @@ use pyo3::types::PyInt;
 use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::FromPyPointer;
-
-use hyperparameter::entry::Value;
-use hyperparameter::storage::frozen_as_global_storage;
-use hyperparameter::storage::Storage;
-use hyperparameter::storage::StorageManager;
-use hyperparameter::storage::MGR;
-use hyperparameter::xxh::xxhstr;
 
 #[repr(C)]
 enum UserDefinedType {
@@ -49,8 +42,7 @@ fn make_value_from_pyobject(obj: *mut pyo3::ffi::PyObject) -> Value {
 
 #[pyclass]
 pub struct KVStorage {
-    storage: Storage,
-    isview: bool,
+    storage: ParamScope,
 }
 
 #[pymethods]
@@ -58,20 +50,19 @@ impl KVStorage {
     #[new]
     pub fn new() -> KVStorage {
         KVStorage {
-            storage: Storage::new(),
-            isview: false,
+            storage: ParamScope::default(),
         }
     }
 
     pub unsafe fn storage(&mut self, py: Python<'_>) -> PyResult<PyObject> {
         let res = PyDict::new(py);
         for k in self.storage.keys().iter() {
-            match self.storage.get(k).unwrap() {
+            match self.storage.get(k) {
                 Value::Empty => Ok(()),
                 Value::Int(v) => res.set_item(k, v),
                 Value::Float(v) => res.set_item(k, v),
                 Value::Text(v) => res.set_item(k, v.as_str()),
-                Value::Boolen(v) => res.set_item(k, v),
+                Value::Boolean(v) => res.set_item(k, v),
                 Value::UserDefined(v, k, _) => {
                     if k == UserDefinedType::PyObjectType as i32 {
                         res.set_item(k, PyAny::from_owned_ptr(py, v as *mut pyo3::ffi::PyObject))
@@ -118,52 +109,43 @@ impl KVStorage {
 
     pub unsafe fn get(&mut self, py: Python<'_>, key: String) -> PyResult<Option<PyObject>> {
         match self.storage.get(key) {
-            Some(val) => match val {
-                Value::Empty => Err(PyValueError::new_err("not found")),
-                Value::Int(v) => Ok(Some(v.into_py(py))),
-                Value::Float(v) => Ok(Some(v.into_py(py))),
-                Value::Text(v) => Ok(Some(v.into_py(py))),
-                Value::Boolen(v) => Ok(Some(v.into_py(py))),
-                Value::UserDefined(v, k, _) => {
-                    if k == UserDefinedType::PyObjectType as i32 {
-                        Ok(Some(
-                            PyAny::from_borrowed_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
-                        ))
-                    } else {
-                        Ok(Some((v as u64).into_py(py)))
-                    }
+            Value::Empty => Err(PyValueError::new_err("not found")),
+            Value::Int(v) => Ok(Some(v.into_py(py))),
+            Value::Float(v) => Ok(Some(v.into_py(py))),
+            Value::Text(v) => Ok(Some(v.into_py(py))),
+            Value::Boolean(v) => Ok(Some(v.into_py(py))),
+            Value::UserDefined(v, k, _) => {
+                if k == UserDefinedType::PyObjectType as i32 {
+                    Ok(Some(
+                        PyAny::from_borrowed_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
+                    ))
+                } else {
+                    Ok(Some((v as u64).into_py(py)))
                 }
-            },
-            None => Err(PyValueError::new_err("not found")),
+            }
         }
     }
 
     pub unsafe fn get_entry(&mut self, py: Python<'_>, hkey: u64) -> PyResult<Option<PyObject>> {
-        match self.storage.get_entry(hkey) {
-            Some(val) => match val {
-                Value::Empty => Err(PyValueError::new_err("not found")),
-                Value::Int(v) => Ok(Some(v.into_py(py))),
-                Value::Float(v) => Ok(Some(v.into_py(py))),
-                Value::Text(v) => Ok(Some(v.into_py(py))),
-                Value::Boolen(v) => Ok(Some(v.into_py(py))),
-                Value::UserDefined(v, k, _) => {
-                    if k == UserDefinedType::PyObjectType as i32 {
-                        Ok(Some(
-                            PyAny::from_borrowed_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
-                        ))
-                    } else {
-                        Ok(Some((v as u64).into_py(py)))
-                    }
+        match self.storage.get_with_hash(hkey) {
+            Value::Empty => Err(PyValueError::new_err("not found")),
+            Value::Int(v) => Ok(Some(v.into_py(py))),
+            Value::Float(v) => Ok(Some(v.into_py(py))),
+            Value::Text(v) => Ok(Some(v.into_py(py))),
+            Value::Boolean(v) => Ok(Some(v.into_py(py))),
+            Value::UserDefined(v, k, _) => {
+                if k == UserDefinedType::PyObjectType as i32 {
+                    Ok(Some(
+                        PyAny::from_borrowed_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
+                    ))
+                } else {
+                    Ok(Some((v as u64).into_py(py)))
                 }
-            },
-            None => Err(PyValueError::new_err("not found")),
+            }
         }
     }
 
     pub unsafe fn put(&mut self, key: String, val: &PyAny) -> PyResult<()> {
-        if self.isview {
-            MGR.with(|mgr: &RefCell<StorageManager>| mgr.borrow_mut().put_key(key.clone()));
-        }
         if val.is_none() {
             self.storage.put(key, Value::Empty);
         } else if val.is_instance_of::<PyBool>().unwrap() {
@@ -171,12 +153,14 @@ impl KVStorage {
         } else if val.is_instance_of::<PyFloat>().unwrap() {
             self.storage.put(key, val.extract::<f64>().unwrap());
         } else if val.is_instance_of::<PyString>().unwrap() {
-            self.storage.put(key, val.extract::<&str>().unwrap());
+            self.storage
+                .put(key, val.extract::<&str>().unwrap().to_string());
         } else if val.is_instance_of::<PyInt>().unwrap() {
             self.storage.put(key, val.extract::<i64>().unwrap());
         } else {
             Py_IncRef(val.into_ptr());
-            self.storage.put(key, make_value_from_pyobject(val.into_ptr()));
+            self.storage
+                .put(key, make_value_from_pyobject(val.into_ptr()));
         }
         Ok(())
     }
@@ -191,17 +175,14 @@ impl KVStorage {
 
     #[staticmethod]
     pub fn current() -> KVStorage {
-        let mut kv = KVStorage {
-            storage: Storage::new(),
-            isview: true,
-        };
-        kv.storage.isview = 1;
-        kv
+        KVStorage {
+            storage: ParamScope::Nothing,
+        }
     }
 
     #[staticmethod]
     pub fn frozen() {
-        frozen_as_global_storage();
+        frozen_global_params();
     }
 }
 
