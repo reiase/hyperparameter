@@ -13,6 +13,9 @@ use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::FromPyPointer;
 
+use crate::debug::enable_debug_server;
+use crate::debug::sleep;
+
 #[repr(C)]
 enum UserDefinedType {
     PyObjectType = 1,
@@ -88,7 +91,7 @@ impl KVStorage {
                     Some(p) => format!("{}.{}", p, k.extract::<String>().unwrap()),
                     None => k.extract::<String>().unwrap(),
                 };
-                if v.is_instance_of::<PyDict>().unwrap() {
+                if v.is_instance_of::<PyDict>() {
                     self._update(&v.downcast::<PyDict>().unwrap(), Some(key));
                 } else {
                     self.put(key, v).unwrap();
@@ -148,14 +151,14 @@ impl KVStorage {
     pub unsafe fn put(&mut self, key: String, val: &PyAny) -> PyResult<()> {
         if val.is_none() {
             self.storage.put(key, Value::Empty);
-        } else if val.is_instance_of::<PyBool>().unwrap() {
+        } else if val.is_instance_of::<PyBool>() {
             self.storage.put(key, val.extract::<bool>().unwrap());
-        } else if val.is_instance_of::<PyFloat>().unwrap() {
+        } else if val.is_instance_of::<PyFloat>() {
             self.storage.put(key, val.extract::<f64>().unwrap());
-        } else if val.is_instance_of::<PyString>().unwrap() {
+        } else if val.is_instance_of::<PyString>() {
             self.storage
                 .put(key, val.extract::<&str>().unwrap().to_string());
-        } else if val.is_instance_of::<PyInt>().unwrap() {
+        } else if val.is_instance_of::<PyInt>() {
             self.storage.put(key, val.extract::<i64>().unwrap());
         } else {
             Py_IncRef(val.into_ptr());
@@ -195,5 +198,8 @@ pub fn xxh64(s: &str) -> u64 {
 fn librbackend(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<KVStorage>()?;
     m.add_function(wrap_pyfunction!(xxh64, m)?)?;
+    m.add_function(wrap_pyfunction!(sleep, m)?)?;
+    m.add_function(wrap_pyfunction!(enable_debug_server, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::debug::backtrace, m)?)?;
     Ok(())
 }

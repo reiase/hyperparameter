@@ -8,6 +8,7 @@ pub mod value;
 pub mod api;
 pub mod ffi;
 pub mod xxh;
+pub mod debug_server;
 
 pub use crate::api::frozen_global_params;
 pub use crate::api::ParamScope;

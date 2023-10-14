@@ -1,7 +1,8 @@
 from .api import auto_param, param_scope
 import importlib.metadata
+from .debug import DebugConsole
 
-__all__ = ["param_scope", "auto_param"]
+__all__ = ["param_scope", "auto_param", "DebugConsole"]
 
 VERSION = importlib.metadata.version("hyperparameter")
 
