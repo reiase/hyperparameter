@@ -13,7 +13,7 @@ struct DebugRepl {
 impl DebugRepl {
     pub fn new(console: Option<Py<PyAny>>) -> DebugRepl {
         DebugRepl {
-            console: console,
+            console,
             buf: "".to_string(),
             live: true,
         }

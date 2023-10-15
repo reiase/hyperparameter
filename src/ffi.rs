@@ -5,7 +5,7 @@ use super::api::ParamScopeOps;
 
 #[no_mangle]
 pub unsafe extern "C" fn param_scope_create() -> *mut ParamScope {
-    let ps = Box::new(ParamScope::default());
+    let ps = Box::<ParamScope>::default();
     Box::leak(ps)
 }
 
@@ -78,7 +78,7 @@ pub unsafe extern "C" fn param_scope_hget_or_bool(
 #[no_mangle]
 pub unsafe extern "C" fn param_scope_put_i64(this: *mut ParamScope, key: *const i8, val: i64) {
     let key = CStr::from_ptr(key);
-    (*this).put(key.to_string_lossy(), val)
+    (*this).put(key.to_string_lossy().to_string(), val)
 }
 
 #[cfg(target_arch = "aarch64")]

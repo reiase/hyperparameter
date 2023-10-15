@@ -191,7 +191,7 @@ impl KVStorage {
 
 #[pyfunction]
 pub fn xxh64(s: &str) -> u64 {
-    xxhstr(s)
+    s.xxh()
 }
 
 #[pymodule]

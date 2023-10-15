@@ -45,7 +45,7 @@ fn test_with_params_multi_threads() {
         }
 
         for t in workers {
-            t.join();
+            let _ = t.join();
         }
     }
 }

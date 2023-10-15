@@ -4,7 +4,7 @@ use phf::phf_map;
 
 use crate::value::VersionedValue::{Single, Versioned};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeferUnsafe(pub u64, pub unsafe fn(*mut c_void));
 
 impl Drop for DeferUnsafe {
@@ -239,7 +239,7 @@ impl VersionedValue {
     }
 
     pub fn update<V: Into<Value>>(&mut self, val: V) -> Value {
-        let mut val = val.into();
+        let val = val.into();
         let old = match self {
             Single(old) => old,
             Versioned(old, _) => old,

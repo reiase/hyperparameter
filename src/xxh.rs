@@ -1,3 +1,5 @@
+use std::ffi::{CStr, CString};
+
 // rust version of xxhash, original C++ verison is from: https://github.com/ekpyron/xxhashct/blob/master/xxh64.hpp
 static PRIME1: u64 = 11400714785074694791u64;
 static PRIME2: u64 = 14029467366897019727u64;
@@ -132,23 +134,55 @@ fn xxh(p: &[u8], len: u64, seed: u64) -> u64 {
     }
 }
 
-pub fn xxhstr(s: &str) -> u64 {
-    xxh(s.as_bytes(), s.len() as u64, 42)
+pub trait XXHashable {
+    fn xxh(&self) -> u64;
+}
+
+impl XXHashable for String {
+    fn xxh(&self) -> u64 {
+        xxh(self.as_bytes(), self.len() as u64, 42)
+    }
+}
+
+impl XXHashable for &String {
+    fn xxh(&self) -> u64 {
+        xxh(self.as_bytes(), self.len() as u64, 42)
+    }
+}
+
+impl XXHashable for &str {
+    fn xxh(&self) -> u64 {
+        xxh(self.as_bytes(), self.len() as u64, 42)
+    }
+}
+
+impl XXHashable for CStr {
+    fn xxh(&self) -> u64 {
+        let bs = self.to_bytes();
+        xxh(bs, bs.len() as u64, 42)
+    }
+}
+
+impl XXHashable for CString {
+    fn xxh(&self) -> u64 {
+        let bs = self.to_bytes();
+        xxh(bs, bs.len() as u64, 42)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::xxh::xxhstr;
+    use crate::xxh::XXHashable;
 
     #[test]
     fn test_xxhstr() {
-        assert_eq!(xxhstr("12345"), 13461425039964245335u64);
+        assert_eq!("12345".xxh(), 13461425039964245335u64);
         assert_eq!(
-            xxhstr("12345678901234567890123456789012345678901234567890"),
+            "12345678901234567890123456789012345678901234567890".xxh(),
             5815762531248152886
         );
         assert_eq!(
-            xxhstr("0123456789abcdefghijklmnopqrstuvwxyz"),
+            "0123456789abcdefghijklmnopqrstuvwxyz".xxh(),
             5308235351123835395
         );
     }

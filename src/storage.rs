@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 use crate::value::Value;
 use crate::value::VersionedValue;
 use crate::value::EMPTY;
-use crate::xxh::xxhstr;
+use crate::xxh::XXHashable;
 
 #[derive(Debug, Clone)]
 pub struct Entry {
@@ -68,16 +68,16 @@ impl MultipleVersion<u64> for Tree {
     }
 }
 
-pub fn hashstr<T: Into<String>>(s: T) -> u64 {
-    let s: String = s.into();
-    xxhstr(&s)
-}
+// pub fn hashstr<T: Into<String>>(s: T) -> u64 {
+//     let s: String = s.into();
+//     xxhstr(&s)
+// }
 
 thread_local! {
     pub static THREAD_STORAGE: RefCell<Storage> = create_thread_storage();
 }
 
-pub fn create_thread_storage() -> RefCell<Storage> {
+fn create_thread_storage() -> RefCell<Storage> {
     let ts = RefCell::new(Storage::default());
     ts.borrow_mut()
         .tree
@@ -142,17 +142,18 @@ impl Storage {
         self.tree.remove(&key);
     }
 
-    pub fn get<T: Into<String>>(&self, key: T) -> &Value {
-        let hkey = hashstr(key);
+    pub fn get<T: XXHashable>(&self, key: T) -> &Value {
+        let hkey = key.xxh();
         if let Some(e) = self.tree.get(&hkey) {
-            return e.value();
+            e.value()
+        } else {
+            &EMPTY
         }
-        return &EMPTY;
     }
 
-    pub fn put<T: Into<String>, V: Into<Value> + Clone>(&mut self, key: T, val: V) {
+    pub fn put<T: Into<String> + XXHashable, V: Into<Value> + Clone>(&mut self, key: T, val: V) {
+        let hkey = key.xxh();
         let key: String = key.into();
-        let hkey = hashstr(&key);
         if self.history.last().unwrap().contains(&hkey) {
             self.tree.update(hkey, val);
         } else {
@@ -162,7 +163,7 @@ impl Storage {
                 self.tree.insert(
                     hkey,
                     Entry {
-                        key: key,
+                        key,
                         val: VersionedValue::Single(val.into()),
                     },
                 );
@@ -171,8 +172,8 @@ impl Storage {
         }
     }
 
-    pub fn del<T: Into<String>>(&mut self, key: T) {
-        let hkey = hashstr(key);
+    pub fn del<T: XXHashable>(&mut self, key: T) {
+        let hkey = key.xxh();
         if self.history.last().unwrap().contains(&hkey) {
             self.tree.update(hkey, None::<i32>);
         } else {
@@ -230,11 +231,11 @@ where
 
 impl<K, T> GetOrElse<K, T> for Storage
 where
-    K: Into<String> + Hashable,
+    K: Into<String> + XXHashable,
     T: Into<Value> + TryFrom<Value>,
 {
     fn get_or_else(&self, key: K, dval: T) -> T {
-        let hkey = hashstr(key);
+        let hkey = key.xxh();
         self.get_or_else(hkey, dval)
     }
 }

@@ -1,7 +1,7 @@
 import code
-from types import CodeType
-from contextlib import redirect_stdout, redirect_stderr
 import io
+from contextlib import redirect_stderr, redirect_stdout
+from types import CodeType
 from typing import Any
 
 
@@ -53,8 +53,9 @@ class BackTrace(DebugCommand):
         return "print python and C stack"
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
-        from hyperparameter.librbackend import backtrace
         import traceback
+
+        from hyperparameter.librbackend import backtrace
 
         bt = backtrace()
         py = "".join(traceback.format_stack())
@@ -70,8 +71,9 @@ class ParamsCommand(DebugCommand):
         return "list of parameters"
 
     def __call__(self) -> Any:
-        from hyperparameter import param_scope
         import json
+
+        from hyperparameter import param_scope
 
         params = param_scope().storage().storage()
         return json.dumps(params)

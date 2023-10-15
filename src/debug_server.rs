@@ -38,7 +38,7 @@ impl DebugServer {
         let listener = TcpListener::bind(self.self_addr.as_ref().unwrap()).unwrap();
         self.self_addr = match listener.local_addr() {
             Ok(addr) => {
-                println!("debug server is started on {}", addr.to_string());
+                println!("debug server is started on {}", addr);
                 Some(addr.to_string())
             }
             Err(_) => None,

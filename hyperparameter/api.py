@@ -2,8 +2,8 @@ import functools
 import inspect
 from typing import Any, Callable, Dict
 
-from hyperparameter.storage import TLSKVStorage, has_rust_backend
-from hyperparameter.storage import xxh64
+from hyperparameter.storage import TLSKVStorage, has_rust_backend, xxh64
+
 from .tune import Suggester
 
 

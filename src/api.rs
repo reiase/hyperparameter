@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use crate::storage::{
-    frozen_global_storage, hashstr, Entry, GetOrElse, Hashable, MultipleVersion, Tree,
-    THREAD_STORAGE,
+    frozen_global_storage, Entry, GetOrElse, MultipleVersion, Tree, THREAD_STORAGE,
 };
 use crate::value::{Value, EMPTY};
+use crate::xxh::XXHashable;
 
 #[derive(Debug)]
 pub enum ParamScope {
@@ -40,9 +40,9 @@ impl ParamScope {
 
     pub fn get<K>(&self, key: K) -> Value
     where
-        K: Into<String> + Clone + Hashable,
+        K: Into<String> + Clone + XXHashable,
     {
-        let hkey = hashstr(key);
+        let hkey = key.xxh();
         self.get_with_hash(hkey)
     }
 
@@ -117,16 +117,16 @@ where
 
 impl<K, V> ParamScopeOps<K, V> for ParamScope
 where
-    K: Into<String> + Clone + Hashable + Debug,
+    K: Into<String> + Clone + XXHashable + Debug,
     V: Into<Value> + TryFrom<Value> + Clone,
 {
     fn get_or_else(&self, key: K, default: V) -> V {
-        let hkey = hashstr(key);
+        let hkey = key.xxh();
         self.get_or_else(hkey, default)
     }
 
     fn put(&mut self, key: K, val: V) {
-        let hkey = hashstr(key.clone());
+        let hkey = key.xxh();
         if let ParamScope::Just(changes) = self {
             if changes.contains_key(&hkey) {
                 changes.update(hkey, val);

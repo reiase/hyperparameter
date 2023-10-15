@@ -2,7 +2,6 @@ import os
 import threading
 from typing import Any, Callable, Dict, Iterable
 
-
 GLOBAL_STORAGE = {}
 
 
@@ -102,7 +101,7 @@ class TLSKVStorage(Storage):
 
     def clear(self):
         self._storage.clear()
-        
+
     def get_entry(self, *args, **kwargs):
         raise RuntimeError("hyperparameter is not build with rust backend")
 
@@ -151,8 +150,7 @@ def xxh64(*args, **kwargs):
 
 try:
     if os.environ.get("HYPERPARAMETER_BACKEND", "RUST") == "RUST":
-        from hyperparameter.librbackend import KVStorage
-        from hyperparameter.librbackend import xxh64
+        from hyperparameter.librbackend import KVStorage, xxh64
 
         TLSKVStorage = KVStorage
         has_rust_backend = True

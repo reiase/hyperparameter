@@ -2,16 +2,16 @@
 #[macro_use]
 extern crate proptest;
 
-pub mod storage;
-pub mod value;
-
-pub mod api;
-pub mod ffi;
-pub mod xxh;
-pub mod debug_server;
-
 pub use crate::api::frozen_global_params;
 pub use crate::api::ParamScope;
 pub use crate::api::ParamScopeOps;
 pub use crate::value::Value;
-pub use crate::xxh::xxhstr;
+pub use crate::xxh::XXHashable;
+
+pub mod storage;
+pub mod value;
+
+pub mod api;
+pub mod debug_server;
+pub mod ffi;
+mod xxh;
