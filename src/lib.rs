@@ -14,4 +14,4 @@ pub mod value;
 pub mod api;
 pub mod debug_server;
 pub mod ffi;
-mod xxh;
+pub mod xxh;

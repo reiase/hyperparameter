@@ -152,7 +152,9 @@ pub fn frozen_global_params() {
 #[macro_export]
 macro_rules! get_param {
     ($name:expr, $default:expr) => {{
-        ParamScope::default().get_or_else(stringify!($name).replace(";", ""), $default)
+        const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
+        const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
+        ParamScope::default().get_or_else(CONST_HASH, $default)
     }};
 }
 
@@ -190,8 +192,10 @@ macro_rules! with_params {
         $($body:tt)*
     ) =>{
         let mut ps = ParamScope::default();
-        ps.put(stringify!($($key).+).replace(";", ""), $val);
-
+        {
+            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
+            ps.put(CONST_KEY, $val);
+        }
         with_params!(params ps; $($body)*)
     };
 
@@ -201,8 +205,10 @@ macro_rules! with_params {
 
         $($body:tt)*
     ) => {
-        $ps.put(stringify!($($key).+).replace(";", ""), $val);
-
+        {
+            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
+            $ps.put(CONST_KEY, $val);
+        }
         with_params!(params $ps; $($body)*)
     };
 

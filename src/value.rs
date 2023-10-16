@@ -328,7 +328,7 @@ mod test {
         let ptr: Value = ptr.into();
         assert_eq!(
             format!("{:?}", ptr),
-            "UserDefined(0xabcd, 0, None)".to_string()
+            "UserDefined(43981, 0, None)".to_string()
         );
     }
 }

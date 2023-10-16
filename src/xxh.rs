@@ -1,4 +1,5 @@
 use std::ffi::{CStr, CString};
+use xxhash_rust::const_xxh64;
 
 // rust version of xxhash, original C++ verison is from: https://github.com/ekpyron/xxhashct/blob/master/xxh64.hpp
 static PRIME1: u64 = 11400714785074694791u64;
@@ -134,6 +135,10 @@ fn xxh(p: &[u8], len: u64, seed: u64) -> u64 {
     }
 }
 
+pub const fn xxhash(u: &[u8]) -> u64 {
+    const_xxh64::xxh64(u, 42)
+}
+
 pub trait XXHashable {
     fn xxh(&self) -> u64;
 }
@@ -172,8 +177,8 @@ impl XXHashable for CString {
 
 #[cfg(test)]
 mod tests {
+    use crate::xxh::xxhash;
     use crate::xxh::XXHashable;
-
     #[test]
     fn test_xxhstr() {
         assert_eq!("12345".xxh(), 13461425039964245335u64);
@@ -183,6 +188,19 @@ mod tests {
         );
         assert_eq!(
             "0123456789abcdefghijklmnopqrstuvwxyz".xxh(),
+            5308235351123835395
+        );
+    }
+
+    #[test]
+    fn test_xxhash() {
+        assert_eq!(xxhash("12345".as_bytes()), 13461425039964245335u64);
+        assert_eq!(
+            xxhash("12345678901234567890123456789012345678901234567890".as_bytes()),
+            5815762531248152886
+        );
+        assert_eq!(
+            xxhash("0123456789abcdefghijklmnopqrstuvwxyz".as_bytes()),
             5308235351123835395
         );
     }
