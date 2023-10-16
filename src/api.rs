@@ -154,7 +154,8 @@ macro_rules! get_param {
     ($name:expr, $default:expr) => {{
         const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
         const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
-        ParamScope::default().get_or_else(CONST_HASH, $default)
+        THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(CONST_HASH, $default))
+        // ParamScope::default().get_or_else(CONST_HASH, $default)
     }};
 }
 
@@ -217,9 +218,8 @@ macro_rules! with_params {
 
         $($body:tt)*
     ) => {
-        let mut ps = ParamScope::default();
         let $name = get_param!($($key).+, $default);
-        with_params!(params ps; $($body)*)
+        with_params_readonly!($($body)*)
     };
 
     (
@@ -241,6 +241,23 @@ macro_rules! with_params {
             $ps.enter();
             let ret = {$($body)*};
             $ps.exit();
+            ret
+    }};
+}
+
+#[macro_export]
+macro_rules! with_params_readonly {
+    (
+        get $name:ident = $($key:ident).+ or $default:expr;
+
+        $($body:tt)*
+    ) => {
+        let $name = get_param!($($key).+, $default);
+        with_params_readonly!($($body)*)
+    };
+
+    ($($body:tt)*) => {{
+            let ret = {$($body)*};
             ret
     }};
 }
@@ -387,6 +404,15 @@ mod tests {
                 assert_eq!(1, a_b_c);
                 assert_eq!(2, a_b);
             };
+        }
+    }
+
+    #[test]
+    fn test_param_scope_with_param_readonly() {
+        with_params! {
+            get a_b_c = a.b.c or 1;
+
+            1;
         }
     }
 }

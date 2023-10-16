@@ -229,7 +229,7 @@ impl TryFrom<&Value> for bool {
             Value::Empty => Err("empty value error".into()),
             Value::Int(v) => Ok(*v != 0),
             Value::Float(_) => Err("data type not matched, `Float` and bool".into()),
-            Value::Text(s) => match STR2BOOL.get(&s) {
+            Value::Text(s) => match STR2BOOL.get(s) {
                 Some(v) => Ok(*v),
                 None => Err("data type not matched, `Text` and bool".into()),
             },
