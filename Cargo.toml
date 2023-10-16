@@ -7,7 +7,7 @@ keywords = ["config", "env"]
 
 [lib]
 name = "hyperparameter"
-crate-type = ["rlib"]
+crate-type = ["rlib", "staticlib"]
 
 [dependencies]
 backtrace = "0.3.69"

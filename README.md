@@ -9,31 +9,49 @@ Hyperparameter
 
 <p align="center">
 
-**Hyperparameter, Make configurable AI applications.Build for Python hackers.**
+**Hyperparameter, Make configurable AI applications. Build for Python/Rust hackers.**
 
 </p>
+
+Hyperparameter is a Python/Rust library for managing hyperparameters that control the learning process of an ML model or the behaviors of an underlying machine learning system.
 
 Quick Start
 -----------
 
-`Hyperparameter` uses `auto _ param` decorator to convert keywords arguments into configurable parameters:
+`Hyperparameter` uses the `auto_param` decorator to convert keywords arguments into configurable parameters:
 
 ```python
-from hyperparameter import auto_param
+from hyperparameter import auto_param, param_scope
 
+# Define the function 'foo' with configurable parameters
 @auto_param("foo")
-def foo(x, y=1, z="a"):
-    return f"x={x}, y={y}, z={z}"
+def foo(x=1):
+    return f"x={x}"
+
+# Control the parameters using 'param_scope'
+foo()  # x=1, if no params is defined
+with param_scope(**{"foo.x": 2}):
+    foo()  # x=2', when `foo.x` is set to `2`
 ```
 
-The parameters can be controlled with `param_scope`
+Rust version of the above example:
+```rust
+fn foo() -> i32{
+    with_params! {
+        get x = foo.x or 1i32;
 
-```python
-from hyperparameter import param_scope
+        x
+    }
+}
 
-foo(1) # x=1, y=1, z='a'
-with param_scope(**{"foo.y":2}):
-    foo(1) # x=1, y=2, z='a'
+fn main() {
+    println!("foo() = {}", foo()); // foo() = 1
+    with_params! {
+        set foo.x = 2i32;
+
+        println!("foo() = {}", foo()); // foo() = 2
+    }
+}
 ```
 
 Advanced Usage
@@ -124,8 +142,8 @@ Examples
 
 ### [parameter tunning for researchers](examples/sparse_lr/README.md)
 
-This example shows how to use hyperparameter in your research projects, and make your experiments reproducible.
+This example demonstrates how to use hyperparameter in research projects, and make experiments reproducible.
 
 ### [experiment tracing for data scientists](examples/mnist/README.md)
 
-This example shows experiment management with hyperparameter, and tracing the results with mlflow.tracing.
+This example showcases experiment management with hyperparameter and result tracing with mlflow.tracing.

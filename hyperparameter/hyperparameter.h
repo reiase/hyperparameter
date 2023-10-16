@@ -128,7 +128,7 @@ namespace hyperparameter
         inline T get(const char *key, int keylen, T def) { return get(xxhash(key, keylen), def); }
 
         template <typename T>
-        inline Hyperparameter *put(const std::string &key, T val) { put(key.c_str(), val); }
+        inline Hyperparameter *put(const std::string &key, T val) { put(key.c_str(), val); return this;}
 
         template <typename T>
         inline Hyperparameter *put(const char *key, T val);
@@ -240,11 +240,17 @@ namespace hyperparameter
 #define PP_CAT2_1(a, b) a##b
 
 #define WITH_PARAMS_0(impl) (impl->enter())
-#define WITH_PARAMS_1(impl, KEY, VAL, ...) WITH_PARAMS_0(impl->put(#KEY, VAL))
-#define WITH_PARAMS_2(impl, KEY, VAL, ...) WITH_PARAMS_1(impl->put(#KEY, VAL), ##__VA_ARGS__)
-#define WITH_PARAMS_3(impl, KEY, VAL, ...) WITH_PARAMS_2(impl->put(#KEY, VAL), ##__VA_ARGS__)
+#define WITH_PARAMS_1(impl, k, v) WITH_PARAMS_0(((impl)->put(#k, v)))
+#define WITH_PARAMS_2(impl, k, v, ...) WITH_PARAMS_1((impl)->put(#k, v), ## __VA_ARGS__)
+#define WITH_PARAMS_3(impl, KEY, VAL, ...) WITH_PARAMS_2((impl)->put(#KEY, VAL), ## __VA_ARGS__)
+#define WITH_PARAMS_4(impl, KEY, VAL, ...) WITH_PARAMS_3((impl)->put(#KEY, VAL), ## __VA_ARGS__)
+#define WITH_PARAMS_5(impl, KEY, VAL, ...) WITH_PARAMS_4((impl)->put(#KEY, VAL), ## __VA_ARGS__)
+#define WITH_PARAMS_6(impl, KEY, VAL, ...) WITH_PARAMS_5((impl)->put(#KEY, VAL), ## __VA_ARGS__)
+#define WITH_PARAMS_7(impl, KEY, VAL, ...) WITH_PARAMS_6((impl)->put(#KEY, VAL), ## __VA_ARGS__)
 
-#define WITH_PARAMS(KEY, VAL, ...) \
-    (std::unique_ptr<hyperparameter::Hyperparameter>(PP_VA_NAME(WITH_PARAMS_, __VA_ARGS__)(hyperparameter::create()->put(#KEY, VAL), ##__VA_ARGS__)))
+#define WITH_PARAMS(k, v, ...) \
+    (std::unique_ptr<hyperparameter::Hyperparameter>(PP_VA_NAME(WITH_PARAMS_, __VA_ARGS__)((hyperparameter::create()->put(#k, (v) )),## __VA_ARGS__)))
 
+// #endif#define WITH_PARAMS(KEY, VAL, ...) \
+//     PP_VA_NAME(WITH_PARAMS_, __VA_ARGS__)(hyperparameter::create()->put(#KEY, VAL), ##__VA_ARGS__)
 #endif

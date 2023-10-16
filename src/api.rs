@@ -20,24 +20,23 @@ impl Default for ParamScope {
 }
 
 impl ParamScope {
+    /// Get a parameter with a given hash key.
     pub fn get_with_hash(&self, key: u64) -> Value {
         if let ParamScope::Just(changes) = self {
             if let Some(e) = changes.get(&key) {
                 match e.value() {
                     Value::Empty => {}
                     v => return v.clone(),
-                };
+                }
             }
-        };
+        }
         THREAD_STORAGE.with(|ts| {
             let ts = ts.borrow();
-            match ts.get_entry(key) {
-                Some(e) => e.clone_value(),
-                None => EMPTY,
-            }
+            ts.get_entry(key).map(|e| e.clone_value()).unwrap_or(EMPTY)
         })
     }
 
+    /// Get a parameter with a given key.
     pub fn get<K>(&self, key: K) -> Value
     where
         K: Into<String> + Clone + XXHashable,
@@ -46,6 +45,7 @@ impl ParamScope {
         self.get_with_hash(hkey)
     }
 
+    /// Get a list of all parameter keys.
     pub fn keys(&self) -> Vec<String> {
         let mut retval: HashSet<String> = THREAD_STORAGE.with(|ts| {
             let ts = ts.borrow();
@@ -53,15 +53,16 @@ impl ParamScope {
         });
         if let ParamScope::Just(changes) = self {
             retval.extend(changes.values().map(|e| e.key.clone()));
-        };
+        }
         retval.iter().cloned().collect()
     }
 
+    /// Enter a new parameter scope.
     pub fn enter(&mut self) {
         THREAD_STORAGE.with(|ts| {
-            ts.borrow_mut().enter();
+            let mut ts = ts.borrow_mut();
+            ts.enter();
             if let ParamScope::Just(changes) = self {
-                let mut ts = ts.borrow_mut();
                 for v in changes.values() {
                     ts.put(v.key.clone(), v.value().clone());
                 }
@@ -70,6 +71,7 @@ impl ParamScope {
         *self = ParamScope::Nothing;
     }
 
+    /// Exit the current parameter scope.
     pub fn exit(&mut self) {
         THREAD_STORAGE.with(|ts| {
             let tree = ts.borrow_mut().exit();
@@ -78,6 +80,7 @@ impl ParamScope {
     }
 }
 
+/// Parameter scope operations.
 pub trait ParamScopeOps<K, V> {
     fn get_or_else(&self, key: K, default: V) -> V;
     fn put(&mut self, key: K, val: V);
@@ -93,13 +96,13 @@ where
                 let r = val.value().clone().try_into();
                 if r.is_ok() {
                     return r.ok().unwrap();
-                };
-            };
-        };
-
+                }
+            }
+        }
         THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(key, default))
     }
 
+    /// Put a parameter.
     fn put(&mut self, key: u64, val: V) {
         println!(
             "hyperparameter warning: put parameter with hashed key {}",
@@ -120,11 +123,13 @@ where
     K: Into<String> + Clone + XXHashable + Debug,
     V: Into<Value> + TryFrom<Value> + Clone,
 {
+    /// Get a parameter or the default value if it doesn't exist.
     fn get_or_else(&self, key: K, default: V) -> V {
         let hkey = key.xxh();
         self.get_or_else(hkey, default)
     }
 
+    /// Put a parameter.
     fn put(&mut self, key: K, val: V) {
         let hkey = key.xxh();
         if let ParamScope::Just(changes) = self {
