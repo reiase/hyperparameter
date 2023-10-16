@@ -215,11 +215,11 @@ pub trait GetOrElse<K, T> {
 
 impl<T> GetOrElse<u64, T> for Storage
 where
-    T: Into<Value> + TryFrom<Value>,
+    T: Into<Value> + TryFrom<Value> + for<'a> TryFrom<&'a Value>,
 {
     fn get_or_else(&self, key: u64, dval: T) -> T {
         if let Some(val) = self.tree.get(&key) {
-            match val.value().clone().try_into() {
+            match val.value().try_into() {
                 Ok(v) => v,
                 Err(_) => dval,
             }
@@ -232,7 +232,7 @@ where
 impl<K, T> GetOrElse<K, T> for Storage
 where
     K: Into<String> + XXHashable,
-    T: Into<Value> + TryFrom<Value>,
+    T: Into<Value> + TryFrom<Value> + for<'a> TryFrom<&'a Value>,
 {
     fn get_or_else(&self, key: K, dval: T) -> T {
         let hkey = key.xxh();

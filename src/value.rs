@@ -114,18 +114,18 @@ impl Value {
     }
 }
 
-impl TryFrom<Value> for i64 {
+impl TryFrom<&Value> for i64 {
     type Error = String;
 
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
         match value {
             Value::Empty => Err("empty value error".into()),
-            Value::Int(v) => Ok(v),
-            Value::Float(v) => Ok(v as i64),
+            Value::Int(v) => Ok(*v),
+            Value::Float(v) => Ok(*v as i64),
             Value::Text(v) => v
                 .parse::<i64>()
                 .map_err(|_| format!("error convert {} into i64", v)),
-            Value::Boolean(v) => Ok(v.into()),
+            Value::Boolean(v) => Ok(Into::into(*v)),
             Value::UserDefined(_, _, _) => {
                 Err("data type not matched, `UserDefined` and i64".into())
             }
@@ -133,14 +133,22 @@ impl TryFrom<Value> for i64 {
     }
 }
 
-impl TryFrom<Value> for f64 {
+impl TryFrom<Value> for i64 {
     type Error = String;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&Value> for f64 {
+    type Error = String;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
         match value {
             Value::Empty => Err("empty value error".into()),
-            Value::Int(v) => Ok(v as f64),
-            Value::Float(v) => Ok(v),
+            Value::Int(v) => Ok(*v as f64),
+            Value::Float(v) => Ok(*v),
             Value::Text(v) => v
                 .parse::<f64>()
                 .map_err(|_| format!("error convert {} into i64", v)),
@@ -152,20 +160,36 @@ impl TryFrom<Value> for f64 {
     }
 }
 
-impl TryFrom<Value> for String {
+impl TryFrom<Value> for f64 {
     type Error = String;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&Value> for String {
+    type Error = String;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
         match value {
             Value::Empty => Err("empty value error".into()),
             Value::Int(v) => Ok(format!("{}", v)),
             Value::Float(v) => Ok(format!("{}", v)),
-            Value::Text(v) => Ok(v),
+            Value::Text(v) => Ok(v.clone()),
             Value::Boolean(v) => Ok(format!("{}", v)),
             Value::UserDefined(_, _, _) => {
                 Err("data type not matched, `UserDefined` and str".into())
             }
         }
+    }
+}
+
+impl TryFrom<Value> for String {
+    type Error = String;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        (&value).try_into()
     }
 }
 
@@ -197,23 +221,31 @@ static STR2BOOL: phf::Map<&'static str, bool> = phf_map! {
     "OFF" => false,
 };
 
-impl TryFrom<Value> for bool {
+impl TryFrom<&Value> for bool {
     type Error = String;
 
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
         match value {
             Value::Empty => Err("empty value error".into()),
-            Value::Int(v) => Ok(v != 0),
+            Value::Int(v) => Ok(*v != 0),
             Value::Float(_) => Err("data type not matched, `Float` and bool".into()),
             Value::Text(s) => match STR2BOOL.get(&s) {
                 Some(v) => Ok(*v),
                 None => Err("data type not matched, `Text` and bool".into()),
             },
-            Value::Boolean(v) => Ok(v),
+            Value::Boolean(v) => Ok(*v),
             Value::UserDefined(_, _, _) => {
                 Err("data type not matched, `UserDefined` and str".into())
             }
         }
+    }
+}
+
+impl TryFrom<Value> for bool {
+    type Error = String;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        (&value).try_into()
     }
 }
 

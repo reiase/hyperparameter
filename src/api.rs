@@ -88,7 +88,7 @@ pub trait ParamScopeOps<K, V> {
 
 impl<V> ParamScopeOps<u64, V> for ParamScope
 where
-    V: Into<Value> + TryFrom<Value>,
+    V: Into<Value> + TryFrom<Value> + for<'a> TryFrom<&'a Value>,
 {
     fn get_or_else(&self, key: u64, default: V) -> V {
         if let ParamScope::Just(changes) = self {
@@ -121,7 +121,7 @@ where
 impl<K, V> ParamScopeOps<K, V> for ParamScope
 where
     K: Into<String> + Clone + XXHashable + Debug,
-    V: Into<Value> + TryFrom<Value> + Clone,
+    V: Into<Value> + TryFrom<Value> + for<'a> TryFrom<&'a Value> + Clone,
 {
     /// Get a parameter or the default value if it doesn't exist.
     fn get_or_else(&self, key: K, default: V) -> V {
