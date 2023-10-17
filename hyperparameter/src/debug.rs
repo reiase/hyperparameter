@@ -1,13 +1,23 @@
-use std::{io::Error, time::Duration};
+use std::{io::Error, thread, time::Duration};
 
 use ::backtrace::Backtrace;
-use hyperparameter::debug_server::{start_debug_server, REPL};
+use hyperparameter::debug::{start_async_server, start_debug_server, REPL};
 use pyo3::{prelude::*, types::PyDict};
 
 struct DebugRepl {
     console: Option<Py<PyAny>>,
     buf: String,
     live: bool,
+}
+
+impl Default for DebugRepl {
+    fn default() -> Self {
+        Self {
+            console: Some(create_console()),
+            buf: "".to_string(),
+            live: true,
+        }
+    }
 }
 
 impl DebugRepl {
@@ -85,7 +95,6 @@ ret.init()
             None,
             Some(locals),
         );
-        println!("{:?}", ret);
         if ret.is_err() {
             ret.map_err(|err| {
                 err.print(py);
@@ -101,17 +110,34 @@ ret.init()
     })
 }
 
-pub fn debug_callback() {
+pub fn debug_callback(addr: Option<String>) {
     let console = create_console();
     let mut repl = DebugRepl::new(Some(console));
-    start_debug_server(Some("127.0.0.1:9900".to_string()), &mut repl);
+    start_debug_server(addr, &mut repl);
 }
 
 #[pyfunction]
-pub fn enable_debug_server() -> Result<(), Error> {
+#[pyo3(signature = (addr=None, background=false))]
+pub fn enable_debug_server(addr: Option<String>, background: bool) -> Result<(), Error> {
     unsafe {
-        signal_hook::low_level::register(signal_hook::consts::SIGUSR1, move || debug_callback())?;
-        signal_hook::low_level::register(signal_hook::consts::SIGABRT, move || debug_callback())?;
+        let tmp = addr.clone();
+        signal_hook::low_level::register(signal_hook::consts::SIGUSR1, move || {
+            debug_callback(tmp.clone())
+        })?;
+        let tmp = addr.clone();
+        signal_hook::low_level::register(signal_hook::consts::SIGABRT, move || {
+            debug_callback(tmp.clone())
+        })?;
+    }
+    if background {
+        thread::spawn(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(start_async_server::<DebugRepl>(addr))
+                .unwrap();
+        });
     }
     Ok(())
 }

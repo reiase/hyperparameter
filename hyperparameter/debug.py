@@ -5,19 +5,19 @@ from types import CodeType
 from typing import Any
 
 
+def register_debug_command(name, cmd=None):
+    if cmd is None:
+
+        def wrapper(cls):
+            register_debug_command(name, cls)
+            return cls
+
+        return wrapper
+    DebugCommand.REGISTER[name] = cmd
+
+
 class DebugCommand:
     REGISTER = {}
-
-    @staticmethod
-    def register(name, cmd=None):
-        if cmd is None:
-
-            def wrapper(cls):
-                DebugCommand.register(name, cls)
-                return cls
-
-            return wrapper
-        DebugCommand.REGISTER[name] = cmd
 
     def help(self):
         pass
@@ -25,11 +25,14 @@ class DebugCommand:
     def __str__(self) -> str:
         return self()
 
+    def __repr__(self) -> str:
+        return str(self)
+
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         pass
 
 
-@DebugCommand.register("help")
+@register_debug_command("help")
 class HelpCommand(DebugCommand):
     def help(self):
         ret = "list of commands:\n"
@@ -47,7 +50,7 @@ class HelpCommand(DebugCommand):
         return self.help()
 
 
-@DebugCommand.register("bt")
+@register_debug_command("bt")
 class BackTrace(DebugCommand):
     def help(self):
         return "print python and C stack"
@@ -65,7 +68,7 @@ class BackTrace(DebugCommand):
         return self()
 
 
-@DebugCommand.register("params")
+@register_debug_command("params")
 class ParamsCommand(DebugCommand):
     def help(self):
         return "list of parameters"
@@ -82,7 +85,7 @@ class ParamsCommand(DebugCommand):
         return self()
 
 
-@DebugCommand.register("exit")
+@register_debug_command("exit")
 class ExitCommand(DebugCommand):
     def help(self):
         return "exit debug server"

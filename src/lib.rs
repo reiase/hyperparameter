@@ -14,6 +14,6 @@ pub mod storage;
 pub mod value;
 
 pub mod api;
-pub mod debug_server;
+pub mod debug;
 pub mod ffi;
 pub mod xxh;

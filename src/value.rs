@@ -114,6 +114,14 @@ impl Value {
     }
 }
 
+impl TryFrom<&Value> for Value {
+    type Error = String;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        Ok(value.clone())
+    }
+}
+
 impl TryFrom<&Value> for i64 {
     type Error = String;
 

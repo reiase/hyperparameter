@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use signal_hook;
 
-use hyperparameter::debug_server::start_debug_server;
-use hyperparameter::debug_server::REPL;
+use hyperparameter::debug::start_debug_server;
+use hyperparameter::debug::REPL;
 
 struct DebugRepl {
     buf: String,
