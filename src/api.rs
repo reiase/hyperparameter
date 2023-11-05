@@ -228,9 +228,16 @@ macro_rules! with_params {
 
         $($body:tt)*
     ) => {
-        let $name = get_param!($($key).+, $default);
 
-        with_params!(params $ps; $($body)*)
+        $ps.enter();
+        let ret = {
+            let $name = get_param!($($key).+, $default);
+
+            with_params_readonly!($($body)*)
+        };
+        $ps.exit();
+        ret
+        
     };
 
     (
@@ -254,6 +261,19 @@ macro_rules! with_params_readonly {
     ) => {
         let $name = get_param!($($key).+, $default);
         with_params_readonly!($($body)*)
+    };
+
+    (
+        set $($key:ident).+ = $val:expr;
+
+        $($body:tt)*
+    ) =>{
+        let mut ps = ParamScope::default();
+        {
+            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
+            ps.put(CONST_KEY, $val);
+        }
+        with_params!(params ps; $($body)*)
     };
 
     ($($body:tt)*) => {{
@@ -412,7 +432,18 @@ mod tests {
         with_params! {
             get a_b_c = a.b.c or 1;
 
-            1;
+            assert_eq!(1, a_b_c);
+        }
+    }
+
+    #[test]
+    fn test_param_scope_with_param_mixed_get_set() {
+        with_params! {
+            get a_b_c = a.b.c or 1;
+            set a.b.c = 3;
+            get a_b_c = a.b.c or 2;
+
+            assert_eq!(3, a_b_c);
         }
     }
 }
