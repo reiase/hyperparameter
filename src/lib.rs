@@ -2,7 +2,7 @@
 #[macro_use]
 extern crate proptest;
 
-pub use crate::api::frozen_global_params;
+pub use crate::api::frozen;
 pub use crate::api::ParamScope;
 pub use crate::api::ParamScopeOps;
 pub use crate::storage::GetOrElse;

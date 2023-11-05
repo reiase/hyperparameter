@@ -23,6 +23,7 @@ local-ip-address = "0.5.6"
 [dev-dependencies]
 proptest = "1.2.0"
 criterion = "0.5.1"
+clap = { version = "4.4.7", features = ["derive"] }
 
 [profile.dev]
 overflow-checks = false

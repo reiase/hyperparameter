@@ -185,7 +185,7 @@ impl KVStorage {
 
     #[staticmethod]
     pub fn frozen() {
-        frozen_global_params();
+        frozen();
     }
 }
 

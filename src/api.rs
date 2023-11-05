@@ -19,6 +19,14 @@ impl Default for ParamScope {
     }
 }
 
+impl<T: Into<String> + Clone> From<&Vec<T>> for ParamScope {
+    fn from(value: &Vec<T>) -> Self {
+        let mut ps = ParamScope::default();
+        value.iter().for_each(|x| ps.add(x.clone()));
+        ps
+    }
+}
+
 impl ParamScope {
     /// Get a parameter with a given hash key.
     pub fn get_with_hash(&self, key: u64) -> Value {
@@ -43,6 +51,13 @@ impl ParamScope {
     {
         let hkey = key.xxh();
         self.get_with_hash(hkey)
+    }
+
+    pub fn add<T: Into<String>>(&mut self, expr: T) {
+        let expr: String = expr.into();
+        if let Some((k, v)) = expr.split_once('=') {
+            self.put(k.to_string(), v.to_string())
+        }
     }
 
     /// Get a list of all parameter keys.
@@ -145,7 +160,7 @@ where
     }
 }
 
-pub fn frozen_global_params() {
+pub fn frozen () {
     frozen_global_storage();
 }
 
@@ -237,7 +252,7 @@ macro_rules! with_params {
         };
         $ps.exit();
         ret
-        
+
     };
 
     (

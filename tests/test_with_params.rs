@@ -25,7 +25,7 @@ fn test_with_params_multi_threads() {
         set a.bool = true;
         set a.str = "string".to_string();
 
-        frozen_global_params();
+        frozen();
 
         let mut workers: Vec<JoinHandle<()>> = Vec::new();
         for _ in 0..10 {
