@@ -144,4 +144,6 @@ examples/sparse_lr/mlruns/
 # already existing elements were commented out
 
 #/target
-/Cargo.lock
+Cargo.lock
+.trunk/
+proptest-regressions/

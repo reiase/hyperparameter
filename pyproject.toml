@@ -1,6 +1,12 @@
 [build-system]
-requires = ["maturin>=0.14,<0.15"]
+requires = ["maturin>1.0.0,<=1.0.1"]
 build-backend = "maturin"
+
+[tool.maturin]
+manifest-path = "hyperparameter/Cargo.toml"
+module-name = "hyperparameter.librbackend"
+features = ["pyo3/extension-module"]
+include = ["hyperparameter/hyperparameter.h"]
 
 [project]
 name = "hyperparameter"
@@ -11,10 +17,6 @@ requires-python = ">=3.7"
 readme = "README.md"
 license = { text = "Apache License Version 2.0" }
 
-[tool.maturin]
-module-name = "hyperparameter.librbackend"
-features = ["pyo3/extension-module"]
-include = ["hyperparameter/hyperparameter.h"]
 
 [tool.black]
 line-length = 88

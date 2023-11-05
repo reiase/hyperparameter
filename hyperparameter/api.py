@@ -2,8 +2,8 @@ import functools
 import inspect
 from typing import Any, Callable, Dict
 
-from hyperparameter.storage import TLSKVStorage, has_rust_backend
-from hyperparameter.storage import xxh64
+from hyperparameter.storage import TLSKVStorage, has_rust_backend, xxh64
+
 from .tune import Suggester
 
 
@@ -543,7 +543,7 @@ def auto_param(name_or_func):
                     for k, v in predef_kws.items():
                         if k not in kws:
                             try:
-                                val = hp._storage.get_by_hash(v)
+                                val = hp._storage.get_entry(v)
                                 kws[k] = val
                             except ValueError:
                                 pass
