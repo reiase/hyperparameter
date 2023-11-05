@@ -115,7 +115,7 @@ fn main() {
         print(f"foo.x={x}")
     
     with param_scope() as ps:
-        ps.foo.x=2
+        ps.foo.x=2 # 修改当前线程的foo.x
         
         foo() # foo.x=2
         threading.Thread(target=foo).start() # foo.x=1，新线程中超参取值不受主线程影响
@@ -132,7 +132,7 @@ fn main() {
 
     fn main() {
         with_params!{
-            set foo.x = 2;
+            set foo.x = 2; // 修改当前线程的foo.x
             
             foo(); // foo.x=2
             thread::spawn(foo); // foo.x=1，新线程中超参取值不受主线程影响
@@ -140,7 +140,8 @@ fn main() {
     }
     ```
 
-### 构建命令行应用
+构建命令行应用
+------------
 
 在命令行应用中的常见用法是添加一个用来定义超参的命令行参数（比如：
 `-D, --define`，用来定义命名超参的取值，可重复多次），并通过如下方式在命令行控制超参数：

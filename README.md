@@ -18,113 +18,145 @@ Hyperparameter is a Python/Rust library for managing hyperparameters that contro
 Quick Start
 -----------
 
-`Hyperparameter` uses the `auto_param` decorator to convert keywords arguments into configurable parameters:
+### Using `Hyperparameter` in Python
+
+First, with decorator `auto_param`, we can define hyperparameters by adding keyword arguments to a function:
 
 ```python
-from hyperparameter import auto_param, param_scope
+from hyperparameter import auto_param
 
-# Define the function 'foo' with configurable parameters
 @auto_param("foo")
-def foo(x=1):
-    return f"x={x}"
-
-# Control the parameters using 'param_scope'
-foo()  # x=1, if no params is defined
-with param_scope(**{"foo.x": 2}):
-    foo()  # x=2', when `foo.x` is set to `2`
+def foo(
+      x=1,  # define `foo.y`=1 
+      y="a" # define`foo.z`="a"
+    ): 
+    return f"x={x}, y={y}, z={z}"
 ```
 
-Rust version of the above example:
+Then, we can control hyperparameters with `param_scope`:
+
+```python
+from hyperparameter import param_scope
+
+foo() # x=1, y='a'
+with param_scope(**{"foo.x":2}):
+    foo() # x=2, y='a'
+```
+
+### Using `Hyperparameter` in Rust
+
 ```rust
 fn foo() -> i32{
-    with_params! {
-        get x = foo.x or 1i32;
+    with_params! { // create scope
+        get x = foo.x or 1i32; // read foo.x with default value `1`
 
-        x
-    }
+        println!("x={}", x);
+    } // scope end
 }
 
 fn main() {
-    println!("foo() = {}", foo()); // foo() = 1
-    with_params! {
-        set foo.x = 2i32;
+    foo(); // x=1，param foo.x=1
+    with_params! {// create scope
+        set foo.x = 2i32; // set param foo.x = 2
 
-        println!("foo() = {}", foo()); // foo() = 2
-    }
+        foo(); // x = 2, param foo.x=2
+    }// scope end
+    foo(); // x=1，param foo.x=1
 }
 ```
 
-Advanced Usage
---------------
+Features
+--------
 
-### Read/Write Parameters
+- Default value for all parameters:
 
-```python
-from hyperparameter import param_scope
+    ```python
+    # python
+    x = param_scope.foo.x | "default value"
+    ```
+    ```rust
+    // rust
+    get x = foo.x or "default value";
+    ```
 
-# create param_scope
-with param_scope():
-    pass
+- Scoped parameter values：
 
-with param_scope("foo.y=1", "foo.z=b"):
-    pass
+    ```python
+    # python
+    with param_scope() as ps: # 1st scope start
+        ps.foo.x=1
+        with param_scope() as ps2: # 2nd scope start
+            ps.foo.y=2
+        # 2nd scope end
+    # 1st scope end
+    ```
+    ```rust
+    // rust
+    with_params!{ // 1st scope start
+        set foo.x=1;
 
-with param_scope(**{"foo.y":1, "foo.z":2}):
-    pass
+        with_params!{ //2nd scope start
+            set foo.y=2
 
-# read param with default value
-with param_scope(**{"foo.y":2}) as ps:
-    y = ps.foo.y(1)  
-    y = ps.foo.y | 1
-    y = param_scope.foo.y(1)
-    y = param_scope.foo.y | 1
-    foo(1) # x=1, y=2, z='a'
+        } // 2nd scope end
+    } // 1st scope end
+    ```
 
-# wite values to param_scope
-with param_scope(**{"foo.y":2}) as ps:
-    ps.foo.y = 2
-    param_scope.foo.y = 2
+- Thread Isolation and Thread Safety 
+
+    ```python
+    # python
+    @auto_param("foo")
+    def foo(x=1): # print foo.x
+        print(f"foo.x={x}")
+    
+    with param_scope() as ps:
+        ps.foo.x=2 # modify foo.x in current thread
+        
+        foo() # foo.x=2
+        threading.Thread(target=foo).start() # foo.x=1, the above modification does not affect new thread 
+    ```
+    ```rust
+    // rust
+    fn foo() { // print foo.x
+        with_params!{
+            get x = foo.x or 1;
+
+            println!("foo.x={}", x);
+        }
+    }
+
+    fn main() {
+        with_params!{
+            set foo.x = 2; // modify foo.x in current thread
+            
+            foo(); // foo.x=2
+            thread::spawn(foo); // foo.x=1, the above modification does not affect new thread 
+        }
+    }
+    ```
+
+Build CMD Line Application with `Hyperparameter`
+------------------------------------------------
+
+We can define parameters with a command line argument (for example, `-D, --define`), and call the application with following command:
+```bash
+./example \
+    ... 
+    -D example.a=1 \
+    -D example.b=2 \
+    ...
 ```
 
-### Nested Scope
-
-`Hyperparameter` support nested `param_scope`:
-
-``` python
-from hyperparameter import param_scope
-
-# no param_scope, use the default value defined in foo
-foo(1) # x=1, y=1, z='a'
-
-# start a new param_scope
-# and set the default value of `foo.y` to `2`
-with param_scope(**{"foo.y":2}) as ps:
-    # found one param_scope `ps`, 
-    # and receive default value of `foo.y` from `ps`
-    foo(1) # x=1, y=2, z='a'
-
-    # start another param_scope
-    # and set the default value of `foo.y` to `3`
-    with param_scope(**{"foo.z": "b"}) as ps2:
-        # found nested param_scope `ps2`, 
-        # and receive default values of `foo.z` from `ps2`
-        foo(1) # x=1, y=2, z='b'
-    # `ps2` ends here, and `foo.y` is restored to `2`
-    foo(1) # x=1, y=2, z='a'
-# `ps` ends here, and `foo.y` is restored to `1`
-foo(1) # x=1, y=1, z='a'
-```
-
-### CMD Line Arguments
-
-An example CLI app: 
+A quick implementation of `-D,--define`:
 
 ```python
+# example.py
 from hyperparameter import param_scope, auto_param
 
-@auto_param
-def main(a=0, b=1): # `inline default values`
-    print(a, b)
+@auto_param("example")
+def main(a=0, b=1):
+    print(f"example.a={a}, example.b={b}")
 
 if __name__ == "__main__":
     import argparse
@@ -136,6 +168,35 @@ if __name__ == "__main__":
     with param_scope(*args.define):
         main()
 ```
+
+```rust
+//rust
+fn foo() {
+    with_params! {
+        get a = example.a or 0;
+        get b = example.b or 1;
+        
+        println!("example.a={}, example.b={}",a ,b);
+    }
+}
+
+#[derive(Parser, Debug)]
+struct DeriveArgs {
+    #[arg(short = 'D', long)]
+    define: Vec<String>,
+}
+
+fn main() {
+    let args = DeriveArgs::parse();
+    with_params! {
+        params ParamScope::from(&args.define);
+
+        foo()
+    }
+}
+
+```
+
 
 Examples
 --------
