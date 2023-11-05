@@ -55,12 +55,12 @@ fn call_foo_with_ps_optimized(nloop: i64) -> i64 {
 #[inline(never)]
 fn call_foo_with_ps_and_raw_btree(nloop: i64) -> i64 {
     let mut sum = 0;
-    const key: u64 = xxh::xxhash("y".as_bytes());
+    const KEY: u64 = xxh::xxhash("y".as_bytes());
     with_params! {
         set y = 42;
 
         for i in 0..nloop {
-            sum = sum + THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(key, i));
+            sum = sum + THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(KEY, i));
         }
     }
     sum
