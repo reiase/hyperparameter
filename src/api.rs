@@ -160,7 +160,7 @@ where
     }
 }
 
-pub fn frozen () {
+pub fn frozen() {
     frozen_global_storage();
 }
 
