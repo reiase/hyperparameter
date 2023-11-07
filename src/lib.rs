@@ -2,6 +2,9 @@
 #[macro_use]
 extern crate proptest;
 
+pub extern crate const_str;
+pub extern crate xxhash_rust;
+
 pub use crate::api::frozen;
 pub use crate::api::ParamScope;
 pub use crate::api::ParamScopeOps;
