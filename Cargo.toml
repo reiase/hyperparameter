@@ -1,6 +1,6 @@
 [package]
 name = "hyperparameter"
-version = "0.5.7"
+version = "0.5.8"
 license = "Apache-2.0"
 description = " Hyperparameter, Make configurable AI applications.Build for Python hackers. "
 homepage = "https://reiase.github.io/hyperparameter/"
