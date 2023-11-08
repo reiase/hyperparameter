@@ -2,8 +2,6 @@ use std::{ffi::c_void, mem::replace, sync::Arc};
 
 use phf::phf_map;
 
-use crate::value::VersionedValue::{Single, Versioned};
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeferUnsafe(pub u64, pub unsafe fn(*mut c_void));
 
@@ -258,47 +256,42 @@ impl TryFrom<Value> for bool {
 }
 
 #[derive(Debug, Clone)]
-pub enum VersionedValue {
-    Single(Value),
-    Versioned(Value, Box<VersionedValue>),
-}
+pub struct VersionedValue(std::collections::LinkedList<Value>);
 
 impl VersionedValue {
+    pub fn from<V: Into<Value>>(val: V) -> VersionedValue {
+        let mut retval = VersionedValue(std::collections::LinkedList::new());
+        retval.0.push_front(val.into());
+        retval
+    }
+
     pub fn value(&self) -> &Value {
-        match self {
-            Single(val) => val,
-            Versioned(val, _) => val,
-        }
+        self.0.front().unwrap_or(&EMPTY)
     }
 
     pub fn shallow(&self) -> VersionedValue {
-        match self {
-            Single(v) => Single(v.clone()),
-            Versioned(v, _) => Single(v.clone()),
-        }
+        let mut retval = VersionedValue(std::collections::LinkedList::new());
+        retval.0.push_front(self.0.front().unwrap().clone());
+        retval
     }
 
     pub fn update<V: Into<Value>>(&mut self, val: V) -> Value {
         let val = val.into();
-        let old = match self {
-            Single(old) => old,
-            Versioned(old, _) => old,
-        };
-        replace(old, val)
+        replace(self.0.front_mut().unwrap(), val)
     }
 
     pub fn revision<V: Into<Value>>(&mut self, val: V) {
-        *self = Versioned(val.into(), Box::new(self.clone()));
+        self.0.push_front(val.into());
     }
 
     pub fn rollback(&mut self) -> bool {
-        match self {
-            Single(_) => {
-                *self = Single(EMPTY);
+        match self.0.len() {
+            x if x == 1 => {
+                self.0.pop_front();
                 false
             }
-            Versioned(_, his) => {
-                *self = *his.clone();
+            _ => {
+                self.0.pop_front();
                 true
             }
         }
@@ -375,45 +368,45 @@ mod test {
 
 #[cfg(test)]
 mod test_versioned_value {
-    use crate::value::VersionedValue::Single;
+    use crate::value::VersionedValue;
 
     #[test]
     fn test_versioned_value() {
-        let mut val = Single(0.into());
-        assert_eq!(format!("{:?}", val), "Single(Int(0))");
+        let mut val = VersionedValue::from::<i64>(0i64.into());
+        assert_eq!(format!("{:?}", val), "VersionedValue([Int(0)])");
 
         val.update(2.0);
-        assert_eq!(format!("{:?}", val), "Single(Float(2.0))");
+        assert_eq!(format!("{:?}", val), "VersionedValue([Float(2.0)])");
 
         val.revision(true);
         assert_eq!(
             format!("{:?}", val),
-            "Versioned(Boolean(true), Single(Float(2.0)))"
+            "VersionedValue([Boolean(true), Float(2.0)])"
         );
 
         val.revision("str");
         assert_eq!(
             format!("{:?}", val),
-            "Versioned(Text(\"str\"), Versioned(Boolean(true), Single(Float(2.0))))"
+            "VersionedValue([Text(\"str\"), Boolean(true), Float(2.0)])"
         );
 
         assert!(val.rollback());
         assert_eq!(
             format!("{:?}", val),
-            "Versioned(Boolean(true), Single(Float(2.0)))"
+            "VersionedValue([Boolean(true), Float(2.0)])"
         );
 
         assert!(val.rollback());
-        assert_eq!(format!("{:?}", val), "Single(Float(2.0))");
+        assert_eq!(format!("{:?}", val), "VersionedValue([Float(2.0)])");
 
         assert!(!val.rollback());
-        assert_eq!(format!("{:?}", val), "Single(Empty)");
+        assert_eq!(format!("{:?}", val), "VersionedValue([])");
     }
 
     proptest! {
         #[test]
         fn test_versioned_value_long_history(x in 0i32..100) {
-            let mut v = Single(0.into());
+            let mut v = VersionedValue::from::<i64>(0.into());
             for i in 0..x {
                 v.revision(i);
             }

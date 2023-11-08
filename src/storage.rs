@@ -20,7 +20,7 @@ impl Entry {
     pub fn new<T: Into<String>, V: Into<Value>>(key: T, val: V) -> Entry {
         Entry {
             key: key.into(),
-            val: VersionedValue::Single(val.into()),
+            val: VersionedValue::from(val.into()),
         }
     }
 
@@ -164,7 +164,7 @@ impl Storage {
                     hkey,
                     Entry {
                         key,
-                        val: VersionedValue::Single(val.into()),
+                        val: VersionedValue::from(val.into()),
                     },
                 );
             }
