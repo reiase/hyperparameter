@@ -1,3 +1,4 @@
+use std::collections::LinkedList;
 use std::{ffi::c_void, mem::replace, sync::Arc};
 
 use phf::phf_map;
@@ -256,13 +257,11 @@ impl TryFrom<Value> for bool {
 }
 
 #[derive(Debug, Clone)]
-pub struct VersionedValue(std::collections::LinkedList<Value>);
+pub struct VersionedValue(LinkedList<Value>);
 
 impl VersionedValue {
     pub fn from<V: Into<Value>>(val: V) -> VersionedValue {
-        let mut retval = VersionedValue(std::collections::LinkedList::new());
-        retval.0.push_front(val.into());
-        retval
+        Self(LinkedList::from([val.into()]))
     }
 
     pub fn value(&self) -> &Value {
@@ -270,14 +269,11 @@ impl VersionedValue {
     }
 
     pub fn shallow(&self) -> VersionedValue {
-        let mut retval = VersionedValue(std::collections::LinkedList::new());
-        retval.0.push_front(self.0.front().unwrap().clone());
-        retval
+        Self(LinkedList::from([self.value().clone()]))
     }
 
     pub fn update<V: Into<Value>>(&mut self, val: V) -> Value {
-        let val = val.into();
-        replace(self.0.front_mut().unwrap(), val)
+        replace(self.0.front_mut().unwrap(), val.into())
     }
 
     pub fn revision<V: Into<Value>>(&mut self, val: V) {
@@ -285,16 +281,8 @@ impl VersionedValue {
     }
 
     pub fn rollback(&mut self) -> bool {
-        match self.0.len() {
-            x if x == 1 => {
-                self.0.pop_front();
-                false
-            }
-            _ => {
-                self.0.pop_front();
-                true
-            }
-        }
+        self.0.pop_front();
+        self.0.len() > 0
     }
 }
 

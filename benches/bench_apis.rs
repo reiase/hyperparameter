@@ -67,24 +67,24 @@ fn call_foo_with_ps_and_raw_btree(nloop: i64) -> i64 {
 }
 
 pub fn bench_apis(c: &mut Criterion) {
-    c.bench_function("raw api", |b| b.iter(|| call_foo(black_box(100000))));
+    c.bench_function("raw api", |b| b.iter(|| call_foo(black_box(10000))));
 }
 
 pub fn bench_apis_with_ps_and_raw_btree(c: &mut Criterion) {
     c.bench_function("raw api with ps and raw btree", |b| {
-        b.iter(|| call_foo_with_ps_and_raw_btree(black_box(100000)))
+        b.iter(|| call_foo_with_ps_and_raw_btree(black_box(10000)))
     });
 }
 
 pub fn bench_apis_with_ps_optimized(c: &mut Criterion) {
     c.bench_function("raw api with ps optimized", |b| {
-        b.iter(|| call_foo_with_ps_optimized(black_box(100000)))
+        b.iter(|| call_foo_with_ps_optimized(black_box(10000)))
     });
 }
 
 pub fn bench_apis_with_ps(c: &mut Criterion) {
     c.bench_function("raw api with ps", |b| {
-        b.iter(|| call_foo_with_ps(black_box(100000)))
+        b.iter(|| call_foo_with_ps(black_box(10000)))
     });
 }
 
