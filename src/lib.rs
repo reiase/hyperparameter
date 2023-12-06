@@ -18,7 +18,7 @@ pub mod storage;
 pub mod value;
 
 pub mod api;
+pub mod cfg;
 pub mod debug;
 pub mod ffi;
-pub mod cfg;
 pub mod xxh;
