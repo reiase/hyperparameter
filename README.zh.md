@@ -1,5 +1,4 @@
-Hyperparameter
-===============
+# Hyperparameter
 
 <h3 align="center">
   <p style="text-align: center;">
@@ -9,148 +8,175 @@ Hyperparameter
 
 <p align="center">
 
-**构建易于配置的机器学习应用与系统**
+**Hyperparameter, Make configurable AI applications. Build for Python/Rust hackers.**
 
 </p>
 
 `Hyperparameter` 是一个多功能超参数管理库，旨在简化机器学习算法和系统开发中超参数的管理和控制。专为机器学习系统（MLSYS）开发者设计，超参数提供了一个统一的解决方案，侧重于在Python中易于使用、在Rust和C++中高性能访问，并提供了一组宏，以实现无缝超参数管理。
 
-快速开始
--------
+## 主要特性
 
-### 在Python中使用`Hyperparameter`
+### 针对Python用户
 
-首先，借助`auto _ param`装饰器，使用keyword参数语法定义超参数：
+- **Pythonic语法：** 使用keyword参数语法定义超参数；
+  
+- **直观的作用域：** 通过`with`语句控制参数的作用域；
+  
+- **配置文件：** 从配置文件轻松加载参数；
+
+### 针对Rust和C++用户
+
+- **高性能后端：** 超参数在Rust中实现，提供了强大且高性能的超参数管理后端。在Rust和C++中以最小开销访问超参数，非常适合注重性能的ML和系统开发者。
+
+- **参数管理宏：** 超参数为Rust和C++用户提供了一组宏。这些宏模仿了Python的`with`语句，并遵循特定于语言的作用域规则。
+
+- **编译时哈希：** Rust和C++接口都利用了超参数名称的编译时哈希，降低了运行时哈希计算的开销。
+
+## 快速开始
+
+### 安装
+
+```bash
+pip install hyperparameter
+```
+
+### Python
 
 ```python
-from hyperparameter import auto_param
+from hyperparameter import auto_param, param_scope
 
 @auto_param("foo")
-def foo(
-      x=1,  # 定义超参`foo.y`=1 
-      y="a" # 定义超参`foo.z`="a"
-    ): 
-    return f"x={x}, y={y}, z={z}"
+def foo(x=1, y="a"):
+    return f"x={x}, y={y}"
+
+foo()  # x=1, y='a'
+
+with param_scope(**{"foo.x": 2}):
+    foo()  # x=2, y='a'
 ```
 
-之后，可以通过`param_scope`上下文控制超参数的取值：
-
-```python
-from hyperparameter import param_scope
-
-foo() # x=1, y='a'
-with param_scope(**{"foo.x":2}):
-    foo() # x=2, y='a'
-```
-
-### 在Rust中使用`Hyperparameter`
-
-通过`with_params!`宏创建参数scope，并读写超参数
+### Rust
 
 ```rust
-fn foo() -> i32{
-    with_params! { // 创建scope
-        get x = foo.x or 1i32; // 读取超参 foo.x，默认值为1
-
+fn foo() -> i32 {
+    with_params! {
+        get x = foo.x or 1i32; // 读取带有默认值的超参数
         println!("x={}", x);
-    } // scope结束
+    }
 }
 
 fn main() {
-    foo(); // x=1，超参foo.x=1
-    with_params! {// 创建scope
-        set foo.x = 2i32; // 设置超参 foo.x = 2
+    foo(); // x=1
 
-        foo(); // x = 2，超参foo.x=2
-    }// scope结束, scope内超参foo.x=2失效
-    foo(); // x=1，超参foo.x=1
+    with_params! {
+        set foo.x = 2i32; // 设置超参数
+        foo(); // x=2
+    }
+
+    foo(); // x=1
 }
 ```
 
-主要特性
--------
+### C++
 
-- 支持超参默认值；
-
-    ```python
-    # python
-    x = param_scope.foo.x | "default value"
-    ```
-    ```rust
-    // rust
-    get x = foo.x or "default value";
-    ```
-
-- scope控制参数取值：
-    ```python
-    # python
-    with param_scope() as ps: # 1st scope start
-        ps.foo.x=1
-        with param_scope() as ps2: # 2nd scope start
-            ps.foo.y=2
-        # 2nd scope end
-    # 1st scope end
-    ```
-    ```rust
-    // rust
-    with_params!{ // 1st scope start
-        set foo.x=1;
-
-        with_params!{ //2nd scope start
-            set foo.y=2
-
-        } // 2nd scope end
-    } // 1st scope end
-    ```
-
-- 线程隔离/线程安全
-
-    ```python
-    # python
-    @auto_param("foo")
-    def foo(x=1): # 打印超参foo.x
-        print(f"foo.x={x}")
-    
-    with param_scope() as ps:
-        ps.foo.x=2 # 修改当前线程的foo.x
-        
-        foo() # foo.x=2
-        threading.Thread(target=foo).start() # foo.x=1，新线程中超参取值不受主线程影响
-    ```
-    ```rust
-    // rust
-    fn foo() { // 打印超参foo.x
-        with_params!{
-            get x = foo.x or 1;
-
-            println!("foo.x={}", x);
-        }
-    }
-
-    fn main() {
-        with_params!{
-            set foo.x = 2; // 修改当前线程的foo.x
-            
-            foo(); // foo.x=2
-            thread::spawn(foo); // foo.x=1，新线程中超参取值不受主线程影响
-        }
-    }
-    ```
-
-构建命令行应用
-------------
-
-在命令行应用中的常见用法是添加一个用来定义超参的命令行参数（比如：
-`-D, --define`，用来定义命名超参的取值，可重复多次），并通过如下方式在命令行控制超参数：
-```bash
-./example \
-    ... 
-    -D example.a=1 \
-    -D example.b=2 \
-    ...
+```cpp
+ASSERT(1 == GET_PARAM(a.b, 1), "get undefined param");
+{
+  auto guard = WITH_PARAMS(a, 1,        //
+                            a.b, 2.0,    //
+                            a.b.c, true, //
+                            a.b.c.d, "str");
+  ASSERT(1 == GET_PARAM(a, 0), "get int value");
+  ASSERT(1 == GET_PARAM(a, 0), "get int value");
+}
 ```
 
-以下为`-D,--define`参数在Python与Rust中的实现方法：
+## 详细使用示例
+
+### 参数默认值
+
+#### Python
+
+```python
+x = param_scope.foo.x | "default value"
+```
+
+#### Rust
+
+```rust
+get x = foo.x or "default value";
+```
+
+### 控制参数值的作用域
+
+#### Python
+
+```python
+with param_scope() as ps: # 第1个作用域开始
+    ps.foo.x=1
+    with param_scope() as ps2: # 第2个作用域开始
+        ps.foo.y=2
+    # 第2个作用域结束
+# 第1个作用域结束
+```
+
+#### Rust
+
+```rust
+with_params!{ // 第1个作用域开始
+    set foo.x=1;
+
+    with_params!{ //第2个作用域开始
+        set foo.y=2
+
+    } // 第2个作用域结束
+} // 第1个作用域结束
+```
+
+### 线程隔离/线程安全
+
+#### Python
+
+```python
+@auto_param("foo")
+def foo(x=1): # 打印超参数 foo.x
+    print(f"foo.x={x}")
+
+with param_scope() as ps:
+    ps.foo.x=2 # 在当前线程设置foo.x 
+
+中修改 foo.x
+    
+    foo() # foo.x=2
+    threading.Thread(target=foo).start() # foo.x=1，新线程的超参数值不受主线程的影响
+```
+
+#### Rust
+
+```rust
+fn foo() { // 打印超参数 foo.x
+    with_params!{
+        get x = foo.x or 1;
+
+        println!("foo.x={}", x);
+    }
+}
+
+fn main() {
+    with_params!{
+        set foo.x = 2; // 在当前线程中修改 foo.x
+        
+        foo(); // foo.x=2
+        thread::spawn(foo); // foo.x=1，新线程的超参数值不受主线程的影响
+    }
+}
+```
+
+### 命令行应用
+
+在命令行应用中，通常使用命令行参数（例如，`-D, --define`）定义超参数，并在命令行上控制超参数。以下是Python和Rust中的示例：
+
+#### Python
 
 ```python
 # example.py
@@ -171,8 +197,29 @@ if __name__ == "__main__":
         main()
 ```
 
+#### Rust
+
 ```rust
-//rust
+// example.rs
+use hyperparameter::*;
+use hyperparameter_derive::Parser;
+
+fn main() {
+    #[derive(Parser, Debug)]
+    struct DeriveArgs {
+        #[arg(short = 'D', long)]
+        define: Vec<String>,
+    }
+
+    let args = DeriveArgs::parse();
+
+    with_params! {
+        params ParamScope::from(&args.define);
+
+        foo()
+    }
+}
+
 fn foo() {
     with_params! {
         get a = example.a or 0;
@@ -181,30 +228,14 @@ fn foo() {
         println!("example.a={}, example.b={}",a ,b);
     }
 }
-
-#[derive(Parser, Debug)]
-struct DeriveArgs {
-    #[arg(short = 'D', long)]
-    define: Vec<String>,
-}
-
-fn main() {
-    let args = DeriveArgs::parse();
-    with_params! {
-        params ParamScope::from(&args.define);
-
-        foo()
-    }
-}
-
 ```
 
-更多示例
---------
+## 更多示例
 
-### [超参搜索](examples/sparse_lr/README.md)
+### [parameter tunning for researchers](examples/sparse_lr/README.md)
 
-该示例展示如何在研究项目中使用hyperparameter，并让模型实验可以复现。
-### [实验管理](examples/mnist/README.md)
+该示例演示了如何在研究项目中使用超参数，并使实验可重现。
 
-该示例演示如何使用hyperparameter进行实验管理，并对接mlflow的tracing系统。
+### [experiment tracing for data scientists](examples/mnist/README.md)
+
+该示例展示了使用超参数进行实验管理，并通过mlflow.tracing进行结果追踪。
