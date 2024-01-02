@@ -61,6 +61,7 @@ with param_scope(**{"foo.x": 2}):
 fn foo() -> i32 {
     with_params! {
         get x = foo.x or 1i32; // 读取带有默认值的超参数
+
         println!("x={}", x);
     }
 }
@@ -70,6 +71,7 @@ fn main() {
 
     with_params! {
         set foo.x = 2i32; // 设置超参数
+
         foo(); // x=2
     }
 
@@ -129,6 +131,7 @@ with_params!{ // 第1个作用域开始
     with_params!{ //第2个作用域开始
         set foo.y=2
 
+        ...
     } // 第2个作用域结束
 } // 第1个作用域结束
 ```

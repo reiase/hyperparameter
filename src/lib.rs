@@ -19,6 +19,5 @@ pub mod value;
 
 pub mod api;
 pub mod cfg;
-pub mod debug;
 pub mod ffi;
 pub mod xxh;

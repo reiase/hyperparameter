@@ -13,9 +13,6 @@ use pyo3::types::PyList;
 use pyo3::types::PyString;
 use pyo3::FromPyPointer;
 
-use crate::debug::enable_debug_server;
-use crate::debug::sleep;
-
 #[repr(C)]
 enum UserDefinedType {
     PyObjectType = 1,
@@ -198,8 +195,5 @@ pub fn xxh64(s: &str) -> u64 {
 fn librbackend(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<KVStorage>()?;
     m.add_function(wrap_pyfunction!(xxh64, m)?)?;
-    m.add_function(wrap_pyfunction!(sleep, m)?)?;
-    m.add_function(wrap_pyfunction!(enable_debug_server, m)?)?;
-    m.add_function(wrap_pyfunction!(crate::debug::backtrace, m)?)?;
     Ok(())
 }

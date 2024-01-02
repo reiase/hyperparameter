@@ -61,6 +61,7 @@ with param_scope(**{"foo.x": 2}):
 fn foo() -> i32 {
     with_params! {
         get x = foo.x or 1i32; // Read hyperparameter with default value
+
         println!("x={}", x);
     }
 }
@@ -70,6 +71,7 @@ fn main() {
 
     with_params! {
         set foo.x = 2i32; // Set hyperparameter
+
         foo(); // x=2
     }
 
@@ -129,6 +131,7 @@ with_params!{ // 1st scope start
     with_params!{ //2nd scope start
         set foo.y=2
 
+        ...
     } // 2nd scope end
 } // 1st scope end
 ```
