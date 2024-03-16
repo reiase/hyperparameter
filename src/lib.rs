@@ -21,3 +21,9 @@ pub mod api;
 pub mod cfg;
 pub mod ffi;
 pub mod xxh;
+
+// #[cfg(clap)]
+pub mod cli;
+// #[cfg(clap)]
+pub use crate::cli::PARAMS;
+pub use crate::cli::generate_params_help;

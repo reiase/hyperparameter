@@ -172,6 +172,20 @@ macro_rules! get_param {
         THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(CONST_HASH, $default))
         // ParamScope::default().get_or_else(CONST_HASH, $default)
     }};
+
+    ($name:expr, $default:expr, $help: expr) => {{
+        const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
+        const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
+        // ParamScope::default().get_or_else(CONST_HASH, $default)
+        {
+            const CONST_HELP: &str = $help;
+            #[::linkme::distributed_slice(PARAMS)]
+            static help: (&str, &str) = (
+                CONST_KEY, CONST_HELP
+            );
+        }
+        THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(CONST_HASH, $default))
+    }};
 }
 
 /// Define or use `hyperparameters` in a code block.
