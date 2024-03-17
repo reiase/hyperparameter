@@ -7,6 +7,9 @@ pub static PARAMS: [(&str, &str)];
 
 pub fn generate_params_help() -> String {
     let mut params: HashMap<String, HashSet<String>> = HashMap::default();
+    if PARAMS.len() == 0 {
+        return "".to_string();
+    }
     for kv in PARAMS {
         params
             .entry(kv.0.to_string())
