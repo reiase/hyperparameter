@@ -4,7 +4,7 @@ version = "0.5.9"
 license = "Apache-2.0"
 description = "A high performance configuration system for Rust and Python."
 homepage = "https://reiase.github.io/hyperparameter/"
-readme = "README.md"
+readme = "examples/rust/README.md"
 repository = "https://github.com/reiase/hyperparameter"
 authors = ["reiase <reiase@gmail.com>"]
 edition = "2021"
@@ -49,3 +49,15 @@ overflow-checks = false
 [[bench]]
 name = "bench_apis"
 harness = false
+
+[[example]]
+name = "clap_mini"
+path = "examples/rust/clap_mini.rs"
+
+[[example]]
+name = "clap_layered"
+path = "examples/rust/clap_layered.rs"
+
+[[example]]
+name = "clap_full"
+path = "examples/rust/clap_full.rs"

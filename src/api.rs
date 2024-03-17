@@ -7,7 +7,7 @@ use crate::storage::{
 use crate::value::{Value, EMPTY};
 use crate::xxh::XXHashable;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ParamScope {
     Nothing,
     Just(Tree),
@@ -180,9 +180,7 @@ macro_rules! get_param {
         {
             const CONST_HELP: &str = $help;
             #[::linkme::distributed_slice(PARAMS)]
-            static help: (&str, &str) = (
-                CONST_KEY, CONST_HELP
-            );
+            static help: (&str, &str) = (CONST_KEY, CONST_HELP);
         }
         THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(CONST_HASH, $default))
     }};
@@ -243,6 +241,18 @@ macro_rules! with_params {
     };
 
     (
+        params $ps:expr;
+        params $nested:expr;
+
+        $($body:tt)*
+    ) => {
+        $ps.enter();
+        let ret = with_params!(params $nested; $($body)*);
+        $ps.exit();
+        ret
+    };
+
+    (
         get $name:ident = $($key:ident).+ or $default:expr;
 
         $($body:tt)*
@@ -252,12 +262,21 @@ macro_rules! with_params {
     };
 
     (
+        $(#[doc = $doc:expr])*
+        get $name:ident = $($key:ident).+ or $default:expr;
+
+        $($body:tt)*
+    ) => {
+        let $name = get_param!($($key).+, $default, $($doc)*);
+        with_params_readonly!($($body)*)
+    };
+
+    (
         params $ps:expr;
         get $name:ident = $($key:ident).+ or $default:expr;
 
         $($body:tt)*
     ) => {
-
         $ps.enter();
         let ret = {
             let $name = get_param!($($key).+, $default);
@@ -266,7 +285,6 @@ macro_rules! with_params {
         };
         $ps.exit();
         ret
-
     };
 
     (
@@ -278,6 +296,11 @@ macro_rules! with_params {
             let ret = {$($body)*};
             $ps.exit();
             ret
+    }};
+
+    ($($body:tt)*) => {{
+        let ret = {$($body)*};
+        ret
     }};
 }
 
