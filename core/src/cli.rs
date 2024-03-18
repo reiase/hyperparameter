@@ -21,7 +21,7 @@ pub fn generate_params_help() -> String {
     let mut params: Vec<_> = params
         .iter()
         .map(|kv| {
-            let mut descs = Vec::from_iter(kv.1.iter().map(|x| x.clone()));
+            let mut descs = Vec::from_iter(kv.1.iter().cloned());
             descs.sort();
             (kv.0.clone(), descs.join("\n\t"))
         })

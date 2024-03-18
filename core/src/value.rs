@@ -17,7 +17,7 @@ pub type DeferSafe = Arc<DeferUnsafe>;
 /// The value type for hyperparameter values
 ///
 /// ```
-/// use hyperparameter::value::Value;
+/// use hyperparameter::Value;
 /// let v: Value = 1i32.into();
 /// println!("{:?}", v);
 /// ```
@@ -282,7 +282,7 @@ impl VersionedValue {
 
     pub fn rollback(&mut self) -> bool {
         self.0.pop_front();
-        self.0.len() > 0
+        !self.0.is_empty()
     }
 }
 
@@ -360,7 +360,7 @@ mod test_versioned_value {
 
     #[test]
     fn test_versioned_value() {
-        let mut val = VersionedValue::from::<i64>(0i64.into());
+        let mut val = VersionedValue::from::<i64>(0i64);
         assert_eq!(format!("{:?}", val), "VersionedValue([Int(0)])");
 
         val.update(2.0);

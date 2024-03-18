@@ -6,16 +6,14 @@ pub use crate::storage::THREAD_STORAGE;
 pub use crate::value::Value;
 pub use crate::xxh::XXHashable;
 
-use config;
-
 pub trait AsParamScope {
-    fn param_scope(self: &Self) -> ParamScope;
+    fn param_scope(&self) -> ParamScope;
 }
 
 impl AsParamScope for config::Config {
-    fn param_scope(self: &Self) -> ParamScope {
+    fn param_scope(&self) -> ParamScope {
         let mut ps = ParamScope::default();
-        fn unpack(ps: &mut ParamScope, prefix: Option<String>, value: config::Value) -> () {
+        fn unpack(ps: &mut ParamScope, prefix: Option<String>, value: config::Value) {
             match (prefix, value.kind) {
                 (None, config::ValueKind::Table(v)) => v.iter().for_each(|(k, v)| {
                     unpack(ps, Some(k.to_string()), v.clone());
@@ -25,7 +23,7 @@ impl AsParamScope for config::Config {
                 (Some(k), config::ValueKind::Float(v)) => ps.put(k, v),
                 (Some(k), config::ValueKind::String(v)) => ps.put(k, v),
                 (Some(prefix), config::ValueKind::Table(v)) => v.iter().for_each(|(k, v)| {
-                    unpack(ps, Some(format!("{}.{}", prefix, k.to_string())), v.clone());
+                    unpack(ps, Some(format!("{}.{}", prefix, k)), v.clone());
                 }),
                 _ => todo!(),
             };

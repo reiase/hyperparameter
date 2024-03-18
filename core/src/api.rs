@@ -124,10 +124,10 @@ where
             key
         );
         if let ParamScope::Just(changes) = self {
-            if changes.contains_key(&key) {
-                changes.update(key, val);
+            if let std::collections::btree_map::Entry::Vacant(e) = changes.entry(key) {
+                e.insert(Entry::new("", val));
             } else {
-                changes.insert(key, Entry::new("", val));
+                changes.update(key, val);
             }
         }
     }
@@ -148,11 +148,17 @@ where
     fn put(&mut self, key: K, val: V) {
         let hkey = key.xxh();
         if let ParamScope::Just(changes) = self {
-            if changes.contains_key(&hkey) {
-                changes.update(hkey, val);
-            } else {
+            // if changes.contains_key(&hkey) {
+            //     changes.update(hkey, val);
+            // } else {
+            //     let key: String = key.into();
+            //     changes.insert(hkey, Entry::new(key, val));
+            // }
+            if let std::collections::btree_map::Entry::Vacant(e) = changes.entry(hkey) {
                 let key: String = key.into();
-                changes.insert(hkey, Entry::new(key, val));
+                e.insert(Entry::new(key, val));
+            } else {
+                changes.update(hkey, val);
             }
         } else {
             THREAD_STORAGE.with(|ts| ts.borrow_mut().put(key, val))
@@ -167,15 +173,15 @@ pub fn frozen() {
 #[macro_export]
 macro_rules! get_param {
     ($name:expr, $default:expr) => {{
-        const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
-        const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
+        const CONST_KEY: &str = ::const_str::replace!(stringify!($name), ";", "");
+        const CONST_HASH: u64 = ::xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
         THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(CONST_HASH, $default))
         // ParamScope::default().get_or_else(CONST_HASH, $default)
     }};
 
     ($name:expr, $default:expr, $help: expr) => {{
-        const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
-        const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
+        const CONST_KEY: &str = ::const_str::replace!(stringify!($name), ";", "");
+        const CONST_HASH: u64 = ::xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
         // ParamScope::default().get_or_else(CONST_HASH, $default)
         {
             const CONST_HELP: &str = $help;
@@ -221,7 +227,7 @@ macro_rules! with_params {
     ) =>{
         let mut ps = ParamScope::default();
         {
-            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
+            const CONST_KEY: &str = ::const_str::replace!(stringify!($($key).+), ";", "");
             ps.put(CONST_KEY, $val);
         }
         with_params!(params ps; $($body)*)
@@ -234,7 +240,7 @@ macro_rules! with_params {
         $($body:tt)*
     ) => {
         {
-            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
+            const CONST_KEY: &str = ::const_str::replace!(stringify!($($key).+), ";", "");
             $ps.put(CONST_KEY, $val);
         }
         with_params!(params $ps; $($body)*)
@@ -322,7 +328,7 @@ macro_rules! with_params_readonly {
     ) =>{
         let mut ps = ParamScope::default();
         {
-            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
+            const CONST_KEY: &str = ::const_str::replace!(stringify!($($key).+), ";", "");
             ps.put(CONST_KEY, $val);
         }
         with_params!(params ps; $($body)*)
@@ -491,7 +497,7 @@ mod tests {
     #[test]
     fn test_param_scope_with_param_mixed_get_set() {
         with_params! {
-            get a_b_c = a.b.c or 1;
+            get _a_b_c = a.b.c or 1;
             set a.b.c = 3;
             get a_b_c = a.b.c or 2;
 

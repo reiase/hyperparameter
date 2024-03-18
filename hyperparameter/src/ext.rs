@@ -67,7 +67,7 @@ impl KVStorage {
                     if k == UserDefinedType::PyObjectType as i32 {
                         res.set_item(k, PyAny::from_owned_ptr(py, v as *mut pyo3::ffi::PyObject))
                     } else {
-                        res.set_item(k, v as u64)
+                        res.set_item(k, v)
                     }
                 }
             }

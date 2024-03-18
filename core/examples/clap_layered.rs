@@ -12,7 +12,7 @@ struct CommandLineArgs {
     define: Vec<String>,
 
     /// Specifies the configuration file path.
-    #[arg(short = 'C', long, default_value = "examples/rust/cfg.toml")]
+    #[arg(short = 'C', long, default_value = "examples/cfg.toml")]
     config: String,
 }
 
@@ -21,10 +21,14 @@ fn main() {
     let config_path = Path::new(&args.config);
     let config = config::Config::builder()
         .add_source(File::from(config_path))
-        .build().unwrap();
+        .build()
+        .unwrap();
 
     // No scope
-    println!("param1={}\t// No scope", get_param!(example.param1, "default".to_string()));
+    println!(
+        "param1={}\t// No scope",
+        get_param!(example.param1, "default".to_string())
+    );
 
     with_params! { // Scope with configuration file parameters
         params config.param_scope();

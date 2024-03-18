@@ -27,7 +27,7 @@ fn foo_with_config(x: i64, cfg: &Config) -> i64 {
 fn call_foo(nloop: i64) -> i64 {
     let mut sum = 0;
     for i in 0..nloop {
-        sum = sum + foo(i, 42);
+        sum += foo(i, 42);
     }
     sum
 }
@@ -39,7 +39,7 @@ fn call_foo_with_ps(nloop: i64) -> i64 {
         with_params! {
             set y = 42;
 
-            sum = sum + foo_with_ps(i);
+            sum += foo_with_ps(i);
         }
     }
     sum
@@ -53,7 +53,7 @@ fn call_foo_with_ps_optimized(nloop: i64) -> i64 {
         set y = 42;
 
         for i in 0..nloop {
-            sum = sum + foo_with_ps(i);
+            sum += foo_with_ps(i);
         }
     }
     sum
@@ -62,12 +62,12 @@ fn call_foo_with_ps_optimized(nloop: i64) -> i64 {
 #[inline(never)]
 fn call_foo_with_ps_and_raw_btree(nloop: i64) -> i64 {
     let mut sum = 0;
-    const KEY: u64 = xxh::xxhash("y".as_bytes());
+    const KEY: u64 = xxhash("y".as_bytes());
     with_params! {
         set y = 42;
 
         for i in 0..nloop {
-            sum = sum + THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(KEY, i));
+            sum += THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(KEY, i));
         }
     }
     sum
@@ -77,7 +77,7 @@ fn call_foo_with_ps_and_raw_btree(nloop: i64) -> i64 {
 fn call_foo_with_config_rs(nloop: i64, cfg: &Config) -> i64 {
     let mut sum = 0;
     for i in 0..nloop {
-        sum = sum + foo_with_config(i, cfg);
+        sum += foo_with_config(i, cfg);
     }
     sum
 }
@@ -106,12 +106,12 @@ pub fn bench_apis_with_ps(c: &mut Criterion) {
 
 pub fn bench_config_rs(c: &mut Criterion) {
     let cfg = config::Config::builder()
-    .add_source(config::File::from_str(
-        "{\"y\": 1}",
-        config::FileFormat::Json,
-    ))
-    .build()
-    .unwrap();
+        .add_source(config::File::from_str(
+            "{\"y\": 1}",
+            config::FileFormat::Json,
+        ))
+        .build()
+        .unwrap();
     c.bench_function("raw api with config-rs", |b| {
         b.iter(|| call_foo_with_config_rs(black_box(10000), &cfg))
     });
@@ -123,5 +123,6 @@ criterion_group!(
     bench_apis_with_ps_and_raw_btree,
     bench_apis_with_ps_optimized,
     bench_apis_with_ps,
+    bench_config_rs,
 );
 criterion_main!(benches);

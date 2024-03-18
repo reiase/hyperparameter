@@ -68,11 +68,6 @@ impl MultipleVersion<u64> for Tree {
     }
 }
 
-// pub fn hashstr<T: Into<String>>(s: T) -> u64 {
-//     let s: String = s.into();
-//     xxhstr(&s)
-// }
-
 thread_local! {
     pub static THREAD_STORAGE: RefCell<Storage> = create_thread_storage();
 }
@@ -157,16 +152,13 @@ impl Storage {
         if self.history.last().unwrap().contains(&hkey) {
             self.tree.update(hkey, val);
         } else {
-            if self.tree.contains_key(&hkey) {
-                self.tree.revision(hkey, val);
+            if let std::collections::btree_map::Entry::Vacant(e) = self.tree.entry(hkey) {
+                e.insert(Entry {
+                    key,
+                    val: VersionedValue::from(val.into()),
+                });
             } else {
-                self.tree.insert(
-                    hkey,
-                    Entry {
-                        key,
-                        val: VersionedValue::from(val.into()),
-                    },
-                );
+                self.tree.revision(hkey, val);
             }
             self.history.last_mut().unwrap().insert(hkey);
         }
@@ -182,18 +174,10 @@ impl Storage {
         }
     }
 
-    // pub fn rollback<T: Into<String>>(&mut self, key: T) {
-    //     let hkey = hashstr(key);
-    //     self.tree.rollback(hkey);
-    // }
-
     pub fn keys(&self) -> Vec<String> {
         self.tree
             .values()
-            .filter(|x| match x.value() {
-                Value::Empty => false,
-                _ => true,
-            })
+            .filter(|x| !matches!(x.value(), Value::Empty))
             .map(|x| x.key.clone())
             .collect()
     }

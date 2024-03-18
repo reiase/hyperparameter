@@ -2,7 +2,7 @@
 name = "hyperparameter"
 version = "0.5.9"
 license = "Apache-2.0"
-description = "A high performance configuration system for Rust and Python."
+description = "A high performance configuration system for Rust."
 homepage = "https://reiase.github.io/hyperparameter/"
 readme = "examples/rust/README.md"
 repository = "https://github.com/reiase/hyperparameter"
@@ -16,10 +16,9 @@ exclude = [
 ]
 
 [features]
-default = ["json", "toml", "ini", "clap"]
+default = ["json", "toml", "clap"]
 json = ["config/json"]
 toml = ["config/toml"]
-ini = ["config/ini"]
 clap = ["dep:linkme", "dep:clap"]
 
 [lib]
@@ -27,11 +26,8 @@ name = "hyperparameter"
 crate-type = ["rlib", "staticlib"]
 
 [dependencies]
-backtrace = "0.3.69"
 lazy_static = "1.4.0"
 phf = { version = "0.11", features = ["macros"] }
-signal-hook = "0.3.17"
-tokio = { version = "1.31.0", features = ["full"] }
 xxhash-rust = { version = "0.8.7", features = ["xxh3", "xxh64", "const_xxh64"] }
 const-str = "0.5.6"
 config = "0.14.0"
@@ -46,18 +42,10 @@ clap = { version = "4.4.7", features = ["derive"] }
 [profile.dev]
 overflow-checks = false
 
+[profile.release]
+strip = "debuginfo"
+lto = true
+
 [[bench]]
 name = "bench_apis"
 harness = false
-
-[[example]]
-name = "clap_mini"
-path = "examples/rust/clap_mini.rs"
-
-[[example]]
-name = "clap_layered"
-path = "examples/rust/clap_layered.rs"
-
-[[example]]
-name = "clap_full"
-path = "examples/rust/clap_full.rs"
