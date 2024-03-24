@@ -29,13 +29,16 @@ jobs:
         pip install pytest pytest-cov && pip install -e .
     - name: Run tests and collect coverage
       run: |
+        cd core/
         source <(cargo llvm-cov show-env --export-prefix)
         export CARGO_TARGET_DIR=$CARGO_LLVM_COV_TARGET_DIR
         export CARGO_INCREMENTAL=1
         cargo llvm-cov clean --workspace
         cargo test
+        cd ..
         pytest --cov=./ --cov-report=xml
-        cargo llvm-cov --no-run --lcov --output-path coverage.lcov
+        cd core/
+        cargo llvm-cov --no-run --lcov --output-path ../coverage.lcov
     - name: Upload coverage reports to Codecov with GitHub Action
       uses: codecov/codecov-action@v3
       with:

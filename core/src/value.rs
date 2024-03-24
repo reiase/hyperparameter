@@ -39,13 +39,7 @@ pub const EMPTY: Value = Value::Empty;
 
 impl<T: Into<Value>> From<Option<T>> for Value {
     fn from(value: Option<T>) -> Self {
-        match value {
-            Some(x) => {
-                let y: Value = x.into();
-                y
-            }
-            None => Value::Empty,
-        }
+        value.map_or(Value::Empty, |x| x.into())
     }
 }
 
@@ -63,7 +57,7 @@ impl From<i64> for Value {
 
 impl From<f32> for Value {
     fn from(value: f32) -> Self {
-        Value::Float(value.into())
+        Value::Float(value as f64)
     }
 }
 
@@ -81,7 +75,7 @@ impl From<String> for Value {
 
 impl From<&String> for Value {
     fn from(value: &String) -> Self {
-        Value::Text(value.clone())
+        Value::Text(value.to_string())
     }
 }
 

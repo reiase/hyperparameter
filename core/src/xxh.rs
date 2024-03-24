@@ -29,15 +29,13 @@ impl XXHashable for &str {
 
 impl XXHashable for CStr {
     fn xxh(&self) -> u64 {
-        let bs = self.to_bytes();
-        xxhash(bs)
+        xxhash(self.to_bytes())
     }
 }
 
 impl XXHashable for CString {
     fn xxh(&self) -> u64 {
-        let bs = self.to_bytes();
-        xxhash(bs)
+        xxhash(self.to_bytes())
     }
 }
 
