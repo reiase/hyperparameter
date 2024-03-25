@@ -2,8 +2,7 @@ use std::ffi::c_void;
 
 use hyperparameter::*;
 use pyo3::exceptions::PyValueError;
-use pyo3::ffi::Py_DecRef;
-use pyo3::ffi::Py_IncRef;
+use pyo3::ffi::Py_XDECREF;
 use pyo3::prelude::*;
 use pyo3::types::PyBool;
 use pyo3::types::PyDict;
@@ -35,7 +34,7 @@ fn make_value_from_pyobject(obj: *mut pyo3::ffi::PyObject) -> Value {
         obj as *mut c_void,
         UserDefinedType::PyObjectType as i32,
         |obj: *mut c_void| unsafe {
-            Py_DecRef(obj as *mut pyo3::ffi::PyObject);
+            Py_XDECREF(obj as *mut pyo3::ffi::PyObject);
         },
     )
 }
@@ -158,7 +157,7 @@ impl KVStorage {
         } else if val.is_instance_of::<PyInt>() {
             self.storage.put(key, val.extract::<i64>().unwrap());
         } else {
-            Py_IncRef(val.into_ptr());
+            // Py_XINCREF(val.into_ptr());
             self.storage
                 .put(key, make_value_from_pyobject(val.into_ptr()));
         }
