@@ -2,20 +2,31 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use crate::storage::{
-    frozen_global_storage, Entry, GetOrElse, MultipleVersion, Tree, THREAD_STORAGE,
+    frozen_global_storage, Entry, GetOrElse, MultipleVersion, Params, THREAD_STORAGE,
 };
 use crate::value::{Value, EMPTY};
 use crate::xxh::XXHashable;
 
+/// ParameterScope
+///
+/// `ParameterScope` is a data structure that stores the current set of named parameters
+/// and their values. `ParameterScope` is used to manage the scope of named parameters,
+/// allowing parameters to be defined and used within a specific scope,
+/// and then restored to the previous scope when the scope is exited.
+///
+/// The parameter scope can be used to implement a variety of features, such
+/// as named parameters, default parameter values, and parameter inheritance.
 #[derive(Debug, Clone)]
 pub enum ParamScope {
+    /// No parameters are defined in the current scope.
     Nothing,
-    Just(Tree),
+    /// The current scope contains a set of named parameters stored in `Params`.
+    Just(Params),
 }
 
 impl Default for ParamScope {
     fn default() -> Self {
-        ParamScope::Just(Tree::new())
+        ParamScope::Just(Params::new())
     }
 }
 
@@ -505,3 +516,88 @@ mod tests {
         }
     }
 }
+
+// FILEPATH: /home/reiase/workspace/hyperparameter/core/src/api.rs
+// BEGIN: test_code
+
+#[cfg(test)]
+mod test_param_scope {
+    use super::*;
+    use std::convert::TryInto;
+
+    #[test]
+    fn test_param_scope_default() {
+        let ps = ParamScope::default();
+        match ps {
+            ParamScope::Just(_) => assert!(true),
+            _ => assert!(false, "Default ParamScope should be ParamScope::Just"),
+        }
+    }
+
+    #[test]
+    fn test_param_scope_from_vec() {
+        let vec = vec!["param1=value1", "param2=value2"];
+        let ps: ParamScope = (&vec).into();
+        match ps {
+            ParamScope::Just(params) => {
+                assert_eq!(params.get(&"param1".xxh()).unwrap().value(), &Value::from("value1"));
+                assert_eq!(params.get(&"param2".xxh()).unwrap().value(), &Value::from("value2"));
+            }
+            _ => assert!(false, "ParamScope should be ParamScope::Just"),
+        }
+    }
+
+    #[test]
+    fn test_param_scope_get_with_hash() {
+        let mut ps = ParamScope::default();
+        ps.add("param=value");
+        let value = ps.get_with_hash("param".xxh());
+        assert_eq!(value, Value::from("value"));
+    }
+
+    #[test]
+    fn test_param_scope_get() {
+        let mut ps = ParamScope::default();
+        ps.add("param=value");
+        let value: String = ps.get("param").try_into().unwrap();
+        assert_eq!(value, "value");
+    }
+
+    #[test]
+    fn test_param_scope_add() {
+        let mut ps = ParamScope::default();
+        ps.add("param=value");
+        match ps {
+            ParamScope::Just(params) => {
+                assert_eq!(params.get(&"param".xxh()).unwrap().value(), &Value::from("value"));
+            }
+            _ => assert!(false, "ParamScope should be ParamScope::Just"),
+        }
+    }
+
+    #[test]
+    fn test_param_scope_keys() {
+        let mut ps = ParamScope::default();
+        ps.add("param=value");
+        let keys = ps.keys();
+        assert_eq!(keys, vec!["param"]);
+    }
+
+    #[test]
+    fn test_param_scope_enter_exit() {
+        let mut ps = ParamScope::default();
+        ps.add("param=value");
+        ps.enter();
+        match ps {
+            ParamScope::Nothing => assert!(true),
+            _ => assert!(false, "ParamScope should be ParamScope::Nothing after enter"),
+        }
+        ps.exit();
+        match ps {
+            ParamScope::Just(_) => assert!(true),
+            _ => assert!(false, "ParamScope should be ParamScope::Just after exit"),
+        }
+    }
+}
+
+// END: test_code

@@ -40,7 +40,7 @@ impl Entry {
     }
 }
 
-pub type Tree = BTreeMap<u64, Entry>;
+pub type Params = BTreeMap<u64, Entry>;
 
 pub trait MultipleVersion<K> {
     fn update<V: Into<Value>>(&mut self, key: K, val: V);
@@ -48,15 +48,17 @@ pub trait MultipleVersion<K> {
     fn rollback(&mut self, key: K);
 }
 
-impl MultipleVersion<u64> for Tree {
+impl MultipleVersion<u64> for Params {
     fn update<V: Into<Value>>(&mut self, key: u64, val: V) {
-        self.entry(key).and_modify(|e| {
+        if let Some(e) = self.get_mut(&key) {
             e.val.update(val);
-        });
+        }
     }
 
     fn revision<V: Into<Value>>(&mut self, key: u64, val: V) {
-        self.entry(key).and_modify(|e| e.val.revision(val));
+        if let Some(e) = self.get_mut(&key) {
+            e.val.revision(val);
+        }
     }
 
     fn rollback(&mut self, key: u64) {
@@ -75,8 +77,8 @@ thread_local! {
 fn create_thread_storage() -> RefCell<Storage> {
     let ts = RefCell::new(Storage::default());
     ts.borrow_mut()
-        .tree
-        .clone_from(&GLOBAL_STORAGE.lock().unwrap().tree);
+        .params
+        .clone_from(&GLOBAL_STORAGE.lock().unwrap().params);
     ts
 }
 
@@ -89,14 +91,14 @@ pub fn frozen_global_storage() {
         GLOBAL_STORAGE
             .lock()
             .unwrap()
-            .tree
-            .clone_from(&ts.borrow().tree);
+            .params
+            .clone_from(&ts.borrow().params);
     });
 }
 
 #[derive(Debug)]
 pub struct Storage {
-    pub tree: Tree,
+    pub params: Params,
     pub history: Vec<HashSet<u64>>,
 }
 
@@ -105,7 +107,7 @@ unsafe impl Send for Storage {}
 impl Default for Storage {
     fn default() -> Self {
         Storage {
-            tree: Tree::new(),
+            params: Params::new(),
             history: vec![HashSet::new()],
         }
     }
@@ -116,30 +118,30 @@ impl Storage {
         self.history.push(HashSet::new());
     }
 
-    pub fn exit(&mut self) -> Tree {
-        let mut changes = Tree::new();
+    pub fn exit(&mut self) -> Params {
+        let mut changes = Params::new();
         for key in self.history.pop().unwrap() {
-            changes.insert(key, self.tree.get(&key).unwrap().shallow());
-            self.tree.rollback(key);
+            changes.insert(key, self.params.get(&key).unwrap().shallow());
+            self.params.rollback(key);
         }
         changes
     }
 
     pub fn get_entry(&self, key: u64) -> Option<&Entry> {
-        self.tree.get(&key)
+        self.params.get(&key)
     }
 
     pub fn put_entry(&mut self, key: u64, entry: Entry) -> Option<Entry> {
-        self.tree.insert(key, entry)
+        self.params.insert(key, entry)
     }
 
     pub fn del_entry(&mut self, key: u64) {
-        self.tree.remove(&key);
+        self.params.remove(&key);
     }
 
     pub fn get<T: XXHashable>(&self, key: T) -> &Value {
         let hkey = key.xxh();
-        if let Some(e) = self.tree.get(&hkey) {
+        if let Some(e) = self.params.get(&hkey) {
             e.value()
         } else {
             &EMPTY
@@ -150,15 +152,15 @@ impl Storage {
         let hkey = key.xxh();
         let key: String = key.into();
         if self.history.last().unwrap().contains(&hkey) {
-            self.tree.update(hkey, val);
+            self.params.update(hkey, val);
         } else {
-            if let std::collections::btree_map::Entry::Vacant(e) = self.tree.entry(hkey) {
+            if let std::collections::btree_map::Entry::Vacant(e) = self.params.entry(hkey) {
                 e.insert(Entry {
                     key,
                     val: VersionedValue::from(val.into()),
                 });
             } else {
-                self.tree.revision(hkey, val);
+                self.params.revision(hkey, val);
             }
             self.history.last_mut().unwrap().insert(hkey);
         }
@@ -167,15 +169,15 @@ impl Storage {
     pub fn del<T: XXHashable>(&mut self, key: T) {
         let hkey = key.xxh();
         if self.history.last().unwrap().contains(&hkey) {
-            self.tree.update(hkey, None::<i32>);
+            self.params.update(hkey, None::<i32>);
         } else {
-            self.tree.revision(hkey, None::<i32>);
+            self.params.revision(hkey, None::<i32>);
             self.history.last_mut().unwrap().insert(hkey);
         }
     }
 
     pub fn keys(&self) -> Vec<String> {
-        self.tree
+        self.params
             .values()
             .filter(|x| !matches!(x.value(), Value::Empty))
             .map(|x| x.key.clone())
@@ -202,7 +204,7 @@ where
     T: Into<Value> + TryFrom<Value> + for<'a> TryFrom<&'a Value>,
 {
     fn get_or_else(&self, key: u64, dval: T) -> T {
-        if let Some(val) = self.tree.get(&key) {
+        if let Some(val) = self.params.get(&key) {
             match val.value().try_into() {
                 Ok(v) => v,
                 Err(_) => dval,
