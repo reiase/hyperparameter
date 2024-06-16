@@ -1,19 +1,16 @@
 [package]
 name = "hyperparameter"
-version = "0.5.9"
+version = "0.5.10"
 license = "Apache-2.0"
 description = "A high performance configuration system for Rust."
 homepage = "https://reiase.github.io/hyperparameter/"
-readme = "examples/rust/README.md"
+readme = "README.md"
 repository = "https://github.com/reiase/hyperparameter"
 authors = ["reiase <reiase@gmail.com>"]
 edition = "2021"
 keywords = ["config", "env", "cli", "machine-learning"]
 categories = ["config", "science"]
-exclude = [
-    ".cargo",
-    ".github",
-]
+exclude = [".cargo", ".github"]
 
 [features]
 default = ["json", "toml", "clap"]
@@ -30,9 +27,9 @@ lazy_static = "1.4.0"
 phf = { version = "0.11", features = ["macros"] }
 xxhash-rust = { version = "0.8.7", features = ["xxh3", "xxh64", "const_xxh64"] }
 const-str = "0.5.6"
-config = "0.14.0"
-linkme = {version = "0.3", optional = true}
-clap = {version = "4.4.7", optional = true}
+config = { version = "0.14.0", default-features = false }
+linkme = { version = "0.3", optional = true }
+clap = { version = "4.4.7", optional = true }
 
 [dev-dependencies]
 proptest = "1.2.0"
