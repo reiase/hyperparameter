@@ -10,7 +10,7 @@ include = ["hyperparameter/hyperparameter.h"]
 
 [project]
 name = "hyperparameter"
-version = "0.5.6"
+version = "0.5.10"
 authors = [{ name = "Reiase", email = "reiase@gmail.com" }]
 description = "A hyper-parameter library for researchers, data scientists and machine learning engineers."
 requires-python = ">=3.7"
