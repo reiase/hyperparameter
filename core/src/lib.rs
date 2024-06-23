@@ -19,6 +19,8 @@ pub use crate::storage::THREAD_STORAGE;
 pub use crate::value::Value;
 pub use crate::xxh::xxhash;
 pub use crate::xxh::XXHashable;
+pub use const_str;
+pub use xxhash_rust;
 
 #[cfg(feature = "clap")]
 mod cli;

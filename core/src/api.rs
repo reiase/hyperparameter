@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
+use const_str;
+use xxhash_rust;
+
 use crate::storage::{
     frozen_global_storage, Entry, GetOrElse, MultipleVersion, Params, THREAD_STORAGE,
 };
@@ -184,15 +187,15 @@ pub fn frozen() {
 #[macro_export]
 macro_rules! get_param {
     ($name:expr, $default:expr) => {{
-        const CONST_KEY: &str = ::const_str::replace!(stringify!($name), ";", "");
-        const CONST_HASH: u64 = ::xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
+        const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
+        const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
         THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(CONST_HASH, $default))
         // ParamScope::default().get_or_else(CONST_HASH, $default)
     }};
 
     ($name:expr, $default:expr, $help: expr) => {{
-        const CONST_KEY: &str = ::const_str::replace!(stringify!($name), ";", "");
-        const CONST_HASH: u64 = ::xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
+        const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
+        const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
         // ParamScope::default().get_or_else(CONST_HASH, $default)
         {
             const CONST_HELP: &str = $help;
@@ -238,7 +241,7 @@ macro_rules! with_params {
     ) =>{
         let mut ps = ParamScope::default();
         {
-            const CONST_KEY: &str = ::const_str::replace!(stringify!($($key).+), ";", "");
+            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
             ps.put(CONST_KEY, $val);
         }
         with_params!(params ps; $($body)*)
@@ -251,7 +254,7 @@ macro_rules! with_params {
         $($body:tt)*
     ) => {
         {
-            const CONST_KEY: &str = ::const_str::replace!(stringify!($($key).+), ";", "");
+            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
             $ps.put(CONST_KEY, $val);
         }
         with_params!(params $ps; $($body)*)
@@ -339,7 +342,7 @@ macro_rules! with_params_readonly {
     ) =>{
         let mut ps = ParamScope::default();
         {
-            const CONST_KEY: &str = ::const_str::replace!(stringify!($($key).+), ";", "");
+            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
             ps.put(CONST_KEY, $val);
         }
         with_params!(params ps; $($body)*)
