@@ -135,14 +135,14 @@ class _ParamAccessor:
                 elif value.lower() in ("n", "no", "f", "false", "off", "0"):
                     return False
                 else:
-                    print(f"invalid bool value {value}")
+                    print(f"Warning: Invalid bool value '{value}'. Expected one of: y/yes/t/true/on/1/n/no/f/false/off/0. Using False as default.")
                     return False
             if isinstance(value, int):
                 return value != 0
             if value is None:
                 return False
             else:
-                print(f"invalid bool value {value}")
+                print(f"Warning: Invalid bool value '{value}' (type: {type(value).__name__}). Expected bool, int, or str. Using True as default.")
                 return True
         if default is None:
             return value
@@ -151,15 +151,19 @@ class _ParamAccessor:
                 return 0
             try:
                 return int(value)
-            except ValueError:
+            except ValueError as e:
                 try:
-                    return float(value)
-                except Exception as exc:
+                    # Try converting float to int
+                    float_val = float(value)
+                    return int(float_val)
+                except (ValueError, TypeError) as e2:
+                    print(f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to int. Error: {e2}. Returning original value.")
                     return value
         if type(default) is float:
             try:
                 return float(value)
-            except:
+            except (ValueError, TypeError) as e:
+                print(f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to float. Error: {e}. Returning original value.")
                 return value
         if type(default) is str:
             return str(value)
@@ -231,7 +235,7 @@ class _HyperParameter:
     def get(self, name: str) -> Any:
         try:
             return self._storage.get(name)
-        except ValueError:
+        except (KeyError, ValueError):
             return _ParamAccessor(self, name)
 
     def put(self, name: str, value: Any) -> None:
@@ -252,7 +256,7 @@ class _HyperParameter:
         """
         try:
             return self._storage.get(key)
-        except ValueError:
+        except (KeyError, ValueError):
             return _ParamAccessor(self._storage, key)
 
     def __setitem__(self, key: str, value: Any) -> None:

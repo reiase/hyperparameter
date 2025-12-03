@@ -133,10 +133,6 @@ where
 
     /// Put a parameter.
     fn put(&mut self, key: u64, val: V) {
-        println!(
-            "hyperparameter warning: put parameter with hashed key {}",
-            key
-        );
         if let ParamScope::Just(changes) = self {
             if let std::collections::btree_map::Entry::Vacant(e) = changes.entry(key) {
                 e.insert(Entry::new("", val));

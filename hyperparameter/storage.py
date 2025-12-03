@@ -103,7 +103,7 @@ class TLSKVStorage(Storage):
         self._storage.clear()
 
     def get_entry(self, *args, **kwargs):
-        raise RuntimeError("hyperparameter is not build with rust backend")
+        raise RuntimeError("hyperparameter is not built with rust backend")
 
     def get(self, name: str, accessor: Callable = None) -> Any:
         if name in self.__slots__:
@@ -113,7 +113,7 @@ class TLSKVStorage(Storage):
             if name in curr._storage:
                 return curr._storage[name]
             curr = curr._parent
-        raise ValueError()
+        raise KeyError(f"Parameter '{name}' not found in storage")
         # return accessor(self, name)
 
     def put(self, name: str, value: Any) -> None:
@@ -145,7 +145,7 @@ has_rust_backend = False
 
 
 def xxh64(*args, **kwargs):
-    raise RuntimeError("hyperparameter is not build with rust backend")
+    raise RuntimeError("hyperparameter is not built with rust backend")
 
 
 try:

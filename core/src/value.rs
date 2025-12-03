@@ -120,15 +120,15 @@ impl TryFrom<&Value> for i64 {
 
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Empty => Err("empty value error".into()),
+            Value::Empty => Err("Cannot convert empty value to i64".into()),
             Value::Int(v) => Ok(*v),
             Value::Float(v) => Ok(*v as i64),
             Value::Text(v) => v
                 .parse::<i64>()
-                .map_err(|_| format!("error convert {} into i64", v)),
+                .map_err(|e| format!("Cannot convert string '{}' to i64: {}", v, e)),
             Value::Boolean(v) => Ok(Into::into(*v)),
             Value::UserDefined(_, _, _) => {
-                Err("data type not matched, `UserDefined` and i64".into())
+                Err("Cannot convert UserDefined value to i64".into())
             }
         }
     }
@@ -147,15 +147,15 @@ impl TryFrom<&Value> for f64 {
 
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Empty => Err("empty value error".into()),
+            Value::Empty => Err("Cannot convert empty value to f64".into()),
             Value::Int(v) => Ok(*v as f64),
             Value::Float(v) => Ok(*v),
             Value::Text(v) => v
                 .parse::<f64>()
-                .map_err(|_| format!("error convert {} into i64", v)),
-            Value::Boolean(_) => Err("data type not matched, `Boolean` and i64".into()),
+                .map_err(|e| format!("Cannot convert string '{}' to f64: {}", v, e)),
+            Value::Boolean(_) => Err("Cannot convert Boolean value to f64".into()),
             Value::UserDefined(_, _, _) => {
-                Err("data type not matched, `UserDefined` and f64".into())
+                Err("Cannot convert UserDefined value to f64".into())
             }
         }
     }
@@ -174,13 +174,13 @@ impl TryFrom<&Value> for String {
 
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Empty => Err("empty value error".into()),
+            Value::Empty => Err("Cannot convert empty value to String".into()),
             Value::Int(v) => Ok(format!("{}", v)),
             Value::Float(v) => Ok(format!("{}", v)),
             Value::Text(v) => Ok(v.clone()),
             Value::Boolean(v) => Ok(format!("{}", v)),
             Value::UserDefined(_, _, _) => {
-                Err("data type not matched, `UserDefined` and str".into())
+                Err("Cannot convert UserDefined value to String".into())
             }
         }
     }
@@ -227,16 +227,19 @@ impl TryFrom<&Value> for bool {
 
     fn try_from(value: &Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Empty => Err("empty value error".into()),
+            Value::Empty => Err("Cannot convert empty value to bool".into()),
             Value::Int(v) => Ok(*v != 0),
-            Value::Float(_) => Err("data type not matched, `Float` and bool".into()),
+            Value::Float(_) => Err("Cannot convert Float value to bool".into()),
             Value::Text(s) => match STR2BOOL.get(s) {
                 Some(v) => Ok(*v),
-                None => Err("data type not matched, `Text` and bool".into()),
+                None => Err(format!(
+                    "Cannot convert string '{}' to bool. Expected one of: true/True/TRUE/T/yes/Yes/YES/Y/on/On/ON or false/False/FALSE/F/no/No/NO/N/off/Off/OFF",
+                    s
+                )),
             },
             Value::Boolean(v) => Ok(*v),
             Value::UserDefined(_, _, _) => {
-                Err("data type not matched, `UserDefined` and str".into())
+                Err("Cannot convert UserDefined value to bool".into())
             }
         }
     }
