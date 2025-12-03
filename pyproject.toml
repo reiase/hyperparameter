@@ -6,7 +6,6 @@ build-backend = "maturin"
 manifest-path = "hyperparameter/Cargo.toml"
 module-name = "hyperparameter.librbackend"
 features = ["pyo3/extension-module"]
-include = ["hyperparameter/hyperparameter.h"]
 exclude = [
     "hyperparameter/target/**",
     "hyperparameter/Cargo.lock",
