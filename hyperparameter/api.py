@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import argparse
 import functools
 import inspect
+import sys
 from typing import Any, Callable, Dict, Optional, Union, TypeVar, overload, List, Tuple
 
 from hyperparameter.storage import TLSKVStorage, has_rust_backend, xxh64
@@ -159,7 +161,7 @@ class _ParamAccessor:
 
         # Boolean conversion
         if default_type is bool:
-            return self._convert_to_bool(value)
+            return self._convert_to_bool(value, default)
 
         # Integer conversion
         if default_type is int:
@@ -174,20 +176,13 @@ class _ParamAccessor:
                         return float_val
                 except (ValueError, TypeError):
                     pass
-            # Try direct int conversion
-            try:
-                return self._convert_to_int(value)
-            except (ValueError, TypeError):
-                # If conversion fails, return original value
-                return value
+            converted_int = self._convert_to_int(value, default)
+            return value if converted_int is None else converted_int
 
         # Float conversion
         if default_type is float:
-            try:
-                return self._convert_to_float(value)
-            except (ValueError, TypeError):
-                # If conversion fails, return original value
-                return value
+            converted_float = self._convert_to_float(value, default)
+            return value if converted_float is None else converted_float
 
         # String conversion
         if default_type is str:
@@ -196,10 +191,10 @@ class _ParamAccessor:
         # For other types, return value as-is
         return value
 
-    def _convert_to_bool(self, value: Any) -> bool:
+    def _convert_to_bool(self, value: Any, default: bool) -> bool:
         """Convert value to boolean with support for string representations."""
         if value is None:
-            return False
+            return default
         if isinstance(value, bool):
             return value
         if isinstance(value, int):
@@ -210,43 +205,27 @@ class _ParamAccessor:
                 return True
             elif lower_val in ("n", "no", "f", "false", "off", "0"):
                 return False
-            else:
-                print(
-                    f"Warning: Invalid bool value '{value}'. Expected one of: y/yes/t/true/on/1/n/no/f/false/off/0. Using False as default."
-                )
-                return False
-        print(
-            f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to bool. Using False as default."
-        )
-        return False
+        return default
 
-    def _convert_to_int(self, value: Any) -> int:
+    def _convert_to_int(self, value: Any, default: int) -> Optional[Union[int, float]]:
         """Convert value to integer with fallback handling."""
         if value is None:
-            return 0
+            return default
         try:
             return int(value)
         except (ValueError, TypeError):
             try:
                 # Try converting float to int
                 return int(float(value))
-            except (ValueError, TypeError) as e:
-                # Re-raise exception so caller can handle it
-                print(
-                    f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to int. Error: {e}. Returning original value."
-                )
-                raise
+            except (ValueError, TypeError):
+                return None
 
-    def _convert_to_float(self, value: Any) -> float:
+    def _convert_to_float(self, value: Any, default: float) -> Optional[float]:
         """Convert value to float with error handling."""
         try:
             return float(value)
-        except (ValueError, TypeError) as e:
-            # Re-raise exception so caller can handle it
-            print(
-                f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to float. Error: {e}. Returning original value."
-            )
-            raise
+        except (ValueError, TypeError):
+            return None
 
     def __getitem__(self, index: str) -> "_ParamAccessor":
         return self.__getattr__(index)
@@ -402,6 +381,130 @@ class _HyperParameter:
 
     def __call__(self) -> _ParamAccessor:
         return _ParamAccessor(self)
+
+
+def _coerce_with_default(value: Any, default: Any) -> Any:
+    """Best-effort conversion of value toward the type of default."""
+    if default is None:
+        return value
+    default_type = type(default)
+    if default_type is bool:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        if isinstance(value, str):
+            lower_val = value.lower()
+            if lower_val in ("y", "yes", "t", "true", "on", "1"):
+                return True
+            if lower_val in ("n", "no", "f", "false", "off", "0"):
+                return False
+        return default
+    if default_type is int:
+        if isinstance(value, str):
+            try:
+                float_val = float(value)
+                if float_val.is_integer():
+                    return int(float_val)
+                return float_val
+            except (ValueError, TypeError):
+                return value
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            try:
+                return int(float(value))
+            except (ValueError, TypeError):
+                return value
+    if default_type is float:
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return value
+    if default_type is str:
+        return str(value)
+    return value
+
+
+def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
+    """Parse param help from docstring (Google/NumPy/reST)."""
+    if not doc:
+        return {}
+    lines = [line.rstrip() for line in doc.splitlines()]
+    help_map: Dict[str, str] = {}
+
+    # Google style: Args:/Arguments:
+    def parse_google():
+        in_args = False
+        for line in lines:
+            if not in_args:
+                if line.strip().lower() in ("args:", "arguments:"):
+                    in_args = True
+                continue
+            if line.strip() == "":
+                if in_args:
+                    break
+                continue
+            if not line.startswith(" "):
+                break
+            stripped = line.strip()
+            if ":" in stripped:
+                name_part, desc = stripped.split(":", 1)
+                name_part = name_part.strip()
+                if "(" in name_part and ")" in name_part:
+                    name_part = name_part.split("(")[0].strip()
+                if name_part:
+                    help_map.setdefault(name_part, desc.strip())
+
+    # NumPy style: Parameters
+    def parse_numpy():
+        in_params = False
+        current_name = None
+        for line in lines:
+            if not in_params:
+                if line.strip().lower() == "parameters":
+                    in_params = True
+                continue
+            if line.strip() == "":
+                if current_name is not None:
+                    current_name = None
+                continue
+            if not line.startswith(" "):
+                # section ended
+                break
+            # parameter line: name : type
+            if ":" in line:
+                name_part = line.split(":", 1)[0].strip()
+                current_name = name_part
+                # description may follow on same line after type, but we skip
+                if current_name and current_name not in help_map:
+                    # next indented lines are description
+                    continue
+            elif current_name:
+                desc = line.strip()
+                if desc:
+                    help_map.setdefault(current_name, desc)
+
+    # reST/Sphinx: :param name: desc
+    def parse_rest():
+        for line in lines:
+            striped = line.strip()
+            if striped.startswith(":param"):
+                # forms: :param name: desc  or :param type name: desc
+                parts = striped.split(":param", 1)[1].strip()
+                if ":" in parts:
+                    before, desc = parts.split(":", 1)
+                    tokens = before.split()
+                    name = tokens[-1] if tokens else ""
+                    if name:
+                        help_map.setdefault(name, desc.strip())
+
+    parse_google()
+    parse_numpy()
+    parse_rest()
+    return help_map
 
 
 @_dynamic_dispatch
@@ -634,6 +737,7 @@ def auto_param(
 
         def hashed_wrapper(func: Callable) -> Callable:
             predef_kws: Dict[str, int] = {}
+            predef_defaults: Dict[str, Any] = {}
 
             if name_or_func is None:
                 namespace = func.__name__
@@ -645,6 +749,7 @@ def auto_param(
                 if v.default != v.empty:
                     name = "{}.{}".format(namespace, k)
                     predef_kws[k] = xxh64(name)
+                    predef_defaults[k] = v.default
 
             @functools.wraps(func)
             def inner(*arg: Any, **kws: Any) -> Any:
@@ -653,11 +758,13 @@ def auto_param(
                         if k not in kws:
                             try:
                                 val = hp._storage.get_entry(v)
-                                kws[k] = val
+                                kws[k] = _coerce_with_default(val, predef_defaults[k])
                             except ValueError:
                                 pass
                     return func(*arg, **kws)
 
+            inner._auto_param_namespace = namespace  # type: ignore[attr-defined]
+            inner._auto_param_wrapped = func  # type: ignore[attr-defined]
             return inner
 
         return hashed_wrapper
@@ -683,13 +790,149 @@ def auto_param(
             with param_scope() as hp:
                 local_params: Dict[str, Any] = {}
                 for k, v in predef_kws.items():
-                    if getattr(hp(), v).get_or_else(None) is not None and k not in kws:
-                        kws[k] = getattr(hp(), v).get_or_else(None)
+                    if k not in kws:
+                        val = getattr(hp(), v).get_or_else(predef_val[v])
+                        kws[k] = val
                         local_params[v] = hp.get(v)
                     else:
                         local_params[v] = predef_val[v]
                 return func(*arg, **kws)
 
+        inner._auto_param_namespace = namespace  # type: ignore[attr-defined]
+        inner._auto_param_wrapped = func  # type: ignore[attr-defined]
         return inner
 
     return wrapper
+
+
+def _arg_type_from_default(default: Any) -> Optional[Callable[[str], Any]]:
+    if isinstance(default, bool):
+        def _to_bool(v: str) -> bool:
+            return v.lower() in ("1", "true", "t", "yes", "y", "on")
+        return _to_bool
+    if default is None:
+        return None
+    return type(default)
+
+
+def _build_parser_for_func(func: Callable, prog: Optional[str] = None) -> argparse.ArgumentParser:
+    sig = inspect.signature(func)
+    parser = argparse.ArgumentParser(prog=prog or func.__name__, description=func.__doc__)
+    parser.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
+    param_help = _parse_param_help(func.__doc__)
+
+    for name, param in sig.parameters.items():
+        if param.default is inspect._empty:
+            parser.add_argument(name, type=param.annotation if param.annotation is not inspect._empty else str, help=param_help.get(name))
+        else:
+            arg_type = _arg_type_from_default(param.default)
+            help_text = param_help.get(name)
+            if help_text:
+                help_text = f"{help_text} (default: {param.default})"
+            else:
+                help_text = f"(default from auto_param: {param.default})"
+            parser.add_argument(
+                f"--{name}",
+                dest=name,
+                type=arg_type,
+                default=argparse.SUPPRESS,
+                help=help_text,
+            )
+    return parser
+
+
+def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_locals=None) -> None:
+    """Launch CLI for @auto_param functions.
+
+    - launch(f): expose a single @auto_param function f as CLI.
+    - launch(): expose all @auto_param functions in the caller module as subcommands.
+    """
+    if _caller_globals is None or _caller_locals is None:
+        caller_frame = inspect.currentframe().f_back  # type: ignore
+        caller_globals = caller_frame.f_globals if caller_frame else {}
+        caller_locals = caller_frame.f_locals if caller_frame else {}
+    else:
+        caller_globals = _caller_globals
+        caller_locals = _caller_locals
+
+    if func is None:
+        seen_ids = set()
+        candidates = []
+        for obj in list(caller_locals.values()) + list(caller_globals.values()):
+            if not callable(obj):
+                continue
+            ns = getattr(obj, "_auto_param_namespace", None)
+            if not isinstance(ns, str):
+                continue
+            oid = id(obj)
+            if oid in seen_ids:
+                continue
+            seen_ids.add(oid)
+            candidates.append(obj)
+        if not candidates:
+            raise RuntimeError("No @auto_param functions found to launch.")
+
+        if len(candidates) == 1:
+            import sys
+            
+            func = candidates[0]
+            parser = _build_parser_for_func(func)
+            argv = sys.argv[1:]
+            if argv and argv[0] == func.__name__:
+                argv = argv[1:]
+            args = parser.parse_args(argv)
+            args_dict = vars(args)
+            defines = args_dict.pop("define", [])
+            with param_scope(*defines):
+                return func(**args_dict)
+
+        parser = argparse.ArgumentParser(description="hyperparameter auto-param CLI")
+        subparsers = parser.add_subparsers(dest="command", required=True)
+        func_map: Dict[str, Callable] = {}
+        for f in candidates:
+            sub = subparsers.add_parser(f.__name__, help=f.__doc__)
+            func_map[f.__name__] = f
+            sub.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
+            sig = inspect.signature(f)
+            param_help = _parse_param_help(f.__doc__)
+            for name, param in sig.parameters.items():
+                if param.default is inspect._empty:
+                    sub.add_argument(name, type=param.annotation if param.annotation is not inspect._empty else str, help=param_help.get(name))
+                else:
+                    arg_type = _arg_type_from_default(param.default)
+                    help_text = param_help.get(name)
+                    if help_text:
+                        help_text = f"{help_text} (default: {param.default})"
+                    else:
+                        help_text = f"(default from auto_param: {param.default})"
+                    sub.add_argument(
+                        f"--{name}",
+                        dest=name,
+                        type=arg_type,
+                        default=argparse.SUPPRESS,
+                        help=help_text,
+                    )
+        args = parser.parse_args()
+        args_dict = vars(args)
+        cmd = args_dict.pop("command")
+        defines = args_dict.pop("define", [])
+        target = func_map[cmd]
+        with param_scope(*defines):
+            return target(**args_dict)
+
+    if not hasattr(func, "_auto_param_namespace"):
+        raise ValueError("launch() expects a function decorated with @auto_param")
+    parser = _build_parser_for_func(func)
+    args = parser.parse_args()
+    args_dict = vars(args)
+    defines = args_dict.pop("define", [])
+    with param_scope(*defines):
+        return func(**args_dict)
+
+
+def run_cli(func: Optional[Callable] = None) -> None:
+    """Alias for launch() with a less collision-prone name."""
+    caller_frame = inspect.currentframe().f_back  # type: ignore
+    caller_globals = caller_frame.f_globals if caller_frame else {}
+    caller_locals = caller_frame.f_locals if caller_frame else {}
+    return launch(func, _caller_globals=caller_globals, _caller_locals=caller_locals)
