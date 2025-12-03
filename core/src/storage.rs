@@ -78,9 +78,7 @@ fn create_thread_storage() -> RefCell<Storage> {
     let ts = RefCell::new(Storage::default());
     // Use read lock for concurrent access during thread initialization
     if let Ok(global_storage) = GLOBAL_STORAGE.read() {
-        ts.borrow_mut()
-            .params
-            .clone_from(&global_storage.params);
+        ts.borrow_mut().params.clone_from(&global_storage.params);
     }
     // If lock is poisoned, continue with empty storage
     ts
@@ -93,10 +91,10 @@ lazy_static! {
 }
 
 /// Freezes the current thread's storage into the global storage.
-/// 
+///
 /// This function copies all parameters from the current thread's storage
 /// into the global storage, making them available to newly created threads.
-/// 
+///
 /// # Performance
 /// Uses a write lock, which will block other threads from reading or writing
 /// the global storage until this operation completes.
@@ -208,14 +206,20 @@ impl Storage {
     }
 }
 
+// Hashable trait is kept for potential future use
+#[allow(dead_code)]
 pub trait Hashable {}
 
+#[allow(dead_code)]
 impl Hashable for String {}
 
+#[allow(dead_code)]
 impl Hashable for &String {}
 
+#[allow(dead_code)]
 impl Hashable for &str {}
 
+#[allow(dead_code)]
 impl Hashable for str {}
 
 pub trait GetOrElse<K, T> {
@@ -267,13 +271,25 @@ mod tests {
         s.put("str", "str");
         s.put("bool", true);
 
-        let v: i64 = s.get("1").clone().try_into().unwrap();
+        let v: i64 = s
+            .get("1")
+            .clone()
+            .try_into()
+            .expect("Failed to convert '1' to i64");
         assert_eq!(1, v);
 
-        let v: f64 = s.get("2.0").clone().try_into().unwrap();
+        let v: f64 = s
+            .get("2.0")
+            .clone()
+            .try_into()
+            .expect("Failed to convert '2.0' to f64");
         assert_eq!(2.0, v);
 
-        let v: String = s.get("str").clone().try_into().unwrap();
+        let v: String = s
+            .get("str")
+            .clone()
+            .try_into()
+            .expect("Failed to convert 'str' to String");
         assert_eq!("str", v);
     }
 
@@ -299,26 +315,50 @@ mod tests {
         s0.enter();
 
         // check parameter "a" and "b"
-        let v: i64 = s0.get("a").clone().try_into().unwrap();
+        let v: i64 = s0
+            .get("a")
+            .clone()
+            .try_into()
+            .expect("Failed to convert 'a' to i64");
         assert_eq!(1, v);
 
-        let v: f64 = s0.get("b").clone().try_into().unwrap();
+        let v: f64 = s0
+            .get("b")
+            .clone()
+            .try_into()
+            .expect("Failed to convert 'b' to f64");
         assert_eq!(2.0, v);
 
         s0.put("a", 2);
         s0.put("b", 3.0);
-        let v: i64 = s0.get("a").clone().try_into().unwrap();
+        let v: i64 = s0
+            .get("a")
+            .clone()
+            .try_into()
+            .expect("Failed to convert 'a' to i64 after update");
         assert_eq!(2, v);
 
-        let v: f64 = s0.get("b").clone().try_into().unwrap();
+        let v: f64 = s0
+            .get("b")
+            .clone()
+            .try_into()
+            .expect("Failed to convert 'b' to f64 after update");
         assert_eq!(3.0, v);
 
         s0.exit();
         // check parameter "a" and "b"
-        let v: i64 = s0.get("a").clone().try_into().unwrap();
+        let v: i64 = s0
+            .get("a")
+            .clone()
+            .try_into()
+            .expect("Failed to convert 'a' to i64 after exit");
         assert_eq!(1, v);
 
-        let v: f64 = s0.get("b").clone().try_into().unwrap();
+        let v: f64 = s0
+            .get("b")
+            .clone()
+            .try_into()
+            .expect("Failed to convert 'b' to f64 after exit");
         assert_eq!(2.0, v);
     }
 }

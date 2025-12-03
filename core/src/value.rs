@@ -3,7 +3,8 @@ use std::{ffi::c_void, mem::replace, sync::Arc};
 
 use phf::phf_map;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
+#[allow(unpredictable_function_pointer_comparisons)]
 pub struct DeferUnsafe(pub u64, pub unsafe fn(*mut c_void));
 
 impl Drop for DeferUnsafe {
@@ -11,6 +12,16 @@ impl Drop for DeferUnsafe {
         unsafe { self.1(self.0 as *mut c_void) }
     }
 }
+
+#[allow(unpredictable_function_pointer_comparisons)]
+impl PartialEq for DeferUnsafe {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.1 as usize == other.1 as usize
+    }
+}
+
+#[allow(unpredictable_function_pointer_comparisons)]
+impl Eq for DeferUnsafe {}
 
 pub type DeferSafe = Arc<DeferUnsafe>;
 
@@ -127,9 +138,7 @@ impl TryFrom<&Value> for i64 {
                 .parse::<i64>()
                 .map_err(|e| format!("Cannot convert string '{}' to i64: {}", v, e)),
             Value::Boolean(v) => Ok(Into::into(*v)),
-            Value::UserDefined(_, _, _) => {
-                Err("Cannot convert UserDefined value to i64".into())
-            }
+            Value::UserDefined(_, _, _) => Err("Cannot convert UserDefined value to i64".into()),
         }
     }
 }
@@ -154,9 +163,7 @@ impl TryFrom<&Value> for f64 {
                 .parse::<f64>()
                 .map_err(|e| format!("Cannot convert string '{}' to f64: {}", v, e)),
             Value::Boolean(_) => Err("Cannot convert Boolean value to f64".into()),
-            Value::UserDefined(_, _, _) => {
-                Err("Cannot convert UserDefined value to f64".into())
-            }
+            Value::UserDefined(_, _, _) => Err("Cannot convert UserDefined value to f64".into()),
         }
     }
 }
@@ -179,9 +186,7 @@ impl TryFrom<&Value> for String {
             Value::Float(v) => Ok(format!("{}", v)),
             Value::Text(v) => Ok(v.clone()),
             Value::Boolean(v) => Ok(format!("{}", v)),
-            Value::UserDefined(_, _, _) => {
-                Err("Cannot convert UserDefined value to String".into())
-            }
+            Value::UserDefined(_, _, _) => Err("Cannot convert UserDefined value to String".into()),
         }
     }
 }
@@ -296,49 +301,56 @@ mod test {
         #[test]
         fn create_int_value_from_i32(x in 0i32..100) {
             let y: Value = x.into();
-            let y: i64 = y.try_into().unwrap();
+            let y: i64 = y.try_into()
+                .expect("Failed to convert Value to i64");
             assert_eq!(y, x as i64);
         }
 
         #[test]
         fn create_int_value_from_i64(x in 0i64..100) {
             let y: Value = x.into();
-            let y: i64 = y.try_into().unwrap();
+            let y: i64 = y.try_into()
+                .expect("Failed to convert Value to i64");
             assert_eq!(y, x);
         }
 
         #[test]
         fn create_float_value_from_f32(x in 0f32..100.0) {
             let y: Value = x.into();
-            let y: f64 = y.try_into().unwrap();
+            let y: f64 = y.try_into()
+                .expect("Failed to convert Value to f64");
             assert_eq!(y, x as f64);
         }
 
         #[test]
         fn create_float_value_from_f64(x in 0f64..100.0) {
             let y: Value = x.into();
-            let y: f64 = y.try_into().unwrap();
+            let y: f64 = y.try_into()
+                .expect("Failed to convert Value to f64");
             assert_eq!(y, x);
         }
 
         #[test]
         fn int_value_into_string(x in 0i32..100) {
             let y: Value = x.into();
-            let y: String = y.try_into().unwrap();
+            let y: String = y.try_into()
+                .expect("Failed to convert Value to String");
             assert_eq!(y, format!("{}", x));
         }
 
         #[test]
         fn float_value_into_string(x in 0f64..100.0) {
             let y: Value = x.into();
-            let y: String = y.try_into().unwrap();
+            let y: String = y.try_into()
+                .expect("Failed to convert Value to String");
             assert_eq!(y, format!("{}", x));
         }
 
         #[test]
         fn bool_value_into_string(x: bool) {
             let y: Value = x.into();
-            let y: String = y.try_into().unwrap();
+            let y: String = y.try_into()
+                .expect("Failed to convert Value to String");
             assert_eq!(y, format!("{}", x));
         }
     }

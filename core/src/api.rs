@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use const_str;
-use xxhash_rust;
-
 use crate::storage::{
     frozen_global_storage, Entry, GetOrElse, MultipleVersion, Params, THREAD_STORAGE,
 };
@@ -352,9 +349,7 @@ macro_rules! with_params_readonly {
 
 #[cfg(test)]
 mod tests {
-    use crate::get_param;
     use crate::storage::{GetOrElse, THREAD_STORAGE};
-    use crate::with_params;
 
     use super::{ParamScope, ParamScopeOps};
 
@@ -539,10 +534,22 @@ mod test_param_scope {
         let ps: ParamScope = (&vec).into();
         match ps {
             ParamScope::Just(params) => {
-                assert_eq!(params.get(&"param1".xxh()).unwrap().value(), &Value::from("value1"));
-                assert_eq!(params.get(&"param2".xxh()).unwrap().value(), &Value::from("value2"));
+                assert_eq!(
+                    params
+                        .get(&"param1".xxh())
+                        .expect("param1 should exist")
+                        .value(),
+                    &Value::from("value1")
+                );
+                assert_eq!(
+                    params
+                        .get(&"param2".xxh())
+                        .expect("param2 should exist")
+                        .value(),
+                    &Value::from("value2")
+                );
             }
-            _ => assert!(false, "ParamScope should be ParamScope::Just"),
+            _ => panic!("ParamScope should be ParamScope::Just"),
         }
     }
 
@@ -558,7 +565,10 @@ mod test_param_scope {
     fn test_param_scope_get() {
         let mut ps = ParamScope::default();
         ps.add("param=value");
-        let value: String = ps.get("param").try_into().unwrap();
+        let value: String = ps
+            .get("param")
+            .try_into()
+            .expect("Failed to convert param to String");
         assert_eq!(value, "value");
     }
 
@@ -568,9 +578,15 @@ mod test_param_scope {
         ps.add("param=value");
         match ps {
             ParamScope::Just(params) => {
-                assert_eq!(params.get(&"param".xxh()).unwrap().value(), &Value::from("value"));
+                assert_eq!(
+                    params
+                        .get(&"param".xxh())
+                        .expect("param should exist")
+                        .value(),
+                    &Value::from("value")
+                );
             }
-            _ => assert!(false, "ParamScope should be ParamScope::Just"),
+            _ => panic!("ParamScope should be ParamScope::Just"),
         }
     }
 
@@ -589,7 +605,10 @@ mod test_param_scope {
         ps.enter();
         match ps {
             ParamScope::Nothing => assert!(true),
-            _ => assert!(false, "ParamScope should be ParamScope::Nothing after enter"),
+            _ => assert!(
+                false,
+                "ParamScope should be ParamScope::Nothing after enter"
+            ),
         }
         ps.exit();
         match ps {

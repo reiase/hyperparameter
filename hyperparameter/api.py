@@ -1,13 +1,18 @@
+from __future__ import annotations
+
 import functools
 import inspect
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional, Union, TypeVar, overload, List, Tuple
 
 from hyperparameter.storage import TLSKVStorage, has_rust_backend, xxh64
 
 from .tune import Suggester
 
+T = TypeVar("T")
 
-def _repr_dict(d):
+
+def _repr_dict(d: Dict[str, Any]) -> List[Tuple[str, Any]]:
+    """Helper function to represent dictionary as sorted list of tuples."""
     d = [(k, v) for k, v in d.items()]
     d.sort()
     return d
@@ -18,19 +23,19 @@ class _DynamicDispatch:
 
     __slots__ = ("_func", "_name")
 
-    def __get__(self):  # a trick that let doctest discover this class
+    def __get__(self) -> None:  # a trick that let doctest discover this class
         pass
 
-    def __init__(self, func: Callable, name=None):
+    def __init__(self, func: Callable, name: Optional[str] = None) -> None:
         self._func = func
         self._name = name
 
-    def __current__(self):
+    def __current__(self) -> Any:
         if hasattr(self._func, "current"):
             return self._func.current()
         return self._func()
 
-    def __call__(self, *args, **kws) -> Any:
+    def __call__(self, *args: Any, **kws: Any) -> Any:
         if self._name is None:
             return self._func(*args, **kws)
         return self.__current__().__getattr__(self._name)(*args, **kws)
@@ -86,7 +91,7 @@ class _DynamicDispatch:
         return _ParamAccessor(self.__current__(), self._name) | default
 
 
-def _dynamic_dispatch(func, name=None):
+def _dynamic_dispatch(func: Callable, name: Optional[str] = None) -> _DynamicDispatch:
     """Wraps function with a class to allow __getattr__ on a function."""
     clz = type(func.__name__, (_DynamicDispatch, object), dict(__doc__=func.__doc__))
     return clz(func, name)
@@ -116,63 +121,137 @@ class _ParamAccessor:
     1
     """
 
-    def __init__(self, root, /, name=None):
+    def __init__(self, root: Any, name: Optional[str] = None) -> None:
         self._root = root
         self._name = name
 
-    def get_or_else(self, default: Any = None):
+    def get_or_else(self, default: Optional[T] = None) -> Union[T, Any]:
+        """Get parameter value or return default with type conversion.
+
+        Args:
+            default: Default value to return if parameter is missing. The type of
+                    default determines the conversion behavior:
+                    - bool: Converts string/int to bool
+                    - int: Converts value to int
+                    - float: Converts value to float
+                    - str: Converts value to string
+                    - None: Returns value as-is
+
+        Returns:
+            The parameter value (converted to match default type) or the default value.
+        """
         value = self._root.get(self._name)
+
+        # Handle missing parameter
         if isinstance(value, _ParamAccessor):
             return default
+
+        # Handle suggester (lazy evaluation)
         if isinstance(value, Suggester):
             return value()
-        if type(default) is bool and isinstance(value, str):
-            if value is None:
-                return False
-            if isinstance(value, str):
-                if value.lower() in ("y", "yes", "t", "true", "on", "1"):
-                    return True
-                elif value.lower() in ("n", "no", "f", "false", "off", "0"):
-                    return False
-                else:
-                    print(f"Warning: Invalid bool value '{value}'. Expected one of: y/yes/t/true/on/1/n/no/f/false/off/0. Using False as default.")
-                    return False
-            if isinstance(value, int):
-                return value != 0
-            if value is None:
-                return False
-            else:
-                print(f"Warning: Invalid bool value '{value}' (type: {type(value).__name__}). Expected bool, int, or str. Using True as default.")
-                return True
+
+        # Handle None default - return value as-is
         if default is None:
             return value
-        if type(default) is int:
-            if value is None:
-                return 0
-            try:
-                return int(value)
-            except ValueError as e:
+
+        # Type-specific conversion based on default type
+        default_type = type(default)
+
+        # Boolean conversion
+        if default_type is bool:
+            return self._convert_to_bool(value)
+
+        # Integer conversion
+        if default_type is int:
+            # If value is a string that can be converted to float, return float to preserve precision
+            if isinstance(value, str):
                 try:
-                    # Try converting float to int
                     float_val = float(value)
-                    return int(float_val)
-                except (ValueError, TypeError) as e2:
-                    print(f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to int. Error: {e2}. Returning original value.")
-                    return value
-        if type(default) is float:
+                    # If it's a whole number, return int; otherwise return float
+                    if float_val.is_integer():
+                        return int(float_val)
+                    else:
+                        return float_val
+                except (ValueError, TypeError):
+                    pass
+            # Try direct int conversion
             try:
-                return float(value)
-            except (ValueError, TypeError) as e:
-                print(f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to float. Error: {e}. Returning original value.")
+                return self._convert_to_int(value)
+            except (ValueError, TypeError):
+                # If conversion fails, return original value
                 return value
-        if type(default) is str:
+
+        # Float conversion
+        if default_type is float:
+            try:
+                return self._convert_to_float(value)
+            except (ValueError, TypeError):
+                # If conversion fails, return original value
+                return value
+
+        # String conversion
+        if default_type is str:
             return str(value)
+
+        # For other types, return value as-is
         return value
 
-    def __getitem__(self, index: str) -> Any:
+    def _convert_to_bool(self, value: Any) -> bool:
+        """Convert value to boolean with support for string representations."""
+        if value is None:
+            return False
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        if isinstance(value, str):
+            lower_val = value.lower()
+            if lower_val in ("y", "yes", "t", "true", "on", "1"):
+                return True
+            elif lower_val in ("n", "no", "f", "false", "off", "0"):
+                return False
+            else:
+                print(
+                    f"Warning: Invalid bool value '{value}'. Expected one of: y/yes/t/true/on/1/n/no/f/false/off/0. Using False as default."
+                )
+                return False
+        print(
+            f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to bool. Using False as default."
+        )
+        return False
+
+    def _convert_to_int(self, value: Any) -> int:
+        """Convert value to integer with fallback handling."""
+        if value is None:
+            return 0
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            try:
+                # Try converting float to int
+                return int(float(value))
+            except (ValueError, TypeError) as e:
+                # Re-raise exception so caller can handle it
+                print(
+                    f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to int. Error: {e}. Returning original value."
+                )
+                raise
+
+    def _convert_to_float(self, value: Any) -> float:
+        """Convert value to float with error handling."""
+        try:
+            return float(value)
+        except (ValueError, TypeError) as e:
+            # Re-raise exception so caller can handle it
+            print(
+                f"Warning: Cannot convert value '{value}' (type: {type(value).__name__}) to float. Error: {e}. Returning original value."
+            )
+            raise
+
+    def __getitem__(self, index: str) -> "_ParamAccessor":
         return self.__getattr__(index)
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> "_ParamAccessor":
         if name in ("_root", "_name"):
             return self.__dict__[name]
         name = f"{self._name}.{name}" if self._name else name
@@ -190,14 +269,14 @@ class _ParamAccessor:
     def __repr__(self) -> str:
         return f"<{self._name} in {repr(self._root)}>"
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return False
 
-    def __call__(self, default: Any = None) -> Any:
+    def __call__(self, default: Optional[T] = None) -> Union[T, Any]:
         """shortcut for get_or_else"""
         return self.get_or_else(default)
 
-    def __or__(self, default: Any) -> Any:
+    def __or__(self, default: T) -> Union[T, Any]:
         return self.get_or_else(default)
 
     __nonzero__ = __bool__
@@ -215,24 +294,24 @@ class _HyperParameter:
     'a'
     """
 
-    def __init__(self, storage=None, /, **kws):
+    def __init__(self, storage: Optional[Any] = None, **kws: Any) -> None:
         if storage is None:
             storage = TLSKVStorage()
         self.__dict__["_storage"] = storage
         self.update(kws)
 
-    def keys(self):
+    def keys(self) -> Any:
         return self.storage().keys()
 
-    def update(self, kws: Dict[str, Any]) -> None:
+    def update(self, kws: Dict[str, Any]) -> "_HyperParameter":
         self._storage.update(kws)
         return self
 
-    def clear(self):
+    def clear(self) -> "_HyperParameter":
         self._storage.clear()
         return self
 
-    def get(self, name: str) -> Any:
+    def get(self, name: str) -> Union[Any, "_ParamAccessor"]:
         try:
             return self._storage.get(name)
         except (KeyError, ValueError):
@@ -241,7 +320,7 @@ class _HyperParameter:
     def put(self, name: str, value: Any) -> None:
         return self._storage.put(name, value)
 
-    def storage(self):
+    def storage(self) -> Any:
         return self._storage
 
     def __getitem__(self, key: str) -> Any:
@@ -309,10 +388,10 @@ class _HyperParameter:
             return self.__dict__.__setitem__(name, value)
         self.put(name, value)
 
-    def __iter__(self):
+    def __iter__(self) -> Any:
         return self._storage.__iter__()
 
-    def __call__(self) -> Any:
+    def __call__(self) -> _ParamAccessor:
         return _ParamAccessor(self)
 
 
@@ -381,7 +460,7 @@ class param_scope(_HyperParameter):
     [('a', 1), ('b', 2)]
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: str, **kwargs: Any) -> None:
         super().__init__()
         self.update(kwargs)
         for line in args:
@@ -389,7 +468,7 @@ class param_scope(_HyperParameter):
                 k, v = line.split("=", 1)
                 self.put(k, v)
 
-    def __enter__(self):
+    def __enter__(self) -> "param_scope":
         """enter a `param_scope` context
 
         Examples
@@ -414,14 +493,19 @@ class param_scope(_HyperParameter):
         self._storage.enter()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+        self,
+        exc_type: Optional[Any],
+        exc_value: Optional[Any],
+        traceback: Optional[Any],
+    ) -> None:
         self._storage.exit()
 
-    def __call__(self) -> Any:
+    def __call__(self) -> _ParamAccessor:
         return _ParamAccessor(self)
 
     @staticmethod
-    def empty(*args, **kwargs):
+    def empty(*args: str, **kwargs: Any) -> "param_scope":
         """create an empty `param_scope`.
 
         Examples
@@ -441,7 +525,7 @@ class param_scope(_HyperParameter):
         return retval
 
     @staticmethod
-    def current():
+    def current() -> "param_scope":
         """get current `param_scope`
 
         Examples
@@ -463,12 +547,14 @@ class param_scope(_HyperParameter):
         return retval
 
     @staticmethod
-    def init(params=None):
+    def init(params: Optional[Dict[str, Any]] = None) -> None:
         """init param_scope for a new thread."""
+        if params is None:
+            params = {}
         param_scope(**params).__enter__()
 
     @staticmethod
-    def frozen():
+    def frozen() -> None:
         with param_scope():
             TLSKVStorage.frozen()
 
@@ -476,7 +562,17 @@ class param_scope(_HyperParameter):
 _param_scope = param_scope._func
 
 
-def auto_param(name_or_func):
+@overload
+def auto_param(func: Callable) -> Callable: ...
+
+
+@overload
+def auto_param(name: str) -> Callable[[Callable], Callable]: ...
+
+
+def auto_param(
+    name_or_func: Union[str, Callable, None],
+) -> Union[Callable, Callable[[Callable], Callable]]:
     """Convert keyword arguments into hyperparameters
 
     Examples
@@ -527,8 +623,8 @@ def auto_param(name_or_func):
 
     if has_rust_backend:
 
-        def hashed_wrapper(func):
-            predef_kws = {}
+        def hashed_wrapper(func: Callable) -> Callable:
+            predef_kws: Dict[str, int] = {}
 
             if name_or_func is None:
                 namespace = func.__name__
@@ -542,7 +638,7 @@ def auto_param(name_or_func):
                     predef_kws[k] = xxh64(name)
 
             @functools.wraps(func)
-            def inner(*arg, **kws):
+            def inner(*arg: Any, **kws: Any) -> Any:
                 with param_scope() as hp:
                     for k, v in predef_kws.items():
                         if k not in kws:
@@ -557,9 +653,9 @@ def auto_param(name_or_func):
 
         return hashed_wrapper
 
-    def wrapper(func):
-        predef_kws = {}
-        predef_val = {}
+    def wrapper(func: Callable) -> Callable:
+        predef_kws: Dict[str, str] = {}
+        predef_val: Dict[str, Any] = {}
 
         if name_or_func is None:
             namespace = func.__name__
@@ -574,9 +670,9 @@ def auto_param(name_or_func):
                 predef_val[name] = v.default
 
         @functools.wraps(func)
-        def inner(*arg, **kws):
+        def inner(*arg: Any, **kws: Any) -> Any:
             with param_scope() as hp:
-                local_params = {}
+                local_params: Dict[str, Any] = {}
                 for k, v in predef_kws.items():
                     if getattr(hp(), v).get_or_else(None) is not None and k not in kws:
                         kws[k] = getattr(hp(), v).get_or_else(None)

@@ -1,49 +1,61 @@
+from __future__ import annotations
+
 import os
 import threading
-from typing import Any, Callable, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable, Optional, Iterator, Tuple
 
-GLOBAL_STORAGE = {}
+GLOBAL_STORAGE: Dict[str, Any] = {}
 
 
 class Storage:
     """Base class for all storage implementations"""
 
     # storage operations
-    def child(self) -> "Storage":
+    def child(self) -> Optional["Storage"]:
         return None
 
     def storage(self) -> Dict[str, Any]:
+        """Return the underlying storage dictionary."""
         pass
 
     # dict operations
-    def keys(self) -> Iterable:
+    def keys(self) -> Iterable[str]:
+        """Return an iterable of all keys in storage."""
         pass
 
     def update(self, kws: Dict[str, Any] = {}) -> None:
+        """Update storage with key-value pairs from dictionary."""
         return None
 
-    def clear(self):
+    def clear(self) -> None:
+        """Clear all entries from storage."""
         pass
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[str, Any]]:
+        """Return an iterator over (key, value) pairs."""
         pass
 
     # kv operations
-    def get(self, name: str, accessor: Callable = None) -> Any:
+    def get(self, name: str, accessor: Optional[Callable] = None) -> Any:
+        """Get a value by name, optionally using an accessor function."""
         return None
 
     def put(self, name: str, value: Any) -> None:
+        """Store a value with the given name."""
         return None
 
     # context operations
-    def enter(self):
+    def enter(self) -> "Storage":
+        """Enter a new storage context scope."""
         pass
 
-    def exit(self):
+    def exit(self) -> None:
+        """Exit the current storage context scope."""
         pass
 
     @staticmethod
-    def current():
+    def current() -> Optional["Storage"]:
+        """Get the current storage instance from thread-local storage."""
         pass
 
 
@@ -53,9 +65,9 @@ class TLSKVStorage(Storage):
     __slots__ = ("_storage", "_parent")
     tls = threading.local()
 
-    def __init__(self, parent=None) -> None:
-        self._storage = None
-        self._parent = parent
+    def __init__(self, parent: Optional["TLSKVStorage"] = None) -> None:
+        self._storage: Optional[Dict[str, Any]] = None
+        self._parent: Optional["TLSKVStorage"] = parent
         super().__init__()
 
         if not hasattr(TLSKVStorage.tls, "his"):
@@ -66,20 +78,28 @@ class TLSKVStorage(Storage):
 
         elif hasattr(TLSKVStorage.tls, "his") and len(TLSKVStorage.tls.his) > 0:
             parent = TLSKVStorage.tls.his[-1]
-            self.update(parent._storage)
+            if parent._storage is not None:
+                self.update(parent._storage)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[str, Any]]:
+        if self._storage is None:
+            return iter([])
         return iter(self._storage.items())
 
-    def child(self) -> "Storage":
+    def child(self) -> "TLSKVStorage":
         obj = TLSKVStorage(self)
-        obj.update(self._storage)
+        if self._storage is not None:
+            obj.update(self._storage)
         return obj
 
     def storage(self) -> Dict[str, Any]:
+        if self._storage is None:
+            self._storage = {}
         return self._storage
 
-    def keys(self) -> Iterable:
+    def keys(self) -> Iterable[str]:
+        if self._storage is None:
+            return []
         return self._storage.keys()
 
     def update(self, kws: Dict[str, Any] = {}) -> None:
@@ -102,13 +122,14 @@ class TLSKVStorage(Storage):
     def clear(self):
         self._storage.clear()
 
-    def get_entry(self, *args, **kwargs):
+    def get_entry(self, *args: Any, **kwargs: Any) -> Any:
+        """Get entry by hash (Rust backend only)."""
         raise RuntimeError("hyperparameter is not built with rust backend")
 
-    def get(self, name: str, accessor: Callable = None) -> Any:
+    def get(self, name: str, accessor: Optional[Callable] = None) -> Any:
         if name in self.__slots__:
             return self.__dict__[name]
-        curr = self
+        curr: Optional["TLSKVStorage"] = self
         while curr is not None and curr._storage is not None:
             if name in curr._storage:
                 return curr._storage[name]
@@ -121,30 +142,33 @@ class TLSKVStorage(Storage):
             return self.__dict__.__setitem__(name, value)
         return self.update({name: value})
 
-    def enter(self):
+    def enter(self) -> "TLSKVStorage":
         if not hasattr(TLSKVStorage.tls, "his"):
             TLSKVStorage.tls.his = []
         TLSKVStorage.tls.his.append(self)
         return TLSKVStorage.tls.his[-1]
 
-    def exit(self):
+    def exit(self) -> None:
         TLSKVStorage.tls.his.pop()
 
     @staticmethod
-    def current():
+    def current() -> "TLSKVStorage":
         if not hasattr(TLSKVStorage.tls, "his") or len(TLSKVStorage.tls.his) == 0:
             TLSKVStorage.tls.his = [TLSKVStorage()]
         return TLSKVStorage.tls.his[-1]
 
     @staticmethod
-    def frozen():
-        GLOBAL_STORAGE.update(TLSKVStorage.tls.his[-1].storage())
+    def frozen() -> None:
+        """Freeze current thread-local storage to global storage."""
+        if hasattr(TLSKVStorage.tls, "his") and len(TLSKVStorage.tls.his) > 0:
+            GLOBAL_STORAGE.update(TLSKVStorage.tls.his[-1].storage())
 
 
-has_rust_backend = False
+has_rust_backend: bool = False
 
 
-def xxh64(*args, **kwargs):
+def xxh64(*args: Any, **kwargs: Any) -> int:
+    """Compute xxhash64 hash (Rust backend only)."""
     raise RuntimeError("hyperparameter is not built with rust backend")
 
 
