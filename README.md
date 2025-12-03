@@ -240,3 +240,12 @@ This example demonstrates how to use hyperparameter in research projects, and ma
 ### [experiment tracing for data scientists](examples/mnist/README.md)
 
 This example showcases experiment management with hyperparameter and result tracing with mlflow.tracing.
+
+## Behavior Guarantees (Semantic Contract)
+
+- **Keys & hashing:** keys use `.` for nesting, case is preserved, and hashing uses the same UTF-8 input and seed across Python/Rust/C++; invalid characters are an error.
+- **Read precedence:** current thread’s innermost scope > parent scopes outward > frozen global snapshot > user default. Writes only affect the current scope and rollback on exit.
+- **Defaults vs. missing:** only missing keys fall back to defaults; explicit `None`/`False`/`0` are treated as existing values. Type conversion rules (bool/int/float/str) are consistent across languages; invalid values use a best-effort conversion and otherwise fall back to the provided default (no silent random values).
+- **Threads & `frozen()`:** each thread starts from the frozen global snapshot; mutations stay in-thread unless `frozen()` is called, which atomically updates the global snapshot. Global mutations are lock-protected in the Python backend, matching Rust semantics.
+- **Error model:** reading an undefined key without a default raises a key error; backend load failure falls back to the Python backend without noisy tracebacks; no silent failure on type errors.
+- **Multiprocess notice:** cross-process consistency requires a shared backend (e.g., Rust backend or user-provided storage adapter); the built-in Python backend only guards threads, not processes.

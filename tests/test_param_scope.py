@@ -76,6 +76,9 @@ class TestParamScopeWith(TestCase):
                 with param_scope() as ps3:
                     with param_scope() as ps4:
                         assert ps2.a | "empty" == "non-empty"
+                        ps4.b = 42
+                    # b should not leak after ps4 exit
+                    assert ps3.b() is None
             assert ps1.a | "empty" == "empty"
         assert param_scope.a | "empty" == "empty"
 
@@ -124,6 +127,16 @@ class TestParamScopeBool(TestCase):
     def test_param_scope_bool_missing(self):
         ps = param_scope()
         assert bool(ps.missing) is False
+
+
+class TestParamScopeMissingVsDefault(TestCase):
+    def test_missing_uses_default(self):
+        with param_scope() as ps:
+            assert ps.missing | 123 == 123
+
+    def test_explicit_false_not_missing(self):
+        with param_scope(flag=False) as ps:
+            assert ps.flag | True is False
 
 
 class TestParamScopeClear(TestCase):
