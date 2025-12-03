@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 use lazy_static::lazy_static;
 
@@ -76,23 +76,38 @@ thread_local! {
 
 fn create_thread_storage() -> RefCell<Storage> {
     let ts = RefCell::new(Storage::default());
-    ts.borrow_mut()
-        .params
-        .clone_from(&GLOBAL_STORAGE.lock().unwrap().params);
+    // Use read lock for concurrent access during thread initialization
+    if let Ok(global_storage) = GLOBAL_STORAGE.read() {
+        ts.borrow_mut()
+            .params
+            .clone_from(&global_storage.params);
+    }
+    // If lock is poisoned, continue with empty storage
     ts
 }
 
 lazy_static! {
-    static ref GLOBAL_STORAGE: Mutex<Storage> = Mutex::new(Storage::default());
+    /// Global storage shared across all threads.
+    /// Uses RwLock to allow concurrent reads while maintaining exclusive writes.
+    static ref GLOBAL_STORAGE: RwLock<Storage> = RwLock::new(Storage::default());
 }
 
+/// Freezes the current thread's storage into the global storage.
+/// 
+/// This function copies all parameters from the current thread's storage
+/// into the global storage, making them available to newly created threads.
+/// 
+/// # Performance
+/// Uses a write lock, which will block other threads from reading or writing
+/// the global storage until this operation completes.
 pub fn frozen_global_storage() {
     THREAD_STORAGE.with(|ts| {
-        GLOBAL_STORAGE
-            .lock()
-            .unwrap()
-            .params
-            .clone_from(&ts.borrow().params);
+        let thread_params = ts.borrow().params.clone();
+        // Use write lock for exclusive access during update
+        if let Ok(mut global_storage) = GLOBAL_STORAGE.write() {
+            global_storage.params = thread_params;
+        }
+        // If lock is poisoned, silently fail (other threads may have panicked)
     });
 }
 
@@ -120,8 +135,10 @@ impl Storage {
 
     pub fn exit(&mut self) -> Params {
         let mut changes = Params::new();
-        for key in self.history.pop().unwrap() {
-            changes.insert(key, self.params.get(&key).unwrap().shallow());
+        let history_level = self.history.pop().expect("Storage::exit() called but history stack is empty. This indicates a mismatch between enter() and exit() calls.");
+        for key in history_level {
+            let entry = self.params.get(&key).expect("Storage::exit() found key in history but not in params. This indicates corrupted storage state.");
+            changes.insert(key, entry.shallow());
             self.params.rollback(key);
         }
         changes
@@ -151,7 +168,10 @@ impl Storage {
     pub fn put<T: Into<String> + XXHashable, V: Into<Value> + Clone>(&mut self, key: T, val: V) {
         let hkey = key.xxh();
         let key: String = key.into();
-        if self.history.last().unwrap().contains(&hkey) {
+        let current_history = self.history.last_mut().expect(
+            "Storage::put() called but history stack is empty. Storage should always have at least one history level (created in Default)."
+        );
+        if current_history.contains(&hkey) {
             self.params.update(hkey, val);
         } else {
             if let std::collections::btree_map::Entry::Vacant(e) = self.params.entry(hkey) {
@@ -162,17 +182,20 @@ impl Storage {
             } else {
                 self.params.revision(hkey, val);
             }
-            self.history.last_mut().unwrap().insert(hkey);
+            current_history.insert(hkey);
         }
     }
 
     pub fn del<T: XXHashable>(&mut self, key: T) {
         let hkey = key.xxh();
-        if self.history.last().unwrap().contains(&hkey) {
+        let current_history = self.history.last_mut().expect(
+            "Storage::del() called but history stack is empty. Storage should always have at least one history level (created in Default)."
+        );
+        if current_history.contains(&hkey) {
             self.params.update(hkey, None::<i32>);
         } else {
             self.params.revision(hkey, None::<i32>);
-            self.history.last_mut().unwrap().insert(hkey);
+            current_history.insert(hkey);
         }
     }
 

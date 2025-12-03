@@ -123,8 +123,8 @@ where
         if let ParamScope::Just(changes) = self {
             if let Some(val) = changes.get(&key) {
                 let r = val.value().clone().try_into();
-                if r.is_ok() {
-                    return r.ok().unwrap();
+                if let Ok(v) = r {
+                    return v;
                 }
             }
         }

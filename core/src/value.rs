@@ -270,7 +270,10 @@ impl VersionedValue {
     }
 
     pub fn update<V: Into<Value>>(&mut self, val: V) -> Value {
-        replace(self.0.front_mut().unwrap(), val.into())
+        replace(
+            self.0.front_mut().expect("VersionedValue::update() called on empty version history. VersionedValue should always have at least one version."),
+            val.into()
+        )
     }
 
     pub fn revision<V: Into<Value>>(&mut self, val: V) {

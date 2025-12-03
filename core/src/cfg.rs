@@ -1,10 +1,5 @@
-pub use crate::api::frozen;
 pub use crate::api::ParamScope;
 pub use crate::api::ParamScopeOps;
-pub use crate::storage::GetOrElse;
-pub use crate::storage::THREAD_STORAGE;
-pub use crate::value::Value;
-pub use crate::xxh::XXHashable;
 
 pub trait AsParamScope {
     fn param_scope(&self) -> ParamScope;
@@ -15,17 +10,105 @@ impl AsParamScope for config::Config {
         let mut ps = ParamScope::default();
         fn unpack(ps: &mut ParamScope, prefix: Option<String>, value: config::Value) {
             match (prefix, value.kind) {
+                // Root level table - unpack all entries
                 (None, config::ValueKind::Table(v)) => v.iter().for_each(|(k, v)| {
                     unpack(ps, Some(k.to_string()), v.clone());
                 }),
+                // Nested table - unpack with prefix
+                (Some(prefix), config::ValueKind::Table(v)) => v.iter().for_each(|(k, v)| {
+                    unpack(ps, Some(format!("{}.{}", prefix, k)), v.clone());
+                }),
+                // Primitive types with prefix
                 (Some(k), config::ValueKind::Boolean(v)) => ps.put(k, v),
                 (Some(k), config::ValueKind::I64(v)) => ps.put(k, v),
                 (Some(k), config::ValueKind::Float(v)) => ps.put(k, v),
                 (Some(k), config::ValueKind::String(v)) => ps.put(k, v),
-                (Some(prefix), config::ValueKind::Table(v)) => v.iter().for_each(|(k, v)| {
-                    unpack(ps, Some(format!("{}.{}", prefix, k)), v.clone());
-                }),
-                _ => todo!(),
+                // Additional integer types with prefix
+                (Some(k), config::ValueKind::I128(v)) => {
+                    // Convert i128 to i64 if possible, otherwise to string
+                    if v >= i64::MIN as i128 && v <= i64::MAX as i128 {
+                        ps.put(k, v as i64);
+                    } else {
+                        ps.put(k, v.to_string());
+                    }
+                }
+                (Some(k), config::ValueKind::U64(v)) => {
+                    // Convert u64 to i64 if possible, otherwise to string
+                    if v <= i64::MAX as u64 {
+                        ps.put(k, v as i64);
+                    } else {
+                        ps.put(k, v.to_string());
+                    }
+                }
+                (Some(k), config::ValueKind::U128(v)) => {
+                    // Convert u128 to i64 if possible, otherwise to string
+                    if v <= i64::MAX as u128 {
+                        ps.put(k, v as i64);
+                    } else {
+                        ps.put(k, v.to_string());
+                    }
+                }
+                // Array type - convert to comma-separated string
+                (Some(k), config::ValueKind::Array(arr)) => {
+                    // Convert array elements to string and join with comma
+                    let arr_str: Vec<String> = arr
+                        .iter()
+                        .map(|v| match &v.kind {
+                            config::ValueKind::String(s) => s.clone(),
+                            config::ValueKind::I64(n) => n.to_string(),
+                            config::ValueKind::I128(n) => n.to_string(),
+                            config::ValueKind::U64(n) => n.to_string(),
+                            config::ValueKind::U128(n) => n.to_string(),
+                            config::ValueKind::Float(n) => n.to_string(),
+                            config::ValueKind::Boolean(b) => b.to_string(),
+                            config::ValueKind::Table(_) => {
+                                // For nested tables in arrays, use debug representation
+                                format!("{:?}", v)
+                            }
+                            config::ValueKind::Array(_) => {
+                                // For nested arrays, use debug representation
+                                format!("{:?}", v)
+                            }
+                            config::ValueKind::Nil => {
+                                // For nil values in arrays, use empty string
+                                String::new()
+                            }
+                        })
+                        .collect();
+                    ps.put(k, arr_str.join(","));
+                }
+                // Nil type with prefix - skip null values
+                (Some(_k), config::ValueKind::Nil) => {
+                    // Skip null values - don't add to parameter scope
+                }
+                // Root level non-table types - should not occur in normal config, but handle gracefully
+                (None, config::ValueKind::Boolean(_)) => {
+                    // Root level boolean - skip (config root should be a table)
+                }
+                (None, config::ValueKind::I64(_)) => {
+                    // Root level integer - skip (config root should be a table)
+                }
+                (None, config::ValueKind::I128(_)) => {
+                    // Root level i128 - skip (config root should be a table)
+                }
+                (None, config::ValueKind::U64(_)) => {
+                    // Root level u64 - skip (config root should be a table)
+                }
+                (None, config::ValueKind::U128(_)) => {
+                    // Root level u128 - skip (config root should be a table)
+                }
+                (None, config::ValueKind::Float(_)) => {
+                    // Root level float - skip (config root should be a table)
+                }
+                (None, config::ValueKind::String(_)) => {
+                    // Root level string - skip (config root should be a table)
+                }
+                (None, config::ValueKind::Array(_)) => {
+                    // Root level array - skip (config root should be a table)
+                }
+                (None, config::ValueKind::Nil) => {
+                    // Root level nil - skip (config root should be a table)
+                }
             };
         }
         unpack(&mut ps, None, self.cache.clone());
