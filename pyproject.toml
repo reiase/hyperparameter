@@ -7,6 +7,13 @@ manifest-path = "hyperparameter/Cargo.toml"
 module-name = "hyperparameter.librbackend"
 features = ["pyo3/extension-module"]
 include = ["hyperparameter/hyperparameter.h"]
+exclude = [
+    "hyperparameter/target/**",
+    "hyperparameter/Cargo.lock",
+    "hyperparameter/build.rs",
+    # "hyperparameter/src/**",
+    "hyperparameter/__pycache__/**",
+]
 
 [project]
 name = "hyperparameter"
