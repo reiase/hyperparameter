@@ -112,3 +112,22 @@ class TestParamScopeGetOrElse(TestCase):
             assert ps.c | False == False
             assert ps.d | False == False
             assert ps.e | False == False
+
+
+class TestParamScopeBool(TestCase):
+    def test_param_scope_bool_truthy(self):
+        with param_scope(a=True, b=0, c="false") as ps:
+            assert bool(ps.a) is True
+            assert bool(ps.b) is False
+            assert bool(ps.c) is True
+
+    def test_param_scope_bool_missing(self):
+        ps = param_scope()
+        assert bool(ps.missing) is False
+
+
+class TestParamScopeClear(TestCase):
+    def test_clear_on_empty(self):
+        # Should not raise when clearing an empty storage
+        ps = param_scope.empty()
+        ps.clear()

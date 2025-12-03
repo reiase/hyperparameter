@@ -270,7 +270,16 @@ class _ParamAccessor:
         return f"<{self._name} in {repr(self._root)}>"
 
     def __bool__(self) -> bool:
-        return False
+        try:
+            value = self._root.get(self._name)
+        except Exception:
+            return False
+
+        if isinstance(value, _ParamAccessor):
+            return False
+        if isinstance(value, Suggester):
+            return bool(value())
+        return bool(value)
 
     def __call__(self, default: Optional[T] = None) -> Union[T, Any]:
         """shortcut for get_or_else"""

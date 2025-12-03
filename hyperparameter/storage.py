@@ -5,6 +5,7 @@ import threading
 from typing import Any, Callable, Dict, Iterable, Optional, Iterator, Tuple
 
 GLOBAL_STORAGE: Dict[str, Any] = {}
+GLOBAL_STORAGE_LOCK = threading.RLock()
 
 
 class Storage:
@@ -23,7 +24,7 @@ class Storage:
         """Return an iterable of all keys in storage."""
         pass
 
-    def update(self, kws: Dict[str, Any] = {}) -> None:
+    def update(self, kws: Optional[Dict[str, Any]] = None) -> None:
         """Update storage with key-value pairs from dictionary."""
         return None
 
@@ -71,10 +72,12 @@ class TLSKVStorage(Storage):
         super().__init__()
 
         if not hasattr(TLSKVStorage.tls, "his"):
+            with GLOBAL_STORAGE_LOCK:
+                global_snapshot = dict(GLOBAL_STORAGE)
             TLSKVStorage.tls.his = [TLSKVStorage.__new__(TLSKVStorage)]
-            TLSKVStorage.tls.his[-1]._storage = GLOBAL_STORAGE
+            TLSKVStorage.tls.his[-1]._storage = global_snapshot
             TLSKVStorage.tls.his[-1]._parent = None
-            self.update(GLOBAL_STORAGE)
+            self.update(global_snapshot)
 
         elif hasattr(TLSKVStorage.tls, "his") and len(TLSKVStorage.tls.his) > 0:
             parent = TLSKVStorage.tls.his[-1]
@@ -102,13 +105,16 @@ class TLSKVStorage(Storage):
             return []
         return self._storage.keys()
 
-    def update(self, kws: Dict[str, Any] = {}) -> None:
+    def update(self, kws: Optional[Dict[str, Any]] = None) -> None:
+        if kws is None:
+            return
+
         if self._storage is None:
             self._storage = {}
 
         storage = self._storage
 
-        def _update(values={}, prefix=None):
+        def _update(values: Dict[str, Any], prefix: Optional[str] = None) -> None:
             for k, v in values.items():
                 key = f"{prefix}.{k}" if prefix is not None else f"{k}"
                 if isinstance(v, dict):
@@ -116,10 +122,12 @@ class TLSKVStorage(Storage):
                 else:
                     storage[key] = v
 
-        if kws is not None:
-            return _update(kws, prefix=None)
+        _update(kws, prefix=None)
 
     def clear(self):
+        if self._storage is None:
+            self._storage = {}
+            return
         self._storage.clear()
 
     def get_entry(self, *args: Any, **kwargs: Any) -> Any:
@@ -161,7 +169,8 @@ class TLSKVStorage(Storage):
     def frozen() -> None:
         """Freeze current thread-local storage to global storage."""
         if hasattr(TLSKVStorage.tls, "his") and len(TLSKVStorage.tls.his) > 0:
-            GLOBAL_STORAGE.update(TLSKVStorage.tls.his[-1].storage())
+            with GLOBAL_STORAGE_LOCK:
+                GLOBAL_STORAGE.update(TLSKVStorage.tls.his[-1].storage())
 
 
 has_rust_backend: bool = False
@@ -178,7 +187,6 @@ try:
 
         TLSKVStorage = KVStorage
         has_rust_backend = True
-except:
-    import traceback
-
-    traceback.print_exc()
+except Exception:
+    # Fallback to pure-Python backend; avoid noisy tracebacks at import time.
+    has_rust_backend = False

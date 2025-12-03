@@ -12,7 +12,23 @@ class TestParamScopeThread(TestCase):
     def test_new_thread(self):
         t = Thread(target=self.in_thread, args=("a.b", None))
         t.start()
-        t.join
+        t.join()
+
+    def test_frozen_propagates(self):
+        with param_scope() as ps:
+            param_scope.A.B = 1
+            param_scope.frozen()
+
+        result = []
+
+        def target():
+            result.append(param_scope.A.B())
+
+        t = Thread(target=target)
+        t.start()
+        t.join()
+
+        self.assertEqual(result[0], 1)
         
     # def test_new_thread_init(self):
     #     param_scope.A.B = 1
