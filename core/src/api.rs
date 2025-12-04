@@ -104,6 +104,30 @@ impl ParamScope {
             *self = ParamScope::Just(tree);
         })
     }
+
+    /// Enter a parameter scope and return a guard that will exit on drop (panic-safe).
+    pub fn enter_guard(&mut self) -> ParamScopeGuard<'_> {
+        self.enter();
+        ParamScopeGuard {
+            scope: self,
+            active: true,
+        }
+    }
+}
+
+/// RAII guard that restores the previous parameter scope even if a panic occurs.
+pub struct ParamScopeGuard<'a> {
+    scope: &'a mut ParamScope,
+    active: bool,
+}
+
+impl<'a> Drop for ParamScopeGuard<'a> {
+    fn drop(&mut self) {
+        if self.active {
+            self.scope.exit();
+            self.active = false;
+        }
+    }
 }
 
 /// Parameter scope operations.
@@ -231,83 +255,84 @@ macro_rules! with_params {
         set $($key:ident).+ = $val:expr;
 
         $($body:tt)*
-    ) =>{
+    ) => {{
         let mut ps = ParamScope::default();
         {
             const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
             ps.put(CONST_KEY, $val);
         }
         with_params!(params ps; $($body)*)
-    };
+    }};
 
     (
         params $ps:expr;
         set $($key:ident).+ = $val:expr;
 
         $($body:tt)*
-    ) => {
+    ) => {{
         {
             const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
             $ps.put(CONST_KEY, $val);
         }
         with_params!(params $ps; $($body)*)
-    };
+    }};
 
     (
         params $ps:expr;
         params $nested:expr;
 
         $($body:tt)*
-    ) => {
-        $ps.enter();
-        let ret = with_params!(params $nested; $($body)*);
-        $ps.exit();
+    ) => {{
+        let mut __hp_ps = $ps;
+        let _hp_guard = __hp_ps.enter_guard();
+        let mut __hp_nested = $nested;
+        let ret = with_params!(params __hp_nested; $($body)*);
         ret
-    };
+    }};
 
     (
         get $name:ident = $($key:ident).+ or $default:expr;
 
         $($body:tt)*
-    ) => {
+    ) => {{
         let $name = get_param!($($key).+, $default);
         with_params_readonly!($($body)*)
-    };
+    }};
 
     (
         $(#[doc = $doc:expr])*
         get $name:ident = $($key:ident).+ or $default:expr;
 
         $($body:tt)*
-    ) => {
+    ) => {{
         let $name = get_param!($($key).+, $default, $($doc)*);
         with_params_readonly!($($body)*)
-    };
+    }};
 
     (
         params $ps:expr;
         get $name:ident = $($key:ident).+ or $default:expr;
 
         $($body:tt)*
-    ) => {
-        $ps.enter();
-        let ret = {
+    ) => {{
+        let mut __hp_ps = $ps;
+        let _hp_guard = __hp_ps.enter_guard();
+        let ret = {{
             let $name = get_param!($($key).+, $default);
 
             with_params_readonly!($($body)*)
-        };
-        $ps.exit();
+        }};
         ret
-    };
+    }};
 
     (
         params $ps:expr;
 
         $($body:tt)*
     ) => {{
-            $ps.enter();
+            let mut __hp_ps = $ps;
+            let _hp_guard = __hp_ps.enter_guard();
             let ret = {$($body)*};
-            $ps.exit();
             ret
     }};
 
@@ -323,23 +348,23 @@ macro_rules! with_params_readonly {
         get $name:ident = $($key:ident).+ or $default:expr;
 
         $($body:tt)*
-    ) => {
+    ) => {{
         let $name = get_param!($($key).+, $default);
         with_params_readonly!($($body)*)
-    };
+    }};
 
     (
         set $($key:ident).+ = $val:expr;
 
         $($body:tt)*
-    ) =>{
+    ) => {{
         let mut ps = ParamScope::default();
         {
             const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
             ps.put(CONST_KEY, $val);
         }
         with_params!(params ps; $($body)*)
-    };
+    }};
 
     ($($body:tt)*) => {{
             let ret = {$($body)*};

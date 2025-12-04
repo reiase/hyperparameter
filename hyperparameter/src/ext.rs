@@ -29,13 +29,20 @@ enum UserDefinedType {
 //     }
 // }
 
+/// Convert a PyObject pointer into a Value with a GIL-safe destructor.
 fn make_value_from_pyobject(obj: *mut pyo3::ffi::PyObject) -> Value {
+    // `Py_XDECREF` requires the GIL; wrap the drop in `Python::with_gil` to
+    // ensure the object is decref'd safely even if drop happens on another thread.
+    unsafe fn drop_pyobject(ptr: *mut c_void) {
+        Python::with_gil(|_| {
+            Py_XDECREF(ptr as *mut pyo3::ffi::PyObject);
+        });
+    }
+
     Value::managed(
         obj as *mut c_void,
         UserDefinedType::PyObjectType as i32,
-        |obj: *mut c_void| unsafe {
-            Py_XDECREF(obj as *mut pyo3::ffi::PyObject);
-        },
+        drop_pyobject,
     )
 }
 
@@ -56,21 +63,24 @@ impl KVStorage {
     pub unsafe fn storage(&mut self, py: Python<'_>) -> PyResult<PyObject> {
         let res = PyDict::new(py);
         for k in self.storage.keys().iter() {
-            match self.storage.get(k) {
+            let set_result = match self.storage.get(k) {
                 Value::Empty => Ok(()),
                 Value::Int(v) => res.set_item(k, v),
                 Value::Float(v) => res.set_item(k, v),
                 Value::Text(v) => res.set_item(k, v.as_str()),
                 Value::Boolean(v) => res.set_item(k, v),
-                Value::UserDefined(v, k, _) => {
-                    if k == UserDefinedType::PyObjectType as i32 {
-                        res.set_item(k, PyAny::from_owned_ptr(py, v as *mut pyo3::ffi::PyObject))
+                Value::UserDefined(v, kind, _) => {
+                    if kind == UserDefinedType::PyObjectType as i32 {
+                        // Take owned pointer; convert to PyAny safely
+                        let obj = PyAny::from_owned_ptr_or_err(py, v as *mut pyo3::ffi::PyObject)?;
+                        res.set_item(k, obj)
                     } else {
                         res.set_item(k, v)
                     }
                 }
             }
-            .unwrap();
+            .map_err(|e| e)?;
+            // ignore Ok(())
         }
         Ok(res.into())
     }
@@ -81,19 +91,22 @@ impl KVStorage {
     }
 
     pub unsafe fn _update(&mut self, kws: &PyDict, prefix: Option<String>) {
-        kws.iter()
-            .map(|(k, v)| {
-                let key = match &prefix {
-                    Some(p) => format!("{}.{}", p, k.extract::<String>().unwrap()),
-                    None => k.extract::<String>().unwrap(),
-                };
-                if v.is_instance_of::<PyDict>() {
-                    self._update(&v.downcast::<PyDict>().unwrap(), Some(key));
-                } else {
-                    self.put(key, v).unwrap();
-                }
-            })
-            .count();
+        for (k, v) in kws.iter() {
+            let key: String = match k.extract() {
+                Ok(s) => s,
+                Err(_) => continue, // skip non-string keys
+            };
+            let full_key = match &prefix {
+                Some(p) => format!("{}.{}", p, key),
+                None => key,
+            };
+            if let Ok(dict) = v.downcast::<PyDict>() {
+                self._update(dict, Some(full_key));
+            } else {
+                // Best-effort; ignore errors to avoid panic
+                let _ = self.put(full_key, v);
+            }
+        }
     }
 
     pub unsafe fn update(&mut self, kws: &PyDict) {
@@ -115,9 +128,9 @@ impl KVStorage {
             Value::Boolean(v) => Ok(Some(v.into_py(py))),
             Value::UserDefined(v, k, _) => {
                 if k == UserDefinedType::PyObjectType as i32 {
-                    Ok(Some(
-                        PyAny::from_borrowed_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
-                    ))
+                    // borrowed ptr; convert with safety check
+                    let obj = PyAny::from_borrowed_ptr_or_err(py, v as *mut pyo3::ffi::PyObject)?;
+                    Ok(Some(obj.into()))
                 } else {
                     Ok(Some((v as u64).into_py(py)))
                 }
@@ -134,9 +147,8 @@ impl KVStorage {
             Value::Boolean(v) => Ok(Some(v.into_py(py))),
             Value::UserDefined(v, k, _) => {
                 if k == UserDefinedType::PyObjectType as i32 {
-                    Ok(Some(
-                        PyAny::from_borrowed_ptr(py, v as *mut pyo3::ffi::PyObject).into(),
-                    ))
+                    let obj = PyAny::from_borrowed_ptr_or_err(py, v as *mut pyo3::ffi::PyObject)?;
+                    Ok(Some(obj.into()))
                 } else {
                     Ok(Some((v as u64).into_py(py)))
                 }
@@ -148,18 +160,16 @@ impl KVStorage {
         if val.is_none() {
             self.storage.put(key, Value::Empty);
         } else if val.is_instance_of::<PyBool>() {
-            self.storage.put(key, val.extract::<bool>().unwrap());
+            self.storage.put(key, val.extract::<bool>()?);
         } else if val.is_instance_of::<PyFloat>() {
-            self.storage.put(key, val.extract::<f64>().unwrap());
+            self.storage.put(key, val.extract::<f64>()?);
         } else if val.is_instance_of::<PyString>() {
-            self.storage
-                .put(key, val.extract::<&str>().unwrap().to_string());
+            self.storage.put(key, val.extract::<&str>()?.to_string());
         } else if val.is_instance_of::<PyInt>() {
-            self.storage.put(key, val.extract::<i64>().unwrap());
+            self.storage.put(key, val.extract::<i64>()?);
         } else {
             // Py_XINCREF(val.into_ptr());
-            self.storage
-                .put(key, make_value_from_pyobject(val.into_ptr()));
+            self.storage.put(key, make_value_from_pyobject(val.into_ptr()));
         }
         Ok(())
     }
