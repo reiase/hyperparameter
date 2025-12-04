@@ -78,7 +78,17 @@ fn create_thread_storage() -> RefCell<Storage> {
     let ts = RefCell::new(Storage::default());
     // Use read lock for concurrent access during thread initialization
     if let Ok(global_storage) = GLOBAL_STORAGE.read() {
-        ts.borrow_mut().params.clone_from(&global_storage.params);
+        // Only clone send-safe entries; skip user-defined values that may carry
+        // non-Send payloads (e.g., Python objects) to avoid cross-thread drops.
+        ts.borrow_mut()
+            .params
+            .extend(global_storage.params.iter().filter_map(|(k, v)| {
+                if is_send_safe_value(v.value()) {
+                    Some((*k, v.shallow()))
+                } else {
+                    None
+                }
+            }));
     }
     // If lock is poisoned, continue with empty storage
     ts
@@ -100,7 +110,20 @@ lazy_static! {
 /// the global storage until this operation completes.
 pub fn frozen_global_storage() {
     THREAD_STORAGE.with(|ts| {
-        let thread_params = ts.borrow().params.clone();
+        // Copy only send-safe entries to global storage to prevent moving non-Send
+        // payloads (like Python objects) across threads.
+        let thread_params = ts
+            .borrow()
+            .params
+            .iter()
+            .filter_map(|(k, v)| {
+                if is_send_safe_value(v.value()) {
+                    Some((*k, v.shallow()))
+                } else {
+                    None
+                }
+            })
+            .collect();
         // Use write lock for exclusive access during update
         if let Ok(mut global_storage) = GLOBAL_STORAGE.write() {
             global_storage.params = thread_params;
@@ -204,6 +227,12 @@ impl Storage {
             .map(|x| x.key.clone())
             .collect()
     }
+}
+
+fn is_send_safe_value(v: &Value) -> bool {
+    // UserDefined may carry non-Send payloads (e.g., Python objects) that are not
+    // safe to drop on another thread.
+    !matches!(v, Value::UserDefined(_, _, _))
 }
 
 // Hashable trait is kept for potential future use

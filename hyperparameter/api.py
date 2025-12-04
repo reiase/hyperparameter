@@ -864,6 +864,10 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
             ns = getattr(obj, "_auto_param_namespace", None)
             if not isinstance(ns, str):
                 continue
+            # Skip private helpers (e.g., _foo) when exposing subcommands.
+            name = getattr(obj, "__name__", "")
+            if isinstance(name, str) and name.startswith("_"):
+                continue
             oid = id(obj)
             if oid in seen_ids:
                 continue
@@ -918,6 +922,8 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
         defines = args_dict.pop("define", [])
         target = func_map[cmd]
         with param_scope(*defines):
+            # Freeze first so new threads spawned inside target inherit these overrides.
+            param_scope.frozen()
             return target(**args_dict)
 
     if not hasattr(func, "_auto_param_namespace"):
@@ -927,6 +933,7 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
     args_dict = vars(args)
     defines = args_dict.pop("define", [])
     with param_scope(*defines):
+        param_scope.frozen()
         return func(**args_dict)
 
 
