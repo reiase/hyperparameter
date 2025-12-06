@@ -884,22 +884,18 @@ def _describe_parameters(func: Callable, defines: List[str], arg_overrides: Dict
 def _maybe_explain_and_exit(func: Callable, args_dict: Dict[str, Any], defines: List[str]) -> bool:
     list_params = bool(args_dict.pop("list_params", False))
     explain_targets = args_dict.pop("explain_param", None)
-    if explain_targets == []:
-        # Explicit --explain with no args: reject execution.
+    if explain_targets is not None and len(explain_targets) == 0:
         print("No parameter names provided to --explain-param. Please specify at least one.")
-        return True
+        sys.exit(1)
     if not list_params and not explain_targets:
         return False
 
     rows = _describe_parameters(func, defines, args_dict)
     target_set = set(explain_targets) if explain_targets is not None else None
-    if explain_targets is not None and not explain_targets:
-        print("No parameter names provided to --explain-param. Please specify at least one.")
-        return True
     if explain_targets is not None and target_set is not None and all(full_key not in target_set for _, _, full_key, _, _, _ in rows):
         missing = ", ".join(explain_targets)
         print(f"No matching parameters for: {missing}")
-        return True
+        sys.exit(1)
     for func_name, name, full_key, value, source, default in rows:
         # Use fully qualified key for matching to avoid collisions.
         if target_set is not None and full_key not in target_set:

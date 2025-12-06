@@ -1,5 +1,6 @@
 import importlib.metadata
 import os
+import warnings
 
 from .api import auto_param, launch, param_scope, run_cli
 
@@ -13,7 +14,11 @@ def _load_version() -> str:
         env_version = os.environ.get("HYPERPARAMETER_VERSION")
         if env_version:
             return env_version
-        return "0.0.0"
+        warnings.warn(
+            "hyperparameter package metadata not found; falling back to 0.0.0+local. "
+            "Install the package or use `pip install -e .` for an accurate version.",
+        )
+        return "0.0.0+local"
 
 
 VERSION = _load_version()

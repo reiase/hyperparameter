@@ -24,6 +24,14 @@ python -m hyperparameter.examples.quickstart
 
 # Try the @auto_param CLI: override defaults from the command line
 python -m hyperparameter.examples.quickstart --define greet.name=Alice --enthusiasm=3
+
+# Inspect params and defaults
+python -m hyperparameter.examples.quickstart -lps
+python -m hyperparameter.examples.quickstart -ep greet.name
+
+# Running from source? Use module mode or install editable
+# python -m hyperparameter.examples.quickstart
+# or: pip install -e .
 ```
 
 What it shows:

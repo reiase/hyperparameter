@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import os
 import sys
 import textwrap
-
 from textwrap import dedent
 
-from hyperparameter import auto_param, launch, param_scope
+try:
+    from hyperparameter import auto_param, launch, param_scope
+except ModuleNotFoundError:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    from hyperparameter import auto_param, launch, param_scope
 
 
 @auto_param
@@ -16,10 +22,11 @@ def greet(name: str = "world", enthusiasm: int = 1) -> None:
 
 
 def demo() -> None:
-    green = "\033[92m"
-    cyan = "\033[96m"
-    yellow = "\033[93m"
-    reset = "\033[0m"
+    use_color = sys.stdout.isatty()
+    green = "\033[92m" if use_color else ""
+    cyan = "\033[96m" if use_color else ""
+    yellow = "\033[93m" if use_color else ""
+    reset = "\033[0m" if use_color else ""
 
     default_code = dedent(
         """
