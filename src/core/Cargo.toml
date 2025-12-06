@@ -13,10 +13,11 @@ categories = ["config", "science"]
 exclude = [".cargo", ".github"]
 
 [features]
-default = ["json", "toml", "clap"]
+default = ["json", "toml", "clap", "tokio-task-local"]
 json = ["config/json"]
 toml = ["config/toml"]
 clap = ["dep:linkme", "dep:clap"]
+tokio-task-local = ["tokio"]
 
 [lib]
 name = "hyperparameter"
@@ -30,6 +31,7 @@ const-str = "0.5.6"
 config = { version = "0.14.0", default-features = false }
 linkme = { version = "0.3", optional = true }
 clap = { version = "4.4.7", optional = true }
+tokio = { version = "1", features = ["macros", "rt"], optional = true }
 
 [dev-dependencies]
 proptest = "1.2.0"

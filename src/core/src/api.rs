@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use crate::storage::{
-    frozen_global_storage, Entry, GetOrElse, MultipleVersion, Params, THREAD_STORAGE,
+    frozen_global_storage, with_current_storage, Entry, GetOrElse, MultipleVersion, Params,
 };
 use crate::value::{Value, EMPTY};
 use crate::xxh::XXHashable;
@@ -39,6 +39,11 @@ impl<T: Into<String> + Clone> From<&Vec<T>> for ParamScope {
 }
 
 impl ParamScope {
+    /// Capture the current parameters into a new ParamScope.
+    pub fn capture() -> Self {
+        with_current_storage(|ts| ParamScope::Just(ts.params.clone()))
+    }
+
     /// Get a parameter with a given hash key.
     pub fn get_with_hash(&self, key: u64) -> Value {
         if let ParamScope::Just(changes) = self {
@@ -49,10 +54,7 @@ impl ParamScope {
                 }
             }
         }
-        THREAD_STORAGE.with(|ts| {
-            let ts = ts.borrow();
-            ts.get_entry(key).map(|e| e.clone_value()).unwrap_or(EMPTY)
-        })
+        with_current_storage(|ts| ts.get_entry(key).map(|e| e.clone_value()).unwrap_or(EMPTY))
     }
 
     /// Get a parameter with a given key.
@@ -73,10 +75,8 @@ impl ParamScope {
 
     /// Get a list of all parameter keys.
     pub fn keys(&self) -> Vec<String> {
-        let mut retval: HashSet<String> = THREAD_STORAGE.with(|ts| {
-            let ts = ts.borrow();
-            ts.keys().iter().cloned().collect()
-        });
+        let mut retval: HashSet<String> =
+            with_current_storage(|ts| ts.keys().iter().cloned().collect());
         if let ParamScope::Just(changes) = self {
             retval.extend(changes.values().map(|e| e.key.clone()));
         }
@@ -85,8 +85,7 @@ impl ParamScope {
 
     /// Enter a new parameter scope.
     pub fn enter(&mut self) {
-        THREAD_STORAGE.with(|ts| {
-            let mut ts = ts.borrow_mut();
+        with_current_storage(|ts| {
             ts.enter();
             if let ParamScope::Just(changes) = self {
                 for v in changes.values() {
@@ -99,8 +98,8 @@ impl ParamScope {
 
     /// Exit the current parameter scope.
     pub fn exit(&mut self) {
-        THREAD_STORAGE.with(|ts| {
-            let tree = ts.borrow_mut().exit();
+        with_current_storage(|ts| {
+            let tree = ts.exit();
             *self = ParamScope::Just(tree);
         })
     }
@@ -149,7 +148,7 @@ where
                 }
             }
         }
-        THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(key, default))
+        with_current_storage(|ts| ts.get_or_else(key, default))
     }
 
     /// Put a parameter.
@@ -179,12 +178,6 @@ where
     fn put(&mut self, key: K, val: V) {
         let hkey = key.xxh();
         if let ParamScope::Just(changes) = self {
-            // if changes.contains_key(&hkey) {
-            //     changes.update(hkey, val);
-            // } else {
-            //     let key: String = key.into();
-            //     changes.insert(hkey, Entry::new(key, val));
-            // }
             if let std::collections::btree_map::Entry::Vacant(e) = changes.entry(hkey) {
                 let key: String = key.into();
                 e.insert(Entry::new(key, val));
@@ -192,7 +185,7 @@ where
                 changes.update(hkey, val);
             }
         } else {
-            THREAD_STORAGE.with(|ts| ts.borrow_mut().put(key, val))
+            with_current_storage(|ts| ts.put(key, val))
         }
     }
 }
@@ -201,25 +194,55 @@ pub fn frozen() {
     frozen_global_storage();
 }
 
+#[cfg(feature = "tokio-task-local")]
+/// Binds the current parameter scope to the given future.
+pub fn bind<F>(future: F) -> impl std::future::Future<Output = F::Output>
+where
+    F: std::future::Future,
+{
+    let params = with_current_storage(|ts| ts.params.clone());
+    let storage = crate::storage::Storage {
+        params,
+        history: vec![std::collections::HashSet::new()],
+    };
+    crate::storage::scope(storage, future)
+}
+
+#[cfg(feature = "tokio")]
+/// Spawns a new asynchronous task, inheriting the current parameter scope.
+pub fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    #[cfg(feature = "tokio-task-local")]
+    {
+        tokio::spawn(bind(future))
+    }
+
+    #[cfg(not(feature = "tokio-task-local"))]
+    {
+        tokio::spawn(future)
+    }
+}
+
 #[macro_export]
 macro_rules! get_param {
     ($name:expr, $default:expr) => {{
         const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
         const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
-        THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(CONST_HASH, $default))
-        // ParamScope::default().get_or_else(CONST_HASH, $default)
+        $crate::with_current_storage(|ts| ts.get_or_else(CONST_HASH, $default))
     }};
 
     ($name:expr, $default:expr, $help: expr) => {{
         const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
         const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
-        // ParamScope::default().get_or_else(CONST_HASH, $default)
         {
             const CONST_HELP: &str = $help;
             #[::linkme::distributed_slice(PARAMS)]
             static help: (&str, &str) = (CONST_KEY, CONST_HELP);
         }
-        THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(CONST_HASH, $default))
+        with_current_storage(|ts| ts.get_or_else(CONST_HASH, $default))
     }};
 }
 
@@ -251,6 +274,58 @@ macro_rules! get_param {
 /// ```
 #[macro_export]
 macro_rules! with_params {
+    // Internal Async entry point
+    (
+        @async_entry
+        $($body:tt)*
+    ) => {
+        with_params!(@async_start $($body)*)
+    };
+
+    // Async rules implementation
+    (
+        @async_start
+        set $($key:ident).+ = $val:expr;
+        $($rest:tt)*
+    ) => {{
+        let mut ps = ParamScope::default();
+        {
+            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
+            ps.put(CONST_KEY, $val);
+        }
+        with_params!(@async_params ps; $($rest)*)
+    }};
+
+    (
+        @async_start
+        $($body:tt)*
+    ) => {{
+        let ps = ParamScope::default();
+        with_params!(@async_params ps; $($body)*)
+    }};
+
+    (
+        @async_params $ps:expr;
+        set $($key:ident).+ = $val:expr;
+        $($rest:tt)*
+    ) => {{
+        {
+            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
+            $ps.put(CONST_KEY, $val);
+        }
+        with_params!(@async_params $ps; $($rest)*)
+    }};
+
+    (
+        @async_params $ps:expr;
+        $($body:tt)*
+    ) => {{
+        let mut __hp_ps = $ps;
+        let _hp_guard = __hp_ps.enter_guard();
+        $crate::bind(async move { $($body)*.await })
+    }};
+
+    // Existing sync rules
     (
         set $($key:ident).+ = $val:expr;
 
@@ -370,6 +445,32 @@ macro_rules! with_params_readonly {
             let ret = {$($body)*};
             ret
     }};
+}
+
+/// Async version of `with_params!`.
+///
+/// This macro is identical to `with_params!`, but it automatically binds the parameter scope
+/// to the async block or future returned by the body, and awaits it.
+///
+/// # Example
+/// ```
+/// # async fn example() {
+/// use hyperparameter::*;
+///
+/// let result = with_params_async! {
+///     set a = 1;
+///     async {
+///         get_param!(a, 0)
+///     }
+/// };
+/// assert_eq!(result, 1);
+/// # }
+/// ```
+#[macro_export]
+macro_rules! with_params_async {
+    ($($body:tt)*) => {
+        $crate::with_params!(@async_entry $($body)*)
+    };
 }
 
 #[cfg(test)]

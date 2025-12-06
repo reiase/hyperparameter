@@ -62,6 +62,12 @@ impl KVStorage {
         }
     }
 
+    pub fn clone(&self) -> KVStorage {
+        KVStorage {
+            storage: self.storage.clone(),
+        }
+    }
+
     pub unsafe fn storage(&mut self, py: Python<'_>) -> PyResult<PyObject> {
         let res = PyDict::new(py);
         for k in self.storage.keys().iter() {

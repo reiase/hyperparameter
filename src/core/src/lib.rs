@@ -11,10 +11,15 @@ mod ffi;
 mod xxh;
 
 pub use crate::api::frozen;
+#[cfg(feature = "tokio")]
+pub use crate::api::spawn;
+#[cfg(feature = "tokio-task-local")]
+pub use crate::api::bind;
 pub use crate::api::ParamScope;
 pub use crate::api::ParamScopeOps;
 pub use crate::cfg::AsParamScope;
 pub use crate::storage::GetOrElse;
+pub use crate::storage::with_current_storage;
 pub use crate::storage::THREAD_STORAGE;
 pub use crate::value::Value;
 pub use crate::xxh::xxhash;

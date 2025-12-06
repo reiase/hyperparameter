@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use std::sync::RwLock;
 
 use lazy_static::lazy_static;
+#[cfg(feature = "tokio-task-local")]
+use tokio::task_local;
 
 use crate::value::Value;
 use crate::value::VersionedValue;
@@ -70,8 +72,42 @@ impl MultipleVersion<u64> for Params {
     }
 }
 
+#[cfg(feature = "tokio-task-local")]
+task_local! {
+    static TASK_STORAGE: RefCell<Storage>;
+}
+
+#[cfg(feature = "tokio-task-local")]
+pub fn scope<F>(storage: Storage, f: F) -> impl std::future::Future<Output = F::Output>
+where
+    F: std::future::Future,
+{
+    TASK_STORAGE.scope(RefCell::new(storage), f)
+}
+
 thread_local! {
     pub static THREAD_STORAGE: RefCell<Storage> = create_thread_storage();
+}
+
+pub fn with_current_storage<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut Storage) -> R,
+{
+    #[cfg(feature = "tokio-task-local")]
+    {
+        let mut opt_f = Some(f);
+        if let Ok(r) = TASK_STORAGE.try_with(|ts| {
+            let mut borrowed = ts.borrow_mut();
+            let mut f_inner = opt_f.take().expect("closure already taken");
+            f_inner(&mut *borrowed)
+        }) {
+            return r;
+        }
+        let f = opt_f.expect("closure already taken");
+        return THREAD_STORAGE.with(|ts| f(&mut *ts.borrow_mut()));
+    }
+    #[cfg(not(feature = "tokio-task-local"))]
+    THREAD_STORAGE.with(|ts| f(&mut *ts.borrow_mut()))
 }
 
 fn create_thread_storage() -> RefCell<Storage> {
@@ -94,6 +130,17 @@ fn create_thread_storage() -> RefCell<Storage> {
     ts
 }
 
+fn clone_storage(src: &Storage) -> Storage {
+    let mut s = Storage::default();
+    for (k, v) in src.params.iter() {
+        if is_send_safe_value(v.value()) {
+            s.params.insert(*k, v.shallow());
+        }
+    }
+    s.history = vec![HashSet::new()];
+    s
+}
+
 lazy_static! {
     /// Global storage shared across all threads.
     /// Uses RwLock to allow concurrent reads while maintaining exclusive writes.
@@ -109,11 +156,8 @@ lazy_static! {
 /// Uses a write lock, which will block other threads from reading or writing
 /// the global storage until this operation completes.
 pub fn frozen_global_storage() {
-    THREAD_STORAGE.with(|ts| {
-        // Copy only send-safe entries to global storage to prevent moving non-Send
-        // payloads (like Python objects) across threads.
+    with_current_storage(|ts| {
         let thread_params = ts
-            .borrow()
             .params
             .iter()
             .filter_map(|(k, v)| {
@@ -124,11 +168,9 @@ pub fn frozen_global_storage() {
                 }
             })
             .collect();
-        // Use write lock for exclusive access during update
         if let Ok(mut global_storage) = GLOBAL_STORAGE.write() {
             global_storage.params = thread_params;
         }
-        // If lock is poisoned, silently fail (other threads may have panicked)
     });
 }
 
