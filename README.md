@@ -14,6 +14,22 @@
 
 Hyperparameter is a versatile library designed to streamline the management and control of hyperparameters in machine learning algorithms and system development. Tailored for AI researchers and Machine Learning Systems (MLSYS) developers, Hyperparameter offers a unified solution with a focus on ease of use in Python, high-performance access in Rust and C++, and a set of macros for seamless hyperparameter management.
 
+## 5-Minute Try
+
+```bash
+pip install hyperparameter
+
+# Run a ready-to-use demo
+python -m hyperparameter.examples.quickstart
+
+# Try the @auto_param CLI: override defaults from the command line
+python -m hyperparameter.examples.quickstart --define greet.name=Alice --enthusiasm=3
+```
+
+What it shows:
+- default values vs scoped overrides (`param_scope`)
+- `@auto_param` + `launch` exposing a CLI with `-D/--define` for quick overrides
+
 ## Key Features
 
 ### For Python Users

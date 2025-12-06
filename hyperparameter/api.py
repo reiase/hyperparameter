@@ -819,6 +819,19 @@ def _build_parser_for_func(func: Callable, prog: Optional[str] = None) -> argpar
     sig = inspect.signature(func)
     parser = argparse.ArgumentParser(prog=prog or func.__name__, description=func.__doc__)
     parser.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
+    parser.add_argument(
+        "-lps",
+        "--list-params",
+        action="store_true",
+        help="List parameter names, defaults, and current values (after --define overrides), then exit.",
+    )
+    parser.add_argument(
+        "-ep",
+        "--explain-param",
+        nargs="*",
+        metavar="NAME",
+        help="Explain the source of specific parameters (default, CLI arg, or --define override), then exit. If omitted, prints all.",
+    )
     param_help = _parse_param_help(func.__doc__)
 
     for name, param in sig.parameters.items():
@@ -839,6 +852,64 @@ def _build_parser_for_func(func: Callable, prog: Optional[str] = None) -> argpar
                 help=help_text,
             )
     return parser
+
+
+def _describe_parameters(func: Callable, defines: List[str], arg_overrides: Dict[str, Any]) -> List[Tuple[str, str, str, Any, str, Any]]:
+    """Return [(func_name, param_name, full_key, value, source, default)] under current overrides."""
+    namespace = getattr(func, "_auto_param_namespace", func.__name__)
+    func_name = getattr(func, "__name__", namespace)
+    sig = inspect.signature(func)
+    results: List[Tuple[str, str, str, Any, str, Any]] = []
+    _MISSING = object()
+    with param_scope(*defines) as hp:
+        storage_snapshot = hp.storage().storage()
+        for name, param in sig.parameters.items():
+            default = param.default if param.default is not inspect._empty else _MISSING
+            if name in arg_overrides:
+                value = arg_overrides[name]
+                source = "cli-arg"
+            else:
+                full_key = f"{namespace}.{name}"
+                in_define = full_key in storage_snapshot
+                if default is _MISSING:
+                    value = "<required>"
+                else:
+                    value = getattr(hp(), full_key).get_or_else(default)
+                source = "--define" if in_define else ("default" if default is not _MISSING else "required")
+            printable_default = "<required>" if default is _MISSING else default
+            results.append((func_name, name, full_key, value, source, printable_default))
+    return results
+
+
+def _maybe_explain_and_exit(func: Callable, args_dict: Dict[str, Any], defines: List[str]) -> bool:
+    list_params = bool(args_dict.pop("list_params", False))
+    explain_targets = args_dict.pop("explain_param", None)
+    if explain_targets == []:
+        # Explicit --explain with no args: reject execution.
+        print("No parameter names provided to --explain-param. Please specify at least one.")
+        return True
+    if not list_params and not explain_targets:
+        return False
+
+    rows = _describe_parameters(func, defines, args_dict)
+    target_set = set(explain_targets) if explain_targets is not None else None
+    if explain_targets is not None and not explain_targets:
+        print("No parameter names provided to --explain-param. Please specify at least one.")
+        return True
+    if explain_targets is not None and target_set is not None and all(full_key not in target_set for _, _, full_key, _, _, _ in rows):
+        missing = ", ".join(explain_targets)
+        print(f"No matching parameters for: {missing}")
+        return True
+    for func_name, name, full_key, value, source, default in rows:
+        # Use fully qualified key for matching to avoid collisions.
+        if target_set is not None and full_key not in target_set:
+            continue
+        default_repr = "<required>" if default == "<required>" else repr(default)
+        func_module = getattr(func, "__module__", "unknown")
+        location = f"{func_module}.{func_name}"
+        print(f"{full_key}:")
+        print(f"    function={func_name}, location={location}, default={default_repr}")
+    return True
 
 
 def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_locals=None) -> None:
@@ -887,6 +958,8 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
             args = parser.parse_args(argv)
             args_dict = vars(args)
             defines = args_dict.pop("define", [])
+            if _maybe_explain_and_exit(func, args_dict, defines):
+                return None
             with param_scope(*defines):
                 return func(**args_dict)
 
@@ -897,6 +970,19 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
             sub = subparsers.add_parser(f.__name__, help=f.__doc__)
             func_map[f.__name__] = f
             sub.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
+            sub.add_argument(
+                "-lps",
+                "--list-params",
+                action="store_true",
+                help="List parameter names, defaults, and current values (after --define overrides), then exit.",
+            )
+            sub.add_argument(
+                "-ep",
+                "--explain-param",
+                nargs="*",
+                metavar="NAME",
+                help="Explain the source of specific parameters (default, CLI arg, or --define override), then exit. If omitted, prints all.",
+            )
             sig = inspect.signature(f)
             param_help = _parse_param_help(f.__doc__)
             for name, param in sig.parameters.items():
@@ -921,6 +1007,8 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
         cmd = args_dict.pop("command")
         defines = args_dict.pop("define", [])
         target = func_map[cmd]
+        if _maybe_explain_and_exit(target, args_dict, defines):
+            return None
         with param_scope(*defines):
             # Freeze first so new threads spawned inside target inherit these overrides.
             param_scope.frozen()
@@ -932,6 +1020,8 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
     args = parser.parse_args()
     args_dict = vars(args)
     defines = args_dict.pop("define", [])
+    if _maybe_explain_and_exit(func, args_dict, defines):
+        return None
     with param_scope(*defines):
         param_scope.frozen()
         return func(**args_dict)

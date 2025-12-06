@@ -73,8 +73,8 @@ impl KVStorage {
                 Value::Boolean(v) => res.set_item(k, v),
                 Value::UserDefined(v, kind, _) => {
                     if kind == UserDefinedType::PyObjectType as i32 {
-                        // Take owned pointer; convert to PyAny safely
-                        let obj = PyAny::from_owned_ptr_or_err(py, v as *mut pyo3::ffi::PyObject)?;
+                        // Borrowed pointer; increment refcount so Value's drop remains balanced.
+                        let obj = PyAny::from_borrowed_ptr_or_err(py, v as *mut pyo3::ffi::PyObject)?;
                         res.set_item(k, obj)
                     } else {
                         res.set_item(k, v)
