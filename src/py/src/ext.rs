@@ -1,3 +1,5 @@
+#![allow(non_local_definitions)]
+
 use std::ffi::c_void;
 
 use hyperparameter::*;
@@ -63,7 +65,7 @@ impl KVStorage {
     pub unsafe fn storage(&mut self, py: Python<'_>) -> PyResult<PyObject> {
         let res = PyDict::new(py);
         for k in self.storage.keys().iter() {
-            let set_result = match self.storage.get(k) {
+            match self.storage.get(k) {
                 Value::Empty => Ok(()),
                 Value::Int(v) => res.set_item(k, v),
                 Value::Float(v) => res.set_item(k, v),
@@ -80,7 +82,6 @@ impl KVStorage {
                 }
             }
             .map_err(|e| e)?;
-            // ignore Ok(())
         }
         Ok(res.into())
     }
