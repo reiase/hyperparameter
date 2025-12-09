@@ -14,7 +14,8 @@ fn main() {
     with_params! {
         params ParamScope::from(&args.define);
 
-        // Retrieves `example.param1` with a default value of `1` if not specified.
-        println!("param1={}", get_param!(example.param1, false, "help for example.param1"));
+        // Retrieves `example.param1` with a default value of `false` if not specified.
+        let val: bool = get_param!(example.param1, false);
+        println!("param1={}", val);
     }
 }

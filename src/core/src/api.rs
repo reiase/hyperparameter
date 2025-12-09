@@ -208,274 +208,11 @@ where
     crate::storage::scope(storage, future)
 }
 
-#[cfg(feature = "tokio")]
-/// Spawns a new asynchronous task, inheriting the current parameter scope.
-pub fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
-where
-    F: std::future::Future + Send + 'static,
-    F::Output: Send + 'static,
-{
-    #[cfg(feature = "tokio-task-local")]
-    {
-        tokio::spawn(bind(future))
-    }
-
-    #[cfg(not(feature = "tokio-task-local"))]
-    {
-        tokio::spawn(future)
-    }
-}
-
-#[macro_export]
-macro_rules! get_param {
-    ($name:expr, $default:expr) => {{
-        const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
-        const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
-        $crate::with_current_storage(|ts| ts.get_or_else(CONST_HASH, $default))
-    }};
-
-    ($name:expr, $default:expr, $help: expr) => {{
-        const CONST_KEY: &str = const_str::replace!(stringify!($name), ";", "");
-        const CONST_HASH: u64 = xxhash_rust::const_xxh64::xxh64(CONST_KEY.as_bytes(), 42);
-        {
-            const CONST_HELP: &str = $help;
-            #[::linkme::distributed_slice(PARAMS)]
-            static help: (&str, &str) = (CONST_KEY, CONST_HELP);
-        }
-        with_current_storage(|ts| ts.get_or_else(CONST_HASH, $default))
-    }};
-}
-
-/// Define or use `hyperparameters` in a code block.
-///
-/// Hyperparameters are named parameters whose values control the learning process of
-/// an ML model or the behaviors of an underlying machine learning system.
-///
-/// Hyperparameter is designed as user-friendly as global variables but overcomes two major
-/// drawbacks of global variables: non-thread safety and global scope.
-///
-/// # A quick example
-/// ```
-/// use hyperparameter::*;
-///
-/// with_params! {   // with_params begins a new parameter scope
-///     set a.b = 1; // set the value of named parameter `a.b`
-///     set a.b.c = 2.0; // `a.b.c` is another parameter.
-///
-///     assert_eq!(1, get_param!(a.b, 0));
-///
-///     with_params! {   // start a new parameter scope that inherits parameters from the previous scope
-///         set a.b = 2; // override parameter `a.b`
-///
-///         let a_b = get_param!(a.b, 0); // read parameter `a.b`, return the default value (0) if not defined
-///         assert_eq!(2, a_b);
-///     }
-/// }
-/// ```
-#[macro_export]
-macro_rules! with_params {
-    // Internal Async entry point
-    (
-        @async_entry
-        $($body:tt)*
-    ) => {
-        with_params!(@async_start $($body)*)
-    };
-
-    // Async rules implementation
-    (
-        @async_start
-        set $($key:ident).+ = $val:expr;
-        $($rest:tt)*
-    ) => {{
-        let mut ps = ParamScope::default();
-        {
-            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
-            ps.put(CONST_KEY, $val);
-        }
-        with_params!(@async_params ps; $($rest)*)
-    }};
-
-    (
-        @async_start
-        $($body:tt)*
-    ) => {{
-        let ps = ParamScope::default();
-        with_params!(@async_params ps; $($body)*)
-    }};
-
-    (
-        @async_params $ps:expr;
-        set $($key:ident).+ = $val:expr;
-        $($rest:tt)*
-    ) => {{
-        {
-            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
-            $ps.put(CONST_KEY, $val);
-        }
-        with_params!(@async_params $ps; $($rest)*)
-    }};
-
-    (
-        @async_params $ps:expr;
-        $($body:tt)*
-    ) => {{
-        let mut __hp_ps = $ps;
-        let _hp_guard = __hp_ps.enter_guard();
-        $crate::bind(async move { $($body)*.await })
-    }};
-
-    // Existing sync rules
-    (
-        set $($key:ident).+ = $val:expr;
-
-        $($body:tt)*
-    ) => {{
-        let mut ps = ParamScope::default();
-        {
-            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
-            ps.put(CONST_KEY, $val);
-        }
-        with_params!(params ps; $($body)*)
-    }};
-
-    (
-        params $ps:expr;
-        set $($key:ident).+ = $val:expr;
-
-        $($body:tt)*
-    ) => {{
-        {
-            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
-            $ps.put(CONST_KEY, $val);
-        }
-        with_params!(params $ps; $($body)*)
-    }};
-
-    (
-        params $ps:expr;
-        params $nested:expr;
-
-        $($body:tt)*
-    ) => {{
-        let mut __hp_ps = $ps;
-        let _hp_guard = __hp_ps.enter_guard();
-        let mut __hp_nested = $nested;
-        let ret = with_params!(params __hp_nested; $($body)*);
-        ret
-    }};
-
-    (
-        get $name:ident = $($key:ident).+ or $default:expr;
-
-        $($body:tt)*
-    ) => {{
-        let $name = get_param!($($key).+, $default);
-        with_params_readonly!($($body)*)
-    }};
-
-    (
-        $(#[doc = $doc:expr])*
-        get $name:ident = $($key:ident).+ or $default:expr;
-
-        $($body:tt)*
-    ) => {{
-        let $name = get_param!($($key).+, $default, $($doc)*);
-        with_params_readonly!($($body)*)
-    }};
-
-    (
-        params $ps:expr;
-        get $name:ident = $($key:ident).+ or $default:expr;
-
-        $($body:tt)*
-    ) => {{
-        let mut __hp_ps = $ps;
-        let _hp_guard = __hp_ps.enter_guard();
-        let ret = {{
-            let $name = get_param!($($key).+, $default);
-
-            with_params_readonly!($($body)*)
-        }};
-        ret
-    }};
-
-    (
-        params $ps:expr;
-
-        $($body:tt)*
-    ) => {{
-            let mut __hp_ps = $ps;
-            let _hp_guard = __hp_ps.enter_guard();
-            let ret = {$($body)*};
-            ret
-    }};
-
-    ($($body:tt)*) => {{
-        let ret = {$($body)*};
-        ret
-    }};
-}
-
-#[macro_export]
-macro_rules! with_params_readonly {
-    (
-        get $name:ident = $($key:ident).+ or $default:expr;
-
-        $($body:tt)*
-    ) => {{
-        let $name = get_param!($($key).+, $default);
-        with_params_readonly!($($body)*)
-    }};
-
-    (
-        set $($key:ident).+ = $val:expr;
-
-        $($body:tt)*
-    ) => {{
-        let mut ps = ParamScope::default();
-        {
-            const CONST_KEY: &str = const_str::replace!(stringify!($($key).+), ";", "");
-            ps.put(CONST_KEY, $val);
-        }
-        with_params!(params ps; $($body)*)
-    }};
-
-    ($($body:tt)*) => {{
-            let ret = {$($body)*};
-            ret
-    }};
-}
-
-/// Async version of `with_params!`.
-///
-/// This macro is identical to `with_params!`, but it automatically binds the parameter scope
-/// to the async block or future returned by the body, and awaits it.
-///
-/// # Example
-/// ```
-/// # async fn example() {
-/// use hyperparameter::*;
-///
-/// let result = with_params_async! {
-///     set a = 1;
-///     async {
-///         get_param!(a, 0)
-///     }
-/// };
-/// assert_eq!(result, 1);
-/// # }
-/// ```
-#[macro_export]
-macro_rules! with_params_async {
-    ($($body:tt)*) => {
-        $crate::with_params!(@async_entry $($body)*)
-    };
-}
 
 #[cfg(test)]
 mod tests {
     use crate::storage::{GetOrElse, THREAD_STORAGE};
+    use crate::{with_params, get_param};
 
     use super::{ParamScope, ParamScopeOps};
 
@@ -559,44 +296,52 @@ mod tests {
 
         ps.enter();
 
-        let x = get_param!(a.b.c, 0);
+        let x: i64 = get_param!(a.b.c, 0);
         println!("x={}", x);
     }
 
     #[test]
     fn test_param_scope_with_param_set() {
         with_params! {
-            set a.b.c=1;
-            set a.b =2;
+            set a.b.c = 1;
+            set a.b = 2;
 
-            assert_eq!(1, get_param!(a.b.c, 0));
-            assert_eq!(2, get_param!(a.b, 0));
+            let v1: i64 = get_param!(a.b.c, 0);
+            let v2: i64 = get_param!(a.b, 0);
+            assert_eq!(1, v1);
+            assert_eq!(2, v2);
 
             with_params! {
-                set a.b.c=2.0;
+                set a.b.c = 2.0;
 
-                assert_eq!(2.0, get_param!(a.b.c, 0.0));
-                assert_eq!(2, get_param!(a.b, 0));
-            };
+                let v3: f64 = get_param!(a.b.c, 0.0);
+                let v4: i64 = get_param!(a.b, 0);
+                assert_eq!(2.0, v3);
+                assert_eq!(2, v4);
+            }
 
-            assert_eq!(1, get_param!(a.b.c, 0));
-            assert_eq!(2, get_param!(a.b, 0));
+            let v5: i64 = get_param!(a.b.c, 0);
+            let v6: i64 = get_param!(a.b, 0);
+            assert_eq!(1, v5);
+            assert_eq!(2, v6);
         }
 
-        assert_eq!(0, get_param!(a.b.c, 0));
-        assert_eq!(0, get_param!(a.b, 0));
+        let v7: i64 = get_param!(a.b.c, 0);
+        let v8: i64 = get_param!(a.b, 0);
+        assert_eq!(0, v7);
+        assert_eq!(0, v8);
     }
 
     #[test]
     fn test_param_scope_with_param_get() {
         with_params! {
-            set a.b.c=1;
+            set a.b.c = 1;
 
             with_params! {
                 get a_b_c = a.b.c or 0;
 
                 assert_eq!(1, a_b_c);
-            };
+            }
         }
     }
 
@@ -612,7 +357,7 @@ mod tests {
 
                 assert_eq!(1, a_b_c);
                 assert_eq!(2, a_b);
-            };
+            }
         }
     }
 
@@ -636,9 +381,6 @@ mod tests {
         }
     }
 }
-
-// FILEPATH: /home/reiase/workspace/hyperparameter/core/src/api.rs
-// BEGIN: test_code
 
 #[cfg(test)]
 mod test_param_scope {
@@ -743,5 +485,3 @@ mod test_param_scope {
         }
     }
 }
-
-// END: test_code

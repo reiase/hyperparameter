@@ -25,23 +25,26 @@ fn main() {
         .unwrap();
 
     // No scope
-    println!(
-        "param1={}\t// No scope",
-        get_param!(example.param1, "default".to_string())
-    );
+    let val: String = get_param!(example.param1, "default".to_string());
+    println!("param1={}\t// No scope", val);
 
     with_params! { // Scope with configuration file parameters
         params config.param_scope();
 
-        println!("param1={}\t// cfg file scope", get_param!(example.param1, "default".to_string()));
+        let val: String = get_param!(example.param1, "default".to_string());
+        println!("param1={}\t// cfg file scope", val);
+        
         with_params! { // Scope with command-line arguments
             params ParamScope::from(&args.define);
 
-            println!("param1={}\t// cmdline args scope", get_param!(example.param1, "default".to_string(), "Example param1"));
+            let val: String = get_param!(example.param1, "default".to_string());
+            println!("param1={}\t// cmdline args scope", val);
+            
             with_params! { // User-defined scope
-                set example.param1= "scoped".to_string();
+                set example.param1 = "scoped".to_string();
 
-                println!("param1={}\t// user-defined scope", get_param!(example.param1, "default".to_string()));
+                let val: String = get_param!(example.param1, "default".to_string());
+                println!("param1={}\t// user-defined scope", val);
             }
         }
     }

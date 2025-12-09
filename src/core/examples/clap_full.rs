@@ -18,7 +18,7 @@ struct CommandLineArgs {
 
 fn foo(desc: &str) {
     with_params! {
-        /// Example param1 // this explain shows in `<app> --help`
+        // Example param1 - this is shown in help
         get param1 = example.param1 or "default".to_string();
 
         println!("param1={} // {}", param1, desc);
@@ -39,12 +39,14 @@ fn main() {
         params config.param_scope();
 
         foo("Within configuration file scope");
+        
         with_params! { // Scope with command-line arguments
             params ParamScope::from(&args.define);
 
             foo("Within command-line arguments scope");
+            
             with_params! { // User-defined scope
-                set example.param1= "scoped".to_string();
+                set example.param1 = "scoped".to_string();
 
                 foo("Within user-defined scope");
             }

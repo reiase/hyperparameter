@@ -121,14 +121,13 @@ impl AsParamScope for config::Config {
 mod tests {
     use config::ConfigError;
 
-    // use crate::with_params;
     use crate::*;
 
     use super::AsParamScope;
 
     #[test]
     fn test_create_param_scope_from_config() -> Result<(), ConfigError> {
-        let mut cfg = config::Config::builder()
+        let cfg = config::Config::builder()
             .set_default("a", 1)?
             .set_default("b", "2")?
             .set_default(

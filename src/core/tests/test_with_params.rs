@@ -13,7 +13,7 @@ fn test_with_params() {
             get a_int = a.int or 0;
 
             assert_eq!(1, a_int);
-        };
+        }
     }
 }
 
@@ -29,16 +29,16 @@ fn test_with_params_multi_threads() {
 
         let mut workers: Vec<JoinHandle<()>> = Vec::new();
         for _ in 0..10 {
-            let t = thread::spawn(||{
+            let t = thread::spawn(|| {
                 for i in 0..100000 {
                     with_params! {
                         get x = a.int or 0;
-                        assert!(x == 1 );
+                        assert!(x == 1);
 
-                        with_params!{
-                            set a.int = i%10;
-                        };
-                    };
+                        with_params! {
+                            set a.int = i % 10;
+                        }
+                    }
                 }
             });
             workers.push(t);
@@ -48,4 +48,35 @@ fn test_with_params_multi_threads() {
             let _ = t.join();
         }
     }
+}
+
+#[test]
+fn test_with_params_nested() {
+    with_params! {
+        set a.b = 1;
+        
+        let outer: i64 = get_param!(a.b, 0);
+        assert_eq!(1, outer);
+        
+        with_params! {
+            set a.b = 2;
+            
+            let inner: i64 = get_param!(a.b, 0);
+            assert_eq!(2, inner);
+        }
+        
+        let restored: i64 = get_param!(a.b, 0);
+        assert_eq!(1, restored);
+    }
+}
+
+#[test]
+fn test_with_params_expression() {
+    let result = with_params! {
+        set demo.val = 1;
+        
+        let x: i64 = get_param!(demo.val, 0);
+        x + 1
+    };
+    assert_eq!(2, result);
 }

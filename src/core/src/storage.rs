@@ -85,6 +85,14 @@ where
     TASK_STORAGE.scope(RefCell::new(storage), f)
 }
 
+#[cfg(feature = "tokio-task-local")]
+pub fn storage_scope<F>(storage: RefCell<Storage>, f: F) -> impl std::future::Future<Output = F::Output>
+where
+    F: std::future::Future,
+{
+    TASK_STORAGE.scope(storage, f)
+}
+
 thread_local! {
     pub static THREAD_STORAGE: RefCell<Storage> = create_thread_storage();
 }
@@ -98,7 +106,7 @@ where
         let mut opt_f = Some(f);
         if let Ok(r) = TASK_STORAGE.try_with(|ts| {
             let mut borrowed = ts.borrow_mut();
-            let mut f_inner = opt_f.take().expect("closure already taken");
+            let f_inner = opt_f.take().expect("closure already taken");
             f_inner(&mut *borrowed)
         }) {
             return r;
@@ -128,17 +136,6 @@ fn create_thread_storage() -> RefCell<Storage> {
     }
     // If lock is poisoned, continue with empty storage
     ts
-}
-
-fn clone_storage(src: &Storage) -> Storage {
-    let mut s = Storage::default();
-    for (k, v) in src.params.iter() {
-        if is_send_safe_value(v.value()) {
-            s.params.insert(*k, v.shallow());
-        }
-    }
-    s.history = vec![HashSet::new()];
-    s
 }
 
 lazy_static! {
@@ -192,6 +189,19 @@ impl Default for Storage {
 }
 
 impl Storage {
+    /// Clone this storage for use in an async task.
+    /// Only clones send-safe values.
+    pub fn clone_for_async(&self) -> Storage {
+        let mut s = Storage::default();
+        for (k, v) in self.params.iter() {
+            if is_send_safe_value(v.value()) {
+                s.params.insert(*k, v.shallow());
+            }
+        }
+        s.history = vec![HashSet::new()];
+        s
+    }
+
     pub fn enter(&mut self) {
         self.history.push(HashSet::new());
     }
@@ -240,6 +250,27 @@ impl Storage {
             if let std::collections::btree_map::Entry::Vacant(e) = self.params.entry(hkey) {
                 e.insert(Entry {
                     key,
+                    val: VersionedValue::from(val.into()),
+                });
+            } else {
+                self.params.revision(hkey, val);
+            }
+            current_history.insert(hkey);
+        }
+    }
+
+    /// Put a parameter with a pre-computed hash key.
+    /// This is used by the proc macro for compile-time hash computation.
+    pub fn put_with_hash<V: Into<Value> + Clone>(&mut self, hkey: u64, key: &str, val: V) {
+        let current_history = self.history.last_mut().expect(
+            "Storage::put_with_hash() called but history stack is empty."
+        );
+        if current_history.contains(&hkey) {
+            self.params.update(hkey, val);
+        } else {
+            if let std::collections::btree_map::Entry::Vacant(e) = self.params.entry(hkey) {
+                e.insert(Entry {
+                    key: key.to_string(),
                     val: VersionedValue::from(val.into()),
                 });
             } else {

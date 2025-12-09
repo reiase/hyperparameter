@@ -1,0 +1,19 @@
+[package]
+name = "hyperparameter-macros"
+version = "0.5.13"
+license = "Apache-2.0"
+description = "Procedural macros for hyperparameter crate"
+homepage = "https://reiase.github.io/hyperparameter/"
+repository = "https://github.com/reiase/hyperparameter"
+authors = ["reiase <reiase@gmail.com>"]
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "parsing", "visit"] }
+xxhash-rust = { version = "0.8.7", features = ["xxh64"] }
+proc-macro-crate = "3.0"
