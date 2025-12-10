@@ -9,7 +9,7 @@ use hyperparameter::*;
 fn stress_param_scope_multithread_30s() {
     // Seed a global value so spawned threads see the frozen snapshot.
     with_params! {
-        set baseline.seed = 7i64;
+        @set baseline.seed = 7i64;
         frozen();
     }
 
@@ -25,14 +25,14 @@ fn stress_param_scope_multithread_30s() {
             while Instant::now() < deadline {
                 with_params! {
                     // per-iteration writes
-                    set worker.id = worker_id as i64;
-                    set worker.iter = iter;
+                    @set worker.id = worker_id as i64;
+                    @set worker.iter = iter;
 
                     // read baseline propagated via frozen()
-                    get seed = baseline.seed or 0i64;
+                    @get seed = baseline.seed or 0i64;
                     // read back what we just set
-                    get wid = worker.id or -1i64;
-                    get witer = worker.iter or -1i64;
+                    @get wid = worker.id or -1i64;
+                    @get witer = worker.iter or -1i64;
 
                     assert_eq!(seed, 7);
                     assert_eq!(wid, worker_id as i64);

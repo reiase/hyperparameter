@@ -11,7 +11,7 @@ fn foo(x: i64, y: i64) -> i64 {
 #[inline(never)]
 fn foo_with_ps(x: i64) -> i64 {
     with_params! {
-        get y = y or 0;
+        @get y = y or 0;
 
         x+y
     }
@@ -37,7 +37,7 @@ fn call_foo_with_ps(nloop: i64) -> i64 {
     let mut sum = 0;
     for i in 0..nloop {
         with_params! {
-            set y = 42;
+            @set y = 42;
 
             sum += foo_with_ps(i);
         }
@@ -50,7 +50,7 @@ fn call_foo_with_ps_optimized(nloop: i64) -> i64 {
     let mut sum = 0;
 
     with_params! {
-        set y = 42;
+        @set y = 42;
 
         for i in 0..nloop {
             sum += foo_with_ps(i);
@@ -64,7 +64,7 @@ fn call_foo_with_ps_and_raw_btree(nloop: i64) -> i64 {
     let mut sum = 0;
     const KEY: u64 = xxhash("y".as_bytes());
     with_params! {
-        set y = 42;
+        @set y = 42;
 
         for i in 0..nloop {
             sum += THREAD_STORAGE.with(|ts| ts.borrow_mut().get_or_else(KEY, i));

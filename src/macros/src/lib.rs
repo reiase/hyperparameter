@@ -129,23 +129,37 @@ impl Parse for WithParamsInput {
         let mut items = Vec::new();
         
         while !input.is_empty() {
-            // Check for keywords
+            // Check for @set or @get syntax
+            if input.peek(Token![@]) {
+                let fork = input.fork();
+                fork.parse::<Token![@]>()?; // peek '@'
+                
+                if fork.peek(Ident) {
+                    let ident: Ident = fork.parse()?;
+                    
+                    if ident == "set" {
+                        input.parse::<Token![@]>()?; // consume '@'
+                        input.parse::<Ident>()?; // consume 'set'
+                        let set_stmt: SetStatement = input.parse()?;
+                        items.push(BlockItem::Set(set_stmt));
+                        continue;
+                    }
+                    
+                    if ident == "get" {
+                        input.parse::<Token![@]>()?; // consume '@'
+                        input.parse::<Ident>()?; // consume 'get'
+                        let get_stmt: GetStatement = input.parse()?;
+                        items.push(BlockItem::Get(get_stmt));
+                        continue;
+                    }
+                }
+                // If @ is followed by something other than set/get, 
+                // treat it as normal code (fall through)
+            }
+            
+            // Check for params keyword (still supports params without @)
             if input.peek(Ident) {
                 let ident: Ident = input.fork().parse()?;
-                
-                if ident == "set" {
-                    input.parse::<Ident>()?; // consume 'set'
-                    let set_stmt: SetStatement = input.parse()?;
-                    items.push(BlockItem::Set(set_stmt));
-                    continue;
-                }
-                
-                if ident == "get" {
-                    input.parse::<Ident>()?; // consume 'get'
-                    let get_stmt: GetStatement = input.parse()?;
-                    items.push(BlockItem::Get(get_stmt));
-                    continue;
-                }
                 
                 if ident == "params" {
                     input.parse::<Ident>()?; // consume 'params'
@@ -155,14 +169,27 @@ impl Parse for WithParamsInput {
                 }
             }
             
-            // Otherwise, collect tokens until we see 'set', 'get', 'params', or end
+            // Otherwise, collect tokens until we see '@set', '@get', 'params', or end
             let mut code_tokens = TokenStream2::new();
             while !input.is_empty() {
-                // Check if next is a keyword
+                // Check if next is @set or @get
+                if input.peek(Token![@]) {
+                    let fork = input.fork();
+                    fork.parse::<Token![@]>()?;
+                    if fork.peek(Ident) {
+                        if let Ok(ident) = fork.parse::<Ident>() {
+                            if ident == "set" || ident == "get" {
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Check if next is params keyword
                 if input.peek(Ident) {
                     let fork = input.fork();
                     if let Ok(ident) = fork.parse::<Ident>() {
-                        if ident == "set" || ident == "get" || ident == "params" {
+                        if ident == "params" {
                             break;
                         }
                     }
@@ -673,10 +700,10 @@ fn extract_params_setup(items: &[BlockItem]) -> (Option<TokenStream2>, &[BlockIt
 /// ```ignore
 /// // Basic usage
 /// with_params! {
-///     set a.b = 1;
-///     set c.d = 2.0;
+///     @set a.b = 1;
+///     @set c.d = 2.0;
 ///     
-///     get val = a.b or 0;
+///     @get val = a.b or 0;
 ///     
 ///     process(val)
 /// }
@@ -685,7 +712,7 @@ fn extract_params_setup(items: &[BlockItem]) -> (Option<TokenStream2>, &[BlockIt
 /// with_params! {
 ///     params config.param_scope();
 ///     
-///     get val = some.key or "default".to_string();
+///     @get val = some.key or "default".to_string();
 ///     println!("{}", val);
 /// }
 /// ```

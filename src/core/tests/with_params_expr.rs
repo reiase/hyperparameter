@@ -3,8 +3,8 @@ use hyperparameter::*;
 #[test]
 fn with_params_can_be_used_as_expression() {
     let result = with_params! {
-        set demo.val = 1;
-        get x = demo.val or 0;
+        @set demo.val = 1;
+        @get x = demo.val or 0;
 
         x + 1
     };
@@ -23,9 +23,9 @@ fn with_params_get_default() {
 #[test]
 fn with_params_mixed_set_get() {
     let result = with_params! {
-        set a.b = 10;
-        get val = a.b or 0;
-        
+        @set a.b = 10;
+        @get val = a.b or 0;
+
         let doubled = val * 2;
         doubled
     };

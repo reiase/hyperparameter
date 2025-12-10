@@ -104,7 +104,7 @@ fn main() {
 
             println!("param1={} // cmdline args scope", get_param!(example.param1, "default".to_string(), "Example param1"));
             with_params! { // User-defined scope
-                set example.param1= "scoped".to_string();
+                @set example.param1= "scoped".to_string();
 
                 println!("param1={} // user-defined scope", get_param!(example.param1, "default".to_string()));
             }

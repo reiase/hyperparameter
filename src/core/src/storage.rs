@@ -86,7 +86,10 @@ where
 }
 
 #[cfg(feature = "tokio-task-local")]
-pub fn storage_scope<F>(storage: RefCell<Storage>, f: F) -> impl std::future::Future<Output = F::Output>
+pub fn storage_scope<F>(
+    storage: RefCell<Storage>,
+    f: F,
+) -> impl std::future::Future<Output = F::Output>
 where
     F: std::future::Future,
 {
@@ -262,9 +265,10 @@ impl Storage {
     /// Put a parameter with a pre-computed hash key.
     /// This is used by the proc macro for compile-time hash computation.
     pub fn put_with_hash<V: Into<Value> + Clone>(&mut self, hkey: u64, key: &str, val: V) {
-        let current_history = self.history.last_mut().expect(
-            "Storage::put_with_hash() called but history stack is empty."
-        );
+        let current_history = self
+            .history
+            .last_mut()
+            .expect("Storage::put_with_hash() called but history stack is empty.");
         if current_history.contains(&hkey) {
             self.params.update(hkey, val);
         } else {

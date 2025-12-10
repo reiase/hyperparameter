@@ -208,11 +208,10 @@ where
     crate::storage::scope(storage, future)
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::storage::{GetOrElse, THREAD_STORAGE};
-    use crate::{with_params, get_param};
+    use crate::{get_param, with_params};
 
     use super::{ParamScope, ParamScopeOps};
 
@@ -303,8 +302,8 @@ mod tests {
     #[test]
     fn test_param_scope_with_param_set() {
         with_params! {
-            set a.b.c = 1;
-            set a.b = 2;
+            @set a.b.c = 1;
+            @set a.b = 2;
 
             let v1: i64 = get_param!(a.b.c, 0);
             let v2: i64 = get_param!(a.b, 0);
@@ -312,7 +311,7 @@ mod tests {
             assert_eq!(2, v2);
 
             with_params! {
-                set a.b.c = 2.0;
+                @set a.b.c = 2.0;
 
                 let v3: f64 = get_param!(a.b.c, 0.0);
                 let v4: i64 = get_param!(a.b, 0);
@@ -335,10 +334,10 @@ mod tests {
     #[test]
     fn test_param_scope_with_param_get() {
         with_params! {
-            set a.b.c = 1;
+            @set a.b.c = 1;
 
             with_params! {
-                get a_b_c = a.b.c or 0;
+                @get a_b_c = a.b.c or 0;
 
                 assert_eq!(1, a_b_c);
             }
@@ -348,12 +347,12 @@ mod tests {
     #[test]
     fn test_param_scope_with_param_set_get() {
         with_params! {
-            set a.b.c = 1;
-            set a.b = 2;
+            @set a.b.c = 1;
+            @set a.b = 2;
 
             with_params! {
-                get a_b_c = a.b.c or 0;
-                get a_b = a.b or 0;
+                @get a_b_c = a.b.c or 0;
+                @get a_b = a.b or 0;
 
                 assert_eq!(1, a_b_c);
                 assert_eq!(2, a_b);
@@ -364,7 +363,7 @@ mod tests {
     #[test]
     fn test_param_scope_with_param_readonly() {
         with_params! {
-            get a_b_c = a.b.c or 1;
+            @get a_b_c = a.b.c or 1;
 
             assert_eq!(1, a_b_c);
         }
@@ -373,9 +372,9 @@ mod tests {
     #[test]
     fn test_param_scope_with_param_mixed_get_set() {
         with_params! {
-            get _a_b_c = a.b.c or 1;
-            set a.b.c = 3;
-            get a_b_c = a.b.c or 2;
+            @get _a_b_c = a.b.c or 1;
+            @set a.b.c = 3;
+            @get a_b_c = a.b.c or 2;
 
             assert_eq!(3, a_b_c);
         }

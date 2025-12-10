@@ -146,9 +146,9 @@ mod tests {
             params cfg;
 
             with_params! {
-                get a = a or 0i64;
-                get b = b or String::from("2");
-                get foo_a = foo.a or 0i64;
+                @get a = a or 0i64;
+                @get b = b or String::from("2");
+                @get foo_a = foo.a or 0i64;
 
                 assert_eq!(1, a);
                 assert_eq!("2", b);
