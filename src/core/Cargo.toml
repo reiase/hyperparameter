@@ -38,6 +38,7 @@ hyperparameter-macros = { path = "../macros" }
 proptest = "1.2.0"
 criterion = "0.5.1"
 clap = { version = "4.4.7", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "time"] }
 
 [profile.dev]
 overflow-checks = false
