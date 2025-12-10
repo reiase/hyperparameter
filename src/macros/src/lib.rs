@@ -129,7 +129,7 @@ impl Parse for WithParamsInput {
         let mut items = Vec::new();
         
         while !input.is_empty() {
-            // Check for @set or @get syntax
+            // Check for @set, @get, or @params syntax
             if input.peek(Token![@]) {
                 let fork = input.fork();
                 fork.parse::<Token![@]>()?; // peek '@'
@@ -152,8 +152,16 @@ impl Parse for WithParamsInput {
                         items.push(BlockItem::Get(get_stmt));
                         continue;
                     }
+                    
+                    if ident == "params" {
+                        input.parse::<Token![@]>()?; // consume '@'
+                        input.parse::<Ident>()?; // consume 'params'
+                        let params_stmt: ParamsStatement = input.parse()?;
+                        items.push(BlockItem::Params(params_stmt));
+                        continue;
+                    }
                 }
-                // If @ is followed by something other than set/get, 
+                // If @ is followed by something other than set/get/params, 
                 // treat it as normal code (fall through)
             }
             
@@ -169,16 +177,16 @@ impl Parse for WithParamsInput {
                 }
             }
             
-            // Otherwise, collect tokens until we see '@set', '@get', 'params', or end
+            // Otherwise, collect tokens until we see '@set', '@get', '@params', 'params', or end
             let mut code_tokens = TokenStream2::new();
             while !input.is_empty() {
-                // Check if next is @set or @get
+                // Check if next is @set, @get, or @params
                 if input.peek(Token![@]) {
                     let fork = input.fork();
                     fork.parse::<Token![@]>()?;
                     if fork.peek(Ident) {
                         if let Ok(ident) = fork.parse::<Ident>() {
-                            if ident == "set" || ident == "get" {
+                            if ident == "set" || ident == "get" || ident == "params" {
                                 break;
                             }
                         }
