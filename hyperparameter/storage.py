@@ -233,10 +233,11 @@ except Exception:
 class TLSKVStorage(Storage):
     """ContextVar-backed storage wrapper for both Python and Rust backends."""
 
-    __slots__ = ("_inner",)
+    __slots__ = ("_inner", "_handler")
 
     def __init__(self, inner: Optional[Any] = None) -> None:
         stack = _get_ctx_stack()
+        
         if inner is not None:
             self._inner = inner
         elif stack:
@@ -254,6 +255,26 @@ class TLSKVStorage(Storage):
             with GLOBAL_STORAGE_LOCK:
                 snapshot = dict(GLOBAL_STORAGE)
             _copy_storage(snapshot, self._inner)
+        
+        # Handler 直接使用 storage 对象的地址（id）
+        # 这样比较非常快（整数比较），且唯一标识 storage 对象
+        # 在 64 位系统上，id() 返回的是 int64
+        self._handler = id(self._inner)
+        
+        # 设置 Rust 侧的 thread-local handler（关键！）
+        self._set_rust_handler(self._handler)
+    
+    def _set_rust_handler(self, handler: Optional[int]) -> None:
+        """设置 Rust 侧的 thread-local handler
+        handler 是 storage 对象的地址（id(storage)）
+        """
+        if has_rust_backend:
+            try:
+                from hyperparameter.librbackend import set_python_handler
+                set_python_handler(handler)  # 直接写入 Rust thread-local
+            except Exception:
+                # 如果 Rust 后端不可用，忽略
+                pass
 
     def __iter__(self) -> Iterator[Tuple[str, Any]]:
         return iter(self._inner)
@@ -273,6 +294,8 @@ class TLSKVStorage(Storage):
         return self._inner.keys()
 
     def update(self, kws: Optional[Dict[str, Any]] = None) -> None:
+        # 确保 Rust 侧 handler 是最新的
+        self._set_rust_handler(self._handler)
         return self._inner.update(kws)
 
     def clear(self) -> None:
@@ -284,12 +307,19 @@ class TLSKVStorage(Storage):
         raise RuntimeError("get_entry not supported without rust backend")
 
     def get(self, name: str, accessor: Optional[Callable] = None) -> Any:
+        # 确保 Rust 侧 handler 是最新的
+        self._set_rust_handler(self._handler)
         return self._inner.get(name, accessor) if accessor else self._inner.get(name)
 
     def put(self, name: str, value: Any) -> None:
+        # 确保 Rust 侧 handler 是最新的
+        self._set_rust_handler(self._handler)
         return self._inner.put(name, value)
 
     def enter(self) -> "TLSKVStorage":
+        # 先设置 Rust 侧的 handler
+        self._set_rust_handler(self._handler)
+        
         if hasattr(self._inner, "enter"):
             self._inner.enter()
         _push_ctx_stack(self)
@@ -301,6 +331,12 @@ class TLSKVStorage(Storage):
         stack = _get_ctx_stack()
         if stack and stack[-1] is self:
             _pop_ctx_stack()
+            # 退出时，恢复父级 handler 或清空
+            if stack:
+                parent_handler = stack[-1]._handler if hasattr(stack[-1], '_handler') else None
+                self._set_rust_handler(parent_handler)
+            else:
+                self._set_rust_handler(None)
 
     @staticmethod
     def current() -> "TLSKVStorage":

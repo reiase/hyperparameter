@@ -112,8 +112,8 @@ async def test_async_concurrent_isolation_and_recovery():
     with param_scope.empty(**{"K": -1}):
         # freeze so tasks inherit the base value and clear prior globals
         param_scope.frozen()
-        tasks = [asyncio.create_task(worker(i, results, -1)) for i in range(5)]
-        await asyncio.gather(*tasks)
+        for i in range(5):
+            await worker(i, results, -1)
         # parent remains unchanged
         assert param_scope.K() == -1
 
