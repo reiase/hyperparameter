@@ -15,6 +15,41 @@ def _get_param_scope():
     return param_scope
 
 
+# Custom help action that checks if --help (not -h) was used
+class ConditionalHelpAction(argparse.Action):
+    """Help action that shows advanced parameters only when --help is used, not -h."""
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
+        super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
+        self.option_strings = option_strings
+    
+    def __call__(self, parser, namespace, values, option_string=None):
+        # Check if --help was used (not -h)
+        # option_string will be the actual option used (either "-h" or "--help")
+        # Also check sys.argv as a fallback
+        show_advanced = (option_string == "--help") or "--help" in sys.argv
+        
+        # Only load advanced parameters when --help is used (lazy loading for performance)
+        if show_advanced:
+            # Get func and caller_globals from parser (stored during parser creation)
+            func = getattr(parser, '_auto_param_func', None)
+            caller_globals = getattr(parser, '_auto_param_caller_globals', None)
+            
+            if func and caller_globals:
+                # Lazy load: only now do we import and find related functions
+                related_funcs = _find_related_auto_param_functions(func, caller_globals)
+                if related_funcs:
+                    parser.epilog = _format_advanced_params_help(related_funcs)
+        else:
+            # For -h, ensure epilog is None (don't show advanced parameters)
+            parser.epilog = None
+        
+        parser.print_help()
+        
+        # Restore original epilog (which was None for -h, or newly set for --help)
+        # No need to restore since we're exiting anyway
+        parser.exit()
+
+
 def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
     """Parse param help from docstring (Google/NumPy/reST)."""
     if not doc:
@@ -297,16 +332,22 @@ def _build_parser_for_func(func: Callable, prog: Optional[str] = None, caller_gl
     # Use first paragraph of docstring for cleaner help output
     description = _extract_first_paragraph(func.__doc__) or func.__doc__
     
-    # Find related @auto_param functions for advanced parameters help
-    related_funcs = _find_related_auto_param_functions(func, caller_globals) if caller_globals else []
-    epilog = _format_advanced_params_help(related_funcs) if related_funcs else None
+    # Don't load advanced parameters here - delay until --help is used for better performance
+    # epilog will be set lazily in ConditionalHelpAction when --help is used
     
     parser = argparse.ArgumentParser(
         prog=prog or func.__name__,
         description=description,
-        epilog=epilog,
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        epilog=None,  # Will be set lazily in ConditionalHelpAction when --help is used
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False  # We'll add custom help actions
     )
+    
+    # Store func and caller_globals on parser for lazy loading in ConditionalHelpAction
+    parser._auto_param_func = func
+    parser._auto_param_caller_globals = caller_globals
+    
+    parser.add_argument("-h", "--help", action=ConditionalHelpAction, help="show this help message and exit")
     parser.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
     parser.add_argument(
         "-lps",
@@ -492,16 +533,23 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
             # Use first paragraph of docstring for cleaner help output
             help_text = _extract_first_paragraph(f.__doc__) or f.__doc__
             
-            # Find related @auto_param functions for advanced parameters help
-            related_funcs = _find_related_auto_param_functions(f, caller_globals)
-            epilog = _format_advanced_params_help(related_funcs) if related_funcs else None
+            # Don't load advanced parameters here - delay until --help is used for better performance
+            # epilog will be set lazily in ConditionalHelpAction when --help is used
             
             sub = subparsers.add_parser(
                 f.__name__,
                 help=help_text,
-                epilog=epilog,
-                formatter_class=argparse.RawDescriptionHelpFormatter
+                epilog=None,  # Will be set lazily in ConditionalHelpAction when --help is used
+                formatter_class=argparse.RawDescriptionHelpFormatter,
+                add_help=False  # We'll add custom help actions
             )
+            
+            # Store func and caller_globals on subparser for lazy loading in ConditionalHelpAction
+            sub._auto_param_func = f
+            sub._auto_param_caller_globals = caller_globals
+            
+            # Add the same conditional help action for subcommands
+            sub.add_argument("-h", "--help", action=ConditionalHelpAction, help="show this help message and exit")
             func_map[f.__name__] = f
             sub.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
             sub.add_argument(
