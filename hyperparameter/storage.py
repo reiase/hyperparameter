@@ -33,6 +33,18 @@ def _pop_ctx_stack() -> Tuple["TLSKVStorage", ...]:
 def _copy_storage(src: Any, dst: Any) -> None:
     """Best-effort copy from src to dst."""
     try:
+        # 如果src有clone方法，优先使用（Rust后端）
+        if hasattr(src, "clone"):
+            cloned = src.clone()
+            # 对于KVStorage，需要将cloned的数据复制到dst
+            if hasattr(cloned, "storage"):
+                storage_data = cloned.storage()
+                if isinstance(storage_data, dict) and hasattr(dst, "update"):
+                    dst.update(storage_data)
+                    return
+    except Exception:
+        pass
+    try:
         data = src.storage() if hasattr(src, "storage") else src
         if isinstance(data, dict) and hasattr(dst, "update"):
             dst.update(data)
@@ -242,26 +254,23 @@ class TLSKVStorage(Storage):
             self._inner = inner
         elif stack:
             # inherit from current context
-            parent = stack[-1].storage()
+            parent_storage = stack[-1]
+            parent = parent_storage._inner if hasattr(parent_storage, '_inner') else stack[-1].storage()
             if hasattr(parent, "clone"):
                 self._inner = parent.clone()
             else:
+                # 对于非Rust后端，使用copy
                 cloned = _BackendStorage()
                 _copy_storage(parent, cloned)
                 self._inner = cloned
         else:
             self._inner = _BackendStorage()
-            # seed from global
             with GLOBAL_STORAGE_LOCK:
                 snapshot = dict(GLOBAL_STORAGE)
-            _copy_storage(snapshot, self._inner)
+            if snapshot:
+                _copy_storage(snapshot, self._inner)
         
-        # Handler 直接使用 storage 对象的地址（id）
-        # 这样比较非常快（整数比较），且唯一标识 storage 对象
-        # 在 64 位系统上，id() 返回的是 int64
         self._handler = id(self._inner)
-        
-        # 设置 Rust 侧的 thread-local handler（关键！）
         self._set_rust_handler(self._handler)
     
     def _set_rust_handler(self, handler: Optional[int]) -> None:
@@ -294,8 +303,7 @@ class TLSKVStorage(Storage):
         return self._inner.keys()
 
     def update(self, kws: Optional[Dict[str, Any]] = None) -> None:
-        # 确保 Rust 侧 handler 是最新的
-        self._set_rust_handler(self._handler)
+        # 不再调用_set_rust_handler，因为ContextVar已经提供了任务隔离
         return self._inner.update(kws)
 
     def clear(self) -> None:
@@ -307,36 +315,27 @@ class TLSKVStorage(Storage):
         raise RuntimeError("get_entry not supported without rust backend")
 
     def get(self, name: str, accessor: Optional[Callable] = None) -> Any:
-        # 确保 Rust 侧 handler 是最新的
-        self._set_rust_handler(self._handler)
+        # 不再调用_set_rust_handler，因为ContextVar已经提供了任务隔离
+        # 在异步环境下，_set_rust_handler会设置线程本地handler，导致不同任务的handler互相覆盖
         return self._inner.get(name, accessor) if accessor else self._inner.get(name)
 
     def put(self, name: str, value: Any) -> None:
-        # 确保 Rust 侧 handler 是最新的
-        self._set_rust_handler(self._handler)
+        # 不再调用_set_rust_handler，因为ContextVar已经提供了任务隔离
         return self._inner.put(name, value)
 
     def enter(self) -> "TLSKVStorage":
-        # 先设置 Rust 侧的 handler
-        self._set_rust_handler(self._handler)
-        
-        if hasattr(self._inner, "enter"):
-            self._inner.enter()
+        # 不再调用KVStorage.enter()，因为with_current_storage是线程本地的，不是任务本地的
+        # 在异步环境下，使用with_current_storage会导致参数泄漏
+        # TLSKVStorage完全依赖ContextVar进行隔离，不需要with_current_storage
         _push_ctx_stack(self)
         return self
 
     def exit(self) -> None:
-        if hasattr(self._inner, "exit"):
-            self._inner.exit()
+        # 不再调用KVStorage.exit()，因为with_current_storage是线程本地的，不是任务本地的
+        # TLSKVStorage完全依赖ContextVar进行隔离，不需要with_current_storage
         stack = _get_ctx_stack()
         if stack and stack[-1] is self:
             _pop_ctx_stack()
-            # 退出时，恢复父级 handler 或清空
-            if stack:
-                parent_handler = stack[-1]._handler if hasattr(stack[-1], '_handler') else None
-                self._set_rust_handler(parent_handler)
-            else:
-                self._set_rust_handler(None)
 
     @staticmethod
     def current() -> "TLSKVStorage":

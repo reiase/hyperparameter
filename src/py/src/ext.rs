@@ -30,11 +30,6 @@ pub fn set_python_handler(handler: Option<i64>) {
     });
 }
 
-/// 获取当前线程的 Python handler 标记
-fn get_python_handler() -> Option<i64> {
-    PYTHON_HANDLER.with(|h| h.borrow().clone())
-}
-
 #[repr(C)]
 enum UserDefinedType {
     PyObjectType = 1,
@@ -73,6 +68,7 @@ fn make_value_from_pyobject(obj: *mut pyo3::ffi::PyObject) -> Value {
 pub struct KVStorage {
     storage: ParamScope,
     current_handler: Option<i64>,
+    is_current: bool,  // 标记是否通过current()创建
 }
 
 #[pymethods]
@@ -82,59 +78,99 @@ impl KVStorage {
         KVStorage {
             storage: ParamScope::default(),
             current_handler: None,
+            is_current: false,
         }
     }
 
     pub fn clone(&self) -> KVStorage {
+        // clone时，创建新的storage副本，但重置current_handler为None
+        // 这样新的KVStorage实例会使用自己的handler（由Python侧设置）
         KVStorage {
             storage: self.storage.clone(),
-            current_handler: self.current_handler.clone(),
-        }
-    }
-
-    /// 检查并更新 handler（如果不一致）
-    /// 这个方法会检查 thread-local 中的 Python handler，如果与当前 handler 不一致，
-    /// 则更新当前 handler。实际的存储同步由 Python 侧通过 ContextVar 管理。
-    fn check_and_sync_handler(&mut self) {
-        // 从 thread-local 获取 Python handler（不需要 GIL）
-        let python_handler = get_python_handler();
-        
-        // 如果 handler 不一致，更新当前 handler（整数比较，非常快）
-        if self.current_handler != python_handler {
-            if python_handler.is_none() {
-                // handler 为 None，清空存储
-                self.storage = ParamScope::default();
-            }
-            self.current_handler = python_handler;
+            current_handler: None,  // 重置handler，让Python侧设置新的handler
+            is_current: false,  // clone后的实例不是current，不应该回退到with_current_storage
         }
     }
 
     pub unsafe fn storage(&mut self, py: Python<'_>) -> PyResult<PyObject> {
         let res = PyDict::new(py);
-        for k in self.storage.keys().iter() {
-            match self.storage.get(k) {
-                Value::Empty => Ok(()),
-                Value::Int(v) => res.set_item(k, v),
-                Value::Float(v) => res.set_item(k, v),
-                Value::Text(v) => res.set_item(k, v.as_str()),
-                Value::Boolean(v) => res.set_item(k, v),
-                Value::UserDefined(v, kind, _) => {
-                    if kind == UserDefinedType::PyObjectType as i32 {
-                        // Borrowed pointer; increment refcount so Value's drop remains balanced.
-                        let obj = PyAny::from_borrowed_ptr_or_err(py, v as *mut pyo3::ffi::PyObject)?;
-                        res.set_item(k, obj)
-                    } else {
-                        res.set_item(k, v)
+        // 先添加self.storage中的值
+        if let ParamScope::Just(ref changes) = self.storage {
+            for (_, entry) in changes.iter() {
+                match entry.value() {
+                    Value::Empty => Ok(()),
+                    Value::Int(v) => res.set_item(&entry.key, v),
+                    Value::Float(v) => res.set_item(&entry.key, v),
+                    Value::Text(v) => res.set_item(&entry.key, v.as_str()),
+                    Value::Boolean(v) => res.set_item(&entry.key, v),
+                    Value::UserDefined(v, kind, _) => {
+                        if *kind == UserDefinedType::PyObjectType as i32 {
+                            // Borrowed pointer; increment refcount so Value's drop remains balanced.
+                            let obj = PyAny::from_borrowed_ptr_or_err(py, *v as *mut pyo3::ffi::PyObject)?;
+                            res.set_item(&entry.key, obj)
+                        } else {
+                            res.set_item(&entry.key, *v as u64)
+                        }
+                    }
+                }
+                .map_err(|e| e)?;
+            }
+        }
+        // 然后添加with_current_storage中的值（如果self.storage中没有）
+        with_current_storage(|ts| {
+            for (hkey, entry) in ts.params.iter() {
+                let key = &entry.key;
+                // 如果res中已经有这个key，跳过（self.storage优先）
+                if res.contains(key).unwrap_or(false) {
+                    continue;
+                }
+                match entry.value() {
+                    Value::Empty => {}
+                    Value::Int(v) => {
+                        let _ = res.set_item(key, *v);
+                    }
+                    Value::Float(v) => {
+                        let _ = res.set_item(key, *v);
+                    }
+                    Value::Text(v) => {
+                        let _ = res.set_item(key, v.as_str());
+                    }
+                    Value::Boolean(v) => {
+                        let _ = res.set_item(key, *v);
+                    }
+                    Value::UserDefined(v, k, _) => {
+                        if *k == UserDefinedType::PyObjectType as i32 {
+                            if let Ok(obj) = PyAny::from_borrowed_ptr_or_err(py, *v as *mut pyo3::ffi::PyObject) {
+                                let _ = res.set_item(key, obj);
+                            }
+                        } else {
+                            let _ = res.set_item(key, *v as u64);
+                        }
                     }
                 }
             }
-            .map_err(|e| e)?;
-        }
+        });
         Ok(res.into())
     }
 
     pub unsafe fn keys(&mut self, py: Python<'_>) -> PyResult<PyObject> {
-        let res = PyList::new(py, self.storage.keys());
+        // 先从self.storage读取
+        let mut keys: Vec<String> = if let ParamScope::Just(ref changes) = self.storage {
+            changes.values().map(|e| e.key.clone()).collect()
+        } else {
+            Vec::new()
+        };
+        // 如果self.storage是ParamScope::Nothing，从with_current_storage读取（支持enter/exit机制）
+        if matches!(self.storage, ParamScope::Nothing) {
+            with_current_storage(|ts| {
+                for entry in ts.params.values() {
+                    if !keys.contains(&entry.key) {
+                        keys.push(entry.key.clone());
+                    }
+                }
+            });
+        }
+        let res = PyList::new(py, keys);
         Ok(res.into())
     }
 
@@ -158,8 +194,8 @@ impl KVStorage {
     }
 
     pub unsafe fn update(&mut self, py: Python<'_>, kws: &PyDict) {
-        // 检查并更新 handler（如果需要）
-        self.check_and_sync_handler();
+        // 不再检查handler，因为Python侧已经通过ContextVar管理了正确的storage对象
+        // 在异步环境下，check_and_sync_handler会导致不同任务的KVStorage对象被错误同步
         self._update(py, kws, None);
     }
 
@@ -170,10 +206,33 @@ impl KVStorage {
     }
 
     pub unsafe fn get(&mut self, py: Python<'_>, key: String) -> PyResult<Option<PyObject>> {
-        // 检查并更新 handler（如果需要）
-        self.check_and_sync_handler();
+        // 先检查self.storage中是否有值
+        let hkey = key.xxh();
+        let value = if let ParamScope::Just(ref changes) = self.storage {
+            if let Some(e) = changes.get(&hkey) {
+                match e.value() {
+                    Value::Empty => Value::Empty,
+                    v => v.clone(),
+                }
+            } else {
+                Value::Empty
+            }
+        } else {
+            Value::Empty
+        };
         
-        match self.storage.get(key) {
+        // 如果self.storage中没有值，回退到with_current_storage（用于支持enter/exit机制）
+        // 使用ParamScope::get_with_hash()，它会自动处理回退逻辑：
+        // 1. 先检查self.storage中是否有值
+        // 2. 如果没有，回退到with_current_storage
+        // 这确保了enter()后，新的KVStorage实例可以读取到with_current_storage中的参数
+        let value = if matches!(value, Value::Empty) {
+            self.storage.get_with_hash(hkey)
+        } else {
+            value
+        };
+        
+        match value {
             Value::Empty => Err(PyValueError::new_err("not found")),
             Value::Int(v) => Ok(Some(v.into_py(py))),
             Value::Float(v) => Ok(Some(v.into_py(py))),
@@ -192,7 +251,29 @@ impl KVStorage {
     }
 
     pub unsafe fn get_entry(&mut self, py: Python<'_>, hkey: u64) -> PyResult<Option<PyObject>> {
-        match self.storage.get_with_hash(hkey) {
+        // 先检查self.storage中是否有值
+        let value = if let ParamScope::Just(ref changes) = self.storage {
+            if let Some(e) = changes.get(&hkey) {
+                match e.value() {
+                    Value::Empty => Value::Empty,
+                    v => v.clone(),
+                }
+            } else {
+                Value::Empty
+            }
+        } else {
+            Value::Empty
+        };
+
+        // 如果self.storage中没有值，回退到with_current_storage（用于支持enter/exit机制）
+        // 使用ParamScope::get_with_hash()，它会自动处理回退逻辑
+        let value = if matches!(value, Value::Empty) {
+            self.storage.get_with_hash(hkey)
+        } else {
+            value
+        };
+
+        match value {
             Value::Empty => Err(PyValueError::new_err("not found")),
             Value::Int(v) => Ok(Some(v.into_py(py))),
             Value::Float(v) => Ok(Some(v.into_py(py))),
@@ -200,6 +281,7 @@ impl KVStorage {
             Value::Boolean(v) => Ok(Some(v.into_py(py))),
             Value::UserDefined(v, k, _) => {
                 if k == UserDefinedType::PyObjectType as i32 {
+                    // borrowed ptr; convert with safety check
                     let obj = PyAny::from_borrowed_ptr_or_err(py, v as *mut pyo3::ffi::PyObject)?;
                     Ok(Some(obj.into()))
                 } else {
@@ -210,42 +292,58 @@ impl KVStorage {
     }
 
     pub unsafe fn put(&mut self, py: Python<'_>, key: String, val: &PyAny) -> PyResult<()> {
-        // 检查并更新 handler（如果需要）
-        self.check_and_sync_handler();
+        // 确保storage是ParamScope::Just状态，这样才能正确存储参数
+        if matches!(self.storage, ParamScope::Nothing) {
+            self.storage = ParamScope::default();
+        }
         
-        // 执行 put 操作
-        if val.is_none() {
-            self.storage.put(key, Value::Empty);
+        // 先更新self.storage
+        let value = if val.is_none() {
+            Value::Empty
         } else if val.is_instance_of::<PyBool>() {
-            self.storage.put(key, val.extract::<bool>()?);
+            Value::Boolean(val.extract::<bool>()?)
         } else if val.is_instance_of::<PyFloat>() {
-            self.storage.put(key, val.extract::<f64>()?);
+            Value::Float(val.extract::<f64>()?)
         } else if val.is_instance_of::<PyString>() {
-            self.storage.put(key, val.extract::<&str>()?.to_string());
+            Value::Text(val.extract::<&str>()?.to_string())
         } else if val.is_instance_of::<PyInt>() {
-            self.storage.put(key, val.extract::<i64>()?);
+            Value::Int(val.extract::<i64>()?)
         } else {
-            // Py_XINCREF(val.into_ptr());
-            self.storage.put(key, make_value_from_pyobject(val.into_ptr()));
+            make_value_from_pyobject(val.into_ptr())
+        };
+        
+        self.storage.put(key.clone(), value.clone());
+        
+        // 只有当通过current()创建时，才更新with_current_storage（用于支持current()机制）
+        // 否则会导致参数泄漏到全局存储中
+        if self.is_current {
+            with_current_storage(|ts| {
+                ts.put(key, value);
+            });
         }
         
         Ok(())
     }
 
     pub fn enter(&mut self) {
-        // enter 时不需要检查 handler，因为已经在 Python 侧设置了
+        // 调用ParamScope::enter()以支持with_current_storage机制
+        // 这对于直接使用KVStorage的测试（不通过TLSKVStorage）是必要的
         self.storage.enter();
     }
 
     pub fn exit(&mut self) {
+        // 调用ParamScope::exit()以支持with_current_storage机制
+        // 这对于直接使用KVStorage的测试（不通过TLSKVStorage）是必要的
         self.storage.exit();
     }
 
     #[staticmethod]
     pub fn current() -> KVStorage {
+        // 使用ParamScope::capture()来获取当前with_current_storage中的参数
         KVStorage {
-            storage: ParamScope::Nothing,
+            storage: ParamScope::capture(),
             current_handler: None,
+            is_current: true,  // 标记为通过current()创建
         }
     }
 

@@ -86,10 +86,8 @@ class TestRBackend(TestCase):
         # exit s1
         s1.exit()
         s3 = KVStorage()
-        try:
-            self.assertEqual(s3.get("a"), None)
-        except Exception as exc:
-            self.assertIsInstance(exc, ValueError)
+        with self.assertRaises(ValueError):
+            s3.get("a")
 
     def test_kvstorage_current(self):
         s1 = KVStorage()
