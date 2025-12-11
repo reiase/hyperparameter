@@ -815,9 +815,40 @@ def _arg_type_from_default(default: Any) -> Optional[Callable[[str], Any]]:
     return type(default)
 
 
+def _extract_first_paragraph(docstring: Optional[str]) -> Optional[str]:
+    """Extract the first paragraph from a docstring for cleaner help output.
+    
+    The first paragraph is defined as text up to the first blank line or
+    the first line that starts with common docstring section markers like
+    'Args:', 'Returns:', 'Examples:', etc.
+    """
+    if not docstring:
+        return None
+    
+    lines = docstring.strip().split('\n')
+    first_paragraph = []
+    
+    for line in lines:
+        stripped = line.strip()
+        # Stop at blank lines
+        if not stripped:
+            break
+        # Stop at common docstring section markers
+        if stripped.lower() in ('args:', 'arguments:', 'parameters:', 'returns:', 
+                                'raises:', 'examples:', 'note:', 'warning:', 
+                                'see also:', 'todo:'):
+            break
+        first_paragraph.append(stripped)
+    
+    result = ' '.join(first_paragraph).strip()
+    return result if result else None
+
+
 def _build_parser_for_func(func: Callable, prog: Optional[str] = None) -> argparse.ArgumentParser:
     sig = inspect.signature(func)
-    parser = argparse.ArgumentParser(prog=prog or func.__name__, description=func.__doc__)
+    # Use first paragraph of docstring for cleaner help output
+    description = _extract_first_paragraph(func.__doc__) or func.__doc__
+    parser = argparse.ArgumentParser(prog=prog or func.__name__, description=description)
     parser.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
     parser.add_argument(
         "-lps",
@@ -908,16 +939,51 @@ def _maybe_explain_and_exit(func: Callable, args_dict: Dict[str, Any], defines: 
     return True
 
 
-def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_locals=None) -> None:
+def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_locals=None, _caller_module=None) -> None:
     """Launch CLI for @auto_param functions.
 
     - launch(f): expose a single @auto_param function f as CLI.
     - launch(): expose all @auto_param functions in the caller module as subcommands.
+
+    Args:
+        func: Optional function to launch. If None, discovers all @auto_param functions in caller module.
+        _caller_globals: Explicitly pass caller's globals dict (for entry point support).
+        _caller_locals: Explicitly pass caller's locals dict (for entry point support).
+        _caller_module: Explicitly pass caller's module name or module object (for entry point support).
+                       Can be a string (module name) or a module object.
     """
     if _caller_globals is None or _caller_locals is None:
         caller_frame = inspect.currentframe().f_back  # type: ignore
-        caller_globals = caller_frame.f_globals if caller_frame else {}
-        caller_locals = caller_frame.f_locals if caller_frame else {}
+        if caller_frame is not None:
+            caller_globals = caller_frame.f_globals
+            caller_locals = caller_frame.f_locals
+        else:
+            # Fallback: try to find the caller module from sys.modules
+            caller_globals = {}
+            caller_locals = {}
+            if _caller_module is not None:
+                if isinstance(_caller_module, str):
+                    if _caller_module in sys.modules:
+                        mod = sys.modules[_caller_module]
+                        caller_globals = mod.__dict__
+                        caller_locals = mod.__dict__
+                elif hasattr(_caller_module, '__dict__'):
+                    caller_globals = _caller_module.__dict__
+                    caller_locals = _caller_module.__dict__
+            else:
+                # Last resort: try to find the module that called us by walking the stack
+                frame = inspect.currentframe()
+                if frame is not None:
+                    # Walk up the stack to find a module frame
+                    current = frame.f_back
+                    while current is not None:
+                        globs = current.f_globals
+                        # Check if this looks like a module (has __name__ and __file__)
+                        if '__name__' in globs and '__file__' in globs:
+                            caller_globals = globs
+                            caller_locals = current.f_locals
+                            break
+                        current = current.f_back
     else:
         caller_globals = _caller_globals
         caller_locals = _caller_locals
@@ -963,7 +1029,9 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
         subparsers = parser.add_subparsers(dest="command", required=True)
         func_map: Dict[str, Callable] = {}
         for f in candidates:
-            sub = subparsers.add_parser(f.__name__, help=f.__doc__)
+            # Use first paragraph of docstring for cleaner help output
+            help_text = _extract_first_paragraph(f.__doc__) or f.__doc__
+            sub = subparsers.add_parser(f.__name__, help=help_text)
             func_map[f.__name__] = f
             sub.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
             sub.add_argument(
@@ -1023,9 +1091,41 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
         return func(**args_dict)
 
 
-def run_cli(func: Optional[Callable] = None) -> None:
-    """Alias for launch() with a less collision-prone name."""
+def run_cli(func: Optional[Callable] = None, *, _caller_module=None) -> None:
+    """Alias for launch() with a less collision-prone name.
+    
+    Args:
+        func: Optional function to launch. If None, discovers all @auto_param functions in caller module.
+        _caller_module: Explicitly pass caller's module name or module object (for entry point support).
+                       This is useful when called via entry points where frame inspection may fail.
+                       Can be a string (module name) or a module object.
+    
+    Examples:
+        # In __main__.py or entry point script:
+        if __name__ == "__main__":
+            import sys
+            run_cli(_caller_module=sys.modules[__name__])
+        
+        # Or simply:
+        if __name__ == "__main__":
+            run_cli(_caller_module=__name__)
+    """
     caller_frame = inspect.currentframe().f_back  # type: ignore
-    caller_globals = caller_frame.f_globals if caller_frame else {}
-    caller_locals = caller_frame.f_locals if caller_frame else {}
-    return launch(func, _caller_globals=caller_globals, _caller_locals=caller_locals)
+    if caller_frame is not None:
+        caller_globals = caller_frame.f_globals
+        caller_locals = caller_frame.f_locals
+    else:
+        caller_globals = {}
+        caller_locals = {}
+        # Try to use _caller_module if provided
+        if _caller_module is not None:
+            if isinstance(_caller_module, str):
+                if _caller_module in sys.modules:
+                    mod = sys.modules[_caller_module]
+                    caller_globals = mod.__dict__
+                    caller_locals = mod.__dict__
+            elif hasattr(_caller_module, '__dict__'):
+                caller_globals = _caller_module.__dict__
+                caller_locals = _caller_module.__dict__
+    
+    return launch(func, _caller_globals=caller_globals, _caller_locals=caller_locals, _caller_module=_caller_module)

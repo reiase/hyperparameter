@@ -33,10 +33,8 @@ def _pop_ctx_stack() -> Tuple["TLSKVStorage", ...]:
 def _copy_storage(src: Any, dst: Any) -> None:
     """Best-effort copy from src to dst."""
     try:
-        # 如果src有clone方法，优先使用（Rust后端）
         if hasattr(src, "clone"):
             cloned = src.clone()
-            # 对于KVStorage，需要将cloned的数据复制到dst
             if hasattr(cloned, "storage"):
                 storage_data = cloned.storage()
                 if isinstance(storage_data, dict) and hasattr(dst, "update"):
@@ -195,7 +193,6 @@ class _DictStorage(Storage):
                 return curr._storage[name]
             curr = curr._parent
         raise KeyError(f"Parameter '{name}' not found in storage")
-        # return accessor(self, name)
 
     def put(self, name: str, value: Any) -> None:
         if name in self.__slots__:
@@ -253,13 +250,11 @@ class TLSKVStorage(Storage):
         if inner is not None:
             self._inner = inner
         elif stack:
-            # inherit from current context
             parent_storage = stack[-1]
             parent = parent_storage._inner if hasattr(parent_storage, '_inner') else stack[-1].storage()
             if hasattr(parent, "clone"):
                 self._inner = parent.clone()
             else:
-                # 对于非Rust后端，使用copy
                 cloned = _BackendStorage()
                 _copy_storage(parent, cloned)
                 self._inner = cloned
@@ -274,15 +269,15 @@ class TLSKVStorage(Storage):
         self._set_rust_handler(self._handler)
     
     def _set_rust_handler(self, handler: Optional[int]) -> None:
-        """设置 Rust 侧的 thread-local handler
-        handler 是 storage 对象的地址（id(storage)）
+        """Set Rust-side thread-local handler.
+        
+        The handler is the storage object's address (id(storage)).
         """
         if has_rust_backend:
             try:
                 from hyperparameter.librbackend import set_python_handler
-                set_python_handler(handler)  # 直接写入 Rust thread-local
+                set_python_handler(handler)
             except Exception:
-                # 如果 Rust 后端不可用，忽略
                 pass
 
     def __iter__(self) -> Iterator[Tuple[str, Any]]:
@@ -303,7 +298,6 @@ class TLSKVStorage(Storage):
         return self._inner.keys()
 
     def update(self, kws: Optional[Dict[str, Any]] = None) -> None:
-        # 不再调用_set_rust_handler，因为ContextVar已经提供了任务隔离
         return self._inner.update(kws)
 
     def clear(self) -> None:
@@ -315,24 +309,16 @@ class TLSKVStorage(Storage):
         raise RuntimeError("get_entry not supported without rust backend")
 
     def get(self, name: str, accessor: Optional[Callable] = None) -> Any:
-        # 不再调用_set_rust_handler，因为ContextVar已经提供了任务隔离
-        # 在异步环境下，_set_rust_handler会设置线程本地handler，导致不同任务的handler互相覆盖
         return self._inner.get(name, accessor) if accessor else self._inner.get(name)
 
     def put(self, name: str, value: Any) -> None:
-        # 不再调用_set_rust_handler，因为ContextVar已经提供了任务隔离
         return self._inner.put(name, value)
 
     def enter(self) -> "TLSKVStorage":
-        # 不再调用KVStorage.enter()，因为with_current_storage是线程本地的，不是任务本地的
-        # 在异步环境下，使用with_current_storage会导致参数泄漏
-        # TLSKVStorage完全依赖ContextVar进行隔离，不需要with_current_storage
         _push_ctx_stack(self)
         return self
 
     def exit(self) -> None:
-        # 不再调用KVStorage.exit()，因为with_current_storage是线程本地的，不是任务本地的
-        # TLSKVStorage完全依赖ContextVar进行隔离，不需要with_current_storage
         stack = _get_ctx_stack()
         if stack and stack[-1] is self:
             _pop_ctx_stack()
