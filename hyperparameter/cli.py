@@ -375,6 +375,8 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
     lines.append("  Use -D <namespace>.<param>=<value> to configure advanced options.")
     lines.append("")
     
+    # Collect all parameters from all functions first
+    all_param_items = []
     for full_ns, related_func in related_funcs:
         sig = inspect.signature(related_func)
         docstring = related_func.__doc__ or ""
@@ -382,107 +384,97 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
         # Parse docstring to extract parameter help
         param_help = _parse_param_help(docstring)
         
-        # Get function description - use first paragraph from docstring
-        func_desc = _extract_first_paragraph(docstring) or related_func.__name__
-        lines.append(f"  {full_ns}:")
-        lines.append(f"    {func_desc}")
-        lines.append("")
-        
-        # Collect all parameters first to calculate max width
-        param_items = []
         for name, param in sig.parameters.items():
             # Skip VAR_KEYWORD and VAR_POSITIONAL
             if param.kind == inspect.Parameter.VAR_KEYWORD or param.kind == inspect.Parameter.VAR_POSITIONAL:
                 continue
             
             param_key = f"{full_ns}.{name}"
-            param_items.append((param_key, name, param, param_help.get(name, "")))
+            all_param_items.append((param_key, name, param, param_help.get(name, "")))
+    
+    if not all_param_items:
+        return "\n".join(lines)
+    
+    # Calculate max width for alignment (similar to argparse format)
+    # Format: "  -D namespace.param=<value>"
+    max_param_width = max(len(f"  -D {key}=<value>") for key, _, _, _ in all_param_items)
+    # Align to a standard width (argparse typically uses 24-28)
+    align_width = max(max_param_width, 24)
+    
+    # Format each parameter similar to argparse options format
+    for param_key, name, param, help_text in all_param_items:
+        # Build the left side: "  -D namespace.param=<value>"
+        left_side = f"  -D {param_key}=<value>"
         
-        if not param_items:
-            continue
+        # Build help text with type and default info
+        help_parts = []
         
-        # Calculate max width for alignment (similar to argparse format)
-        # Format: "  -D namespace.param=<value>"
-        max_param_width = max(len(f"  -D {key}=<value>") for key, _, _, _ in param_items)
-        # Align to a standard width (argparse typically uses 24-28)
-        align_width = max(max_param_width, 24)
+        # Add help text from docstring
+        if help_text:
+            # Clean up help text - take first line and strip
+            help_text_clean = help_text.split("\n")[0].strip()
+            help_parts.append(help_text_clean)
         
-        # Format each parameter similar to argparse options format
-        for param_key, name, param, help_text in param_items:
-            # Build the left side: "  -D namespace.param=<value>"
-            left_side = f"  -D {param_key}=<value>"
-            
-            # Build help text with type and default info
-            help_parts = []
-            
-            # Add help text from docstring
-            if help_text:
-                # Clean up help text - take first line and strip
-                help_text_clean = help_text.split("\n")[0].strip()
-                help_parts.append(help_text_clean)
-            
-            # Add type information (simplified)
-            if param.annotation is not inspect._empty:
-                type_str = str(param.annotation)
-                # Clean up type string
-                # Handle <class 'str'> format
-                if type_str.startswith("<class '") and type_str.endswith("'>"):
-                    type_str = type_str[8:-2]
-                elif type_str.startswith("<") and type_str.endswith(">"):
-                    # Handle other <...> formats
-                    if "'" in type_str:
-                        type_str = type_str.split("'")[1]
-                    else:
-                        type_str = type_str[1:-1]
-                
-                # Handle typing module types
-                if "typing." in type_str:
-                    type_str = type_str.replace("typing.", "")
-                    # For Optional[Type], extract the inner type
-                    if type_str.startswith("Optional[") and type_str.endswith("]"):
-                        inner_type = type_str[9:-1]
-                        # Clean up inner type if needed
-                        if inner_type.startswith("<class '") and inner_type.endswith("'>"):
-                            inner_type = inner_type[8:-2]
-                        type_str = f"Optional[{inner_type}]"
-                
-                # Get just the class name for qualified names
-                if "." in type_str and not type_str.startswith("Optional["):
-                    type_str = type_str.split(".")[-1]
-                
-                help_parts.append(f"Type: {type_str}")
-            
-            # Add default value
-            default = param.default if param.default is not inspect._empty else None
-            if default is not None:
-                default_str = repr(default) if isinstance(default, str) else str(default)
-                help_parts.append(f"default: {default_str}")
-            
-            # Combine help parts
-            if help_parts:
-                # Format similar to argparse: main help, then (Type: ..., default: ...)
-                if len(help_parts) == 1:
-                    full_help = help_parts[0]
+        # Add type information (simplified)
+        if param.annotation is not inspect._empty:
+            type_str = str(param.annotation)
+            # Clean up type string
+            # Handle <class 'str'> format
+            if type_str.startswith("<class '") and type_str.endswith("'>"):
+                type_str = type_str[8:-2]
+            elif type_str.startswith("<") and type_str.endswith(">"):
+                # Handle other <...> formats
+                if "'" in type_str:
+                    type_str = type_str.split("'")[1]
                 else:
-                    main_help = help_parts[0] if help_text else ""
-                    extra_info = ", ".join(help_parts[1:]) if len(help_parts) > 1 else ""
-                    if main_help:
-                        full_help = f"{main_help} ({extra_info})"
-                    else:
-                        full_help = extra_info
-            else:
-                full_help = ""
+                    type_str = type_str[1:-1]
             
-            # Format the line with alignment (similar to argparse)
-            if full_help:
-                # Pad left side to align_width, then add help text
-                formatted_line = f"{left_side:<{align_width}} {full_help}"
-            else:
-                formatted_line = left_side
+            # Handle typing module types
+            if "typing." in type_str:
+                type_str = type_str.replace("typing.", "")
+                # For Optional[Type], extract the inner type
+                if type_str.startswith("Optional[") and type_str.endswith("]"):
+                    inner_type = type_str[9:-1]
+                    # Clean up inner type if needed
+                    if inner_type.startswith("<class '") and inner_type.endswith("'>"):
+                        inner_type = inner_type[8:-2]
+                    type_str = f"Optional[{inner_type}]"
             
-            lines.append(formatted_line)
+            # Get just the class name for qualified names
+            if "." in type_str and not type_str.startswith("Optional["):
+                type_str = type_str.split(".")[-1]
+            
+            help_parts.append(f"Type: {type_str}")
         
-        lines.append("")
+        # Add default value
+        default = param.default if param.default is not inspect._empty else None
+        if default is not None:
+            default_str = repr(default) if isinstance(default, str) else str(default)
+            help_parts.append(f"default: {default_str}")
+        
+        # Combine help parts
+        if help_parts:
+            # Format similar to argparse: main help, then (Type: ..., default: ...)
+            if len(help_parts) == 1:
+                full_help = help_parts[0]
+            else:
+                main_help = help_parts[0] if help_text else ""
+                extra_info = ", ".join(help_parts[1:]) if len(help_parts) > 1 else ""
+                if main_help:
+                    full_help = f"{main_help} ({extra_info})"
+                else:
+                    full_help = extra_info
+        else:
+            full_help = ""
+        
+        # Format the line with alignment (similar to argparse)
+        if full_help:
+            # Pad left side to align_width, then add help text
+            formatted_line = f"{left_side:<{align_width}} {full_help}"
+        else:
+            formatted_line = left_side
+        
+        lines.append(formatted_line)
     
     return "\n".join(lines)
 
