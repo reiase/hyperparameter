@@ -60,54 +60,104 @@ def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
     # Google style: Args:/Arguments:
     def parse_google():
         in_args = False
+        current_name = None
+        current_desc_lines = []
         for line in lines:
             if not in_args:
                 if line.strip().lower() in ("args:", "arguments:"):
                     in_args = True
                 continue
             if line.strip() == "":
+                # Empty line: save current description if we have one
+                if current_name and current_desc_lines:
+                    help_map.setdefault(current_name, " ".join(current_desc_lines))
+                    current_desc_lines = []
+                current_name = None
                 if in_args:
-                    break
+                    # Empty line after Args: section might end the section
+                    continue
                 continue
             if not line.startswith(" "):
+                # Section ended
+                if current_name and current_desc_lines:
+                    help_map.setdefault(current_name, " ".join(current_desc_lines))
                 break
             stripped = line.strip()
             if ":" in stripped:
-                name_part, desc = stripped.split(":", 1)
-                name_part = name_part.strip()
+                # Save previous parameter description if any
+                if current_name and current_desc_lines:
+                    help_map.setdefault(current_name, " ".join(current_desc_lines))
+                    current_desc_lines = []
+                
+                parts = stripped.split(":", 1)
+                name_part = parts[0].strip()
+                # Remove type annotation if present: "name (type)" -> "name"
                 if "(" in name_part and ")" in name_part:
                     name_part = name_part.split("(")[0].strip()
-                if name_part:
-                    help_map.setdefault(name_part, desc.strip())
+                current_name = name_part
+                
+                # Check if description follows on same line after colon
+                if len(parts) > 1:
+                    after_colon = parts[1].strip()
+                    if after_colon:
+                        current_desc_lines.append(after_colon)
+            elif current_name:
+                # Continuation of description for current parameter
+                desc = line.strip()
+                if desc:
+                    current_desc_lines.append(desc)
+        
+        # Save last parameter description if any
+        if current_name and current_desc_lines:
+            help_map.setdefault(current_name, " ".join(current_desc_lines))
 
     # NumPy style: Parameters
     def parse_numpy():
         in_params = False
         current_name = None
-        for line in lines:
+        current_desc_lines = []
+        for i, line in enumerate(lines):
             if not in_params:
                 if line.strip().lower() == "parameters":
                     in_params = True
                 continue
             if line.strip() == "":
-                if current_name is not None:
-                    current_name = None
+                # Empty line: save current description if we have one
+                if current_name and current_desc_lines:
+                    help_map.setdefault(current_name, " ".join(current_desc_lines))
+                    current_desc_lines = []
+                current_name = None
                 continue
             if not line.startswith(" "):
                 # section ended
+                if current_name and current_desc_lines:
+                    help_map.setdefault(current_name, " ".join(current_desc_lines))
                 break
-            # parameter line: name : type
+            # parameter line: name : type [description]
             if ":" in line:
-                name_part = line.split(":", 1)[0].strip()
+                # Save previous parameter description if any
+                if current_name and current_desc_lines:
+                    help_map.setdefault(current_name, " ".join(current_desc_lines))
+                    current_desc_lines = []
+                
+                parts = line.split(":", 1)
+                name_part = parts[0].strip()
                 current_name = name_part
-                # description may follow on same line after type, but we skip
-                if current_name and current_name not in help_map:
-                    # next indented lines are description
-                    continue
+                
+                # Check if description follows on same line after type
+                if len(parts) > 1:
+                    after_colon = parts[1].strip()
+                    if after_colon:
+                        current_desc_lines.append(after_colon)
             elif current_name:
+                # Continuation of description for current parameter
                 desc = line.strip()
                 if desc:
-                    help_map.setdefault(current_name, desc)
+                    current_desc_lines.append(desc)
+        
+        # Save last parameter description if any
+        if current_name and current_desc_lines:
+            help_map.setdefault(current_name, " ".join(current_desc_lines))
 
     # reST/Sphinx: :param name: desc
     def parse_rest():
@@ -294,33 +344,110 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
     
     for full_ns, related_func in related_funcs:
         sig = inspect.signature(related_func)
-        param_help = _parse_param_help(related_func.__doc__)
+        docstring = related_func.__doc__ or ""
         
-        # Get function description
-        func_desc = _extract_first_paragraph(related_func.__doc__) or related_func.__name__
+        # Parse docstring to extract parameter help
+        param_help = _parse_param_help(docstring)
+        
+        # Get function description - use first paragraph from docstring
+        func_desc = _extract_first_paragraph(docstring) or related_func.__name__
         lines.append(f"  {full_ns}:")
         lines.append(f"    {func_desc}")
+        lines.append("")
         
+        # Collect all parameters first to calculate max width
+        param_items = []
         for name, param in sig.parameters.items():
             # Skip VAR_KEYWORD and VAR_POSITIONAL
             if param.kind == inspect.Parameter.VAR_KEYWORD or param.kind == inspect.Parameter.VAR_POSITIONAL:
                 continue
             
-            help_text = param_help.get(name, "")
-            default = param.default if param.default is not inspect._empty else None
-            
             param_key = f"{full_ns}.{name}"
+            param_items.append((param_key, name, param, param_help.get(name, "")))
+        
+        if not param_items:
+            continue
+        
+        # Calculate max width for alignment (similar to argparse format)
+        # Format: "  -D namespace.param=<value>"
+        max_param_width = max(len(f"  -D {key}=<value>") for key, _, _, _ in param_items)
+        # Align to a standard width (argparse typically uses 24-28)
+        align_width = max(max_param_width, 24)
+        
+        # Format each parameter similar to argparse options format
+        for param_key, name, param, help_text in param_items:
+            # Build the left side: "  -D namespace.param=<value>"
+            left_side = f"  -D {param_key}=<value>"
+            
+            # Build help text with type and default info
+            help_parts = []
+            
+            # Add help text from docstring
             if help_text:
-                help_text = help_text.split("\n")[0].strip()  # First line only
-                if default is not None:
-                    lines.append(f"    -D {param_key}=<value>  {help_text} (default: {default})")
+                # Clean up help text - take first line and strip
+                help_text_clean = help_text.split("\n")[0].strip()
+                help_parts.append(help_text_clean)
+            
+            # Add type information (simplified)
+            if param.annotation is not inspect._empty:
+                type_str = str(param.annotation)
+                # Clean up type string
+                # Handle <class 'str'> format
+                if type_str.startswith("<class '") and type_str.endswith("'>"):
+                    type_str = type_str[8:-2]
+                elif type_str.startswith("<") and type_str.endswith(">"):
+                    # Handle other <...> formats
+                    if "'" in type_str:
+                        type_str = type_str.split("'")[1]
+                    else:
+                        type_str = type_str[1:-1]
+                
+                # Handle typing module types
+                if "typing." in type_str:
+                    type_str = type_str.replace("typing.", "")
+                    # For Optional[Type], extract the inner type
+                    if type_str.startswith("Optional[") and type_str.endswith("]"):
+                        inner_type = type_str[9:-1]
+                        # Clean up inner type if needed
+                        if inner_type.startswith("<class '") and inner_type.endswith("'>"):
+                            inner_type = inner_type[8:-2]
+                        type_str = f"Optional[{inner_type}]"
+                
+                # Get just the class name for qualified names
+                if "." in type_str and not type_str.startswith("Optional["):
+                    type_str = type_str.split(".")[-1]
+                
+                help_parts.append(f"Type: {type_str}")
+            
+            # Add default value
+            default = param.default if param.default is not inspect._empty else None
+            if default is not None:
+                default_str = repr(default) if isinstance(default, str) else str(default)
+                help_parts.append(f"default: {default_str}")
+            
+            # Combine help parts
+            if help_parts:
+                # Format similar to argparse: main help, then (Type: ..., default: ...)
+                if len(help_parts) == 1:
+                    full_help = help_parts[0]
                 else:
-                    lines.append(f"    -D {param_key}=<value>  {help_text}")
+                    main_help = help_parts[0] if help_text else ""
+                    extra_info = ", ".join(help_parts[1:]) if len(help_parts) > 1 else ""
+                    if main_help:
+                        full_help = f"{main_help} ({extra_info})"
+                    else:
+                        full_help = extra_info
             else:
-                if default is not None:
-                    lines.append(f"    -D {param_key}=<value>  (default: {default})")
-                else:
-                    lines.append(f"    -D {param_key}=<value>")
+                full_help = ""
+            
+            # Format the line with alignment (similar to argparse)
+            if full_help:
+                # Pad left side to align_width, then add help text
+                formatted_line = f"{left_side:<{align_width}} {full_help}"
+            else:
+                formatted_line = left_side
+            
+            lines.append(formatted_line)
         
         lines.append("")
     
