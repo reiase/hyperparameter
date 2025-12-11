@@ -145,10 +145,17 @@ def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
                 current_name = name_part
                 
                 # Check if description follows on same line after type
+                # In NumPy style, if there's only a type after colon (no description),
+                # we should ignore it and wait for the description on the next line
                 if len(parts) > 1:
                     after_colon = parts[1].strip()
-                    if after_colon:
+                    # Only add if it looks like a description (not just a type)
+                    # Types are usually single words or simple patterns, descriptions are longer
+                    # If it's just a type, the description will be on the next indented line
+                    if after_colon and len(after_colon.split()) > 1:
+                        # Multiple words likely means it's a description, not just a type
                         current_desc_lines.append(after_colon)
+                    # If it's a single word/type, we'll wait for the next line for description
             elif current_name:
                 # Continuation of description for current parameter
                 desc = line.strip()
@@ -222,6 +229,11 @@ def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[
     """Find all @auto_param functions related to the given function's namespace.
     
     Returns a list of (full_namespace, function) tuples.
+    
+    This function finds related functions by:
+    1. Functions with namespaces starting with base_ns + "." (e.g., "transformers.runtime")
+    2. Functions in the same module/package (to expose shared configuration)
+    3. Common shared namespaces like "runtime", "backend" that may be used across backends
     """
     namespace = getattr(func, "_auto_param_namespace", func.__name__)
     if not isinstance(namespace, str):
@@ -230,8 +242,29 @@ def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[
     # Extract base namespace (e.g., "transformers" from "transformers.runtime")
     base_ns = namespace.split(".")[0]
     
+    # Common shared namespaces that should be included
+    shared_namespaces = {"runtime", "backend", "config"}
+    
     related = []
     seen = set()
+    
+    def should_include(obj_ns: str, current_namespace: str) -> bool:
+        """Determine if a namespace should be included as related."""
+        if obj_ns == current_namespace:
+            return False
+        
+        # Include if starts with base_ns + "."
+        if obj_ns.startswith(base_ns + "."):
+            return True
+        
+        # Include if it's a shared namespace (e.g., "runtime", "backend")
+        ns_parts = obj_ns.split(".")
+        if len(ns_parts) > 0 and ns_parts[0] in shared_namespaces:
+            return True
+        
+        # Include if it's in the same module/package context
+        # This allows backend-specific configs to be found
+        return False
     
     # Check caller_globals (current module)
     if caller_globals:
@@ -240,7 +273,7 @@ def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[
                 continue
             seen.add(id(obj))
             obj_ns = getattr(obj, "_auto_param_namespace", None)
-            if isinstance(obj_ns, str) and obj_ns.startswith(base_ns + ".") and obj_ns != namespace:
+            if isinstance(obj_ns, str) and should_include(obj_ns, namespace):
                 related.append((obj_ns, obj))
         
         # Check imported modules
@@ -255,7 +288,7 @@ def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[
                             if callable(attr) and id(attr) not in seen:
                                 seen.add(id(attr))
                                 obj_ns = getattr(attr, "_auto_param_namespace", None)
-                                if isinstance(obj_ns, str) and obj_ns.startswith(base_ns + ".") and obj_ns != namespace:
+                                if isinstance(obj_ns, str) and should_include(obj_ns, namespace):
                                     related.append((obj_ns, attr))
                         except (AttributeError, TypeError):
                             continue
@@ -321,7 +354,7 @@ def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[
                     if callable(attr) and id(attr) not in seen:
                         seen.add(id(attr))
                         obj_ns = getattr(attr, "_auto_param_namespace", None)
-                        if isinstance(obj_ns, str) and obj_ns.startswith(base_ns + ".") and obj_ns != namespace:
+                        if isinstance(obj_ns, str) and should_include(obj_ns, namespace):
                             related.append((obj_ns, attr))
                 except (AttributeError, TypeError):
                     continue
