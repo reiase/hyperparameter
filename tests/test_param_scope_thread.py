@@ -6,8 +6,11 @@ from hyperparameter import param_scope
 class TestParamScopeThread(TestCase):
     def in_thread(self, key, val):
         ps = param_scope()
-        print(getattr(ps, key)())
-        self.assertEqual(getattr(ps, key)(), val)
+        if val is None:
+            with self.assertRaises(KeyError):
+                getattr(ps, key)()
+        else:
+            self.assertEqual(getattr(ps, key)(), val)
     
     def test_new_thread(self):
         t = Thread(target=self.in_thread, args=("a.b", None))

@@ -44,7 +44,8 @@ class TestParamScopeDirectAccess(TestCase):
             param_scope().b = 2
 
             assert param_scope.a() == 1
-            assert param_scope.b() == None
+            with self.assertRaises(KeyError):
+                param_scope.b()
 
             ps = param_scope()
             ps.b = 2
@@ -53,8 +54,10 @@ class TestParamScopeDirectAccess(TestCase):
                 param_scope.b() == 2
 
         # check for param leak
-        assert param_scope.a() == None
-        assert param_scope.b() == None
+        with self.assertRaises(KeyError):
+            param_scope.a()
+        with self.assertRaises(KeyError):
+            param_scope.b()
 
 
 class TestParamScopeWith(TestCase):
@@ -78,7 +81,8 @@ class TestParamScopeWith(TestCase):
                         assert ps2.a | "empty" == "non-empty"
                         ps4.b = 42
                     # b should not leak after ps4 exit
-                    assert ps3.b() is None
+                    with self.assertRaises(KeyError):
+                        ps3.b()
             assert ps1.a | "empty" == "empty"
         assert param_scope.a | "empty" == "empty"
 

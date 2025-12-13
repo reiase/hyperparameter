@@ -169,10 +169,10 @@ def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
     # reST/Sphinx: :param name: desc
     def parse_rest():
         for line in lines:
-            striped = line.strip()
-            if striped.startswith(":param"):
+            stripped = line.strip()
+            if stripped.startswith(":param"):
                 # forms: :param name: desc  or :param type name: desc
-                parts = striped.split(":param", 1)[1].strip()
+                parts = stripped.split(":param", 1)[1].strip()
                 if ":" in parts:
                     before, desc = parts.split(":", 1)
                     tokens = before.split()
@@ -416,7 +416,7 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
             help_parts.append(help_text_clean)
         
         # Add type information (simplified)
-        if param.annotation is not inspect._empty:
+        if param.annotation is not inspect.Parameter.empty:
             type_str = str(param.annotation)
             # Clean up type string
             # Handle <class 'str'> format
@@ -447,7 +447,7 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
             help_parts.append(f"Type: {type_str}")
         
         # Add default value
-        default = param.default if param.default is not inspect._empty else None
+        default = param.default if param.default is not inspect.Parameter.empty else None
         if default is not None:
             default_str = repr(default) if isinstance(default, str) else str(default)
             help_parts.append(f"default: {default_str}")
@@ -517,8 +517,8 @@ def _build_parser_for_func(func: Callable, prog: Optional[str] = None, caller_gl
     param_help = _parse_param_help(func.__doc__)
 
     for name, param in sig.parameters.items():
-        if param.default is inspect._empty:
-            parser.add_argument(name, type=param.annotation if param.annotation is not inspect._empty else str, help=param_help.get(name))
+        if param.default is inspect.Parameter.empty:
+            parser.add_argument(name, type=param.annotation if param.annotation is not inspect.Parameter.empty else str, help=param_help.get(name))
         else:
             arg_type = _arg_type_from_default(param.default)
             help_text = param_help.get(name)
@@ -547,7 +547,7 @@ def _describe_parameters(func: Callable, defines: List[str], arg_overrides: Dict
     with ps(*defines) as hp:
         storage_snapshot = hp.storage().storage()
         for name, param in sig.parameters.items():
-            default = param.default if param.default is not inspect._empty else _MISSING
+            default = param.default if param.default is not inspect.Parameter.empty else _MISSING
             if name in arg_overrides:
                 value = arg_overrides[name]
                 source = "cli-arg"
@@ -591,7 +591,7 @@ def _maybe_explain_and_exit(func: Callable, args_dict: Dict[str, Any], defines: 
     return True
 
 
-def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_locals=None, _caller_module=None) -> None:
+def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_locals=None, _caller_module=None) -> Any:
     """Launch CLI for @auto_param functions.
 
     - launch(f): expose a single @auto_param function f as CLI.
@@ -662,8 +662,6 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
             raise RuntimeError("No @auto_param functions found to launch.")
 
         if len(candidates) == 1:
-            import sys
-            
             func = candidates[0]
             parser = _build_parser_for_func(func, caller_globals=caller_globals)
             argv = sys.argv[1:]
@@ -720,8 +718,8 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
             sig = inspect.signature(f)
             param_help = _parse_param_help(f.__doc__)
             for name, param in sig.parameters.items():
-                if param.default is inspect._empty:
-                    sub.add_argument(name, type=param.annotation if param.annotation is not inspect._empty else str, help=param_help.get(name))
+                if param.default is inspect.Parameter.empty:
+                    sub.add_argument(name, type=param.annotation if param.annotation is not inspect.Parameter.empty else str, help=param_help.get(name))
                 else:
                     arg_type = _arg_type_from_default(param.default)
                     help_text = param_help.get(name)
@@ -763,7 +761,7 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
         return func(**args_dict)
 
 
-def run_cli(func: Optional[Callable] = None, *, _caller_module=None) -> None:
+def run_cli(func: Optional[Callable] = None, *, _caller_module=None) -> Any:
     """Alias for launch() with a less collision-prone name.
     
     Args:

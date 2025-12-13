@@ -9,6 +9,7 @@ from hyperparameter.storage import TLSKVStorage, has_rust_backend, xxh64
 from .tune import Suggester
 
 T = TypeVar("T")
+_MISSING = object()
 
 
 def _repr_dict(d: Dict[str, Any]) -> List[Tuple[str, Any]]:
@@ -258,8 +259,19 @@ class _ParamAccessor:
             return bool(value())
         return bool(value)
 
-    def __call__(self, default: Optional[T] = None) -> Union[T, Any]:
-        """shortcut for get_or_else"""
+    def __call__(self, default: Union[T, object] = _MISSING) -> Union[T, Any]:
+        """Get parameter value.
+
+        If default is not provided, the parameter is considered required and will raise KeyError if missing.
+        If default is provided, it acts as get_or_else(default).
+        """
+        if default is _MISSING:
+            value = self._root.get(self._name)
+            if isinstance(value, _ParamAccessor):
+                raise KeyError(f"Hyperparameter '{self._name}' is required but not defined.")
+            if isinstance(value, Suggester):
+                return value()
+            return value
         return self.get_or_else(default)
 
     def __or__(self, default: T) -> Union[T, Any]:
