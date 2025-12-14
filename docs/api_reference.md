@@ -425,3 +425,125 @@ with param_scope(**{"a": 1, "b": 2}) as ps:
     storage = ps.storage()
     print(storage.storage())  # {'a': 1, 'b': 2}
 ```
+
+---
+
+## Command Line Tool: hp
+
+Hyperparameter provides a CLI tool `hp` for analyzing hyperparameters in Python packages.
+
+### Installation
+
+After installing hyperparameter, the `hp` command is available:
+
+```bash
+pip install hyperparameter
+hp --help
+```
+
+### Commands
+
+#### hp list / hp ls
+
+List hyperparameters:
+
+```bash
+# List all packages using hyperparameter
+hp ls
+hp list
+
+# List hyperparameters in a package
+hp ls mypackage
+
+# Tree view
+hp ls mypackage --tree
+hp ls mypackage -t
+
+# Scope options
+hp ls mypackage --self       # Only self (default)
+hp ls mypackage --all        # Include dependencies
+hp ls mypackage --deps       # Only dependencies
+
+# Output formats
+hp ls mypackage -f text      # Default text format
+hp ls mypackage -f markdown  # Markdown format
+hp ls mypackage -f json      # JSON format
+
+# Save to file
+hp ls mypackage -o report.md -f markdown
+```
+
+#### Package Discovery
+
+When running `hp ls` without arguments, it scans all installed packages:
+
+```
+Packages using hyperparameter (3):
+============================================================
+Package                        Version      Params   Funcs
+------------------------------------------------------------
+myapp                          1.0.0        15       5
+ml-toolkit                     0.2.1        8        3
+config-manager                 2.1.0        4        2
+------------------------------------------------------------
+
+Use 'hp ls <package>' to see hyperparameters in a package.
+```
+
+#### hp describe / hp desc
+
+View hyperparameter details:
+
+```bash
+# Exact match
+hp desc train.lr mypackage
+
+# Fuzzy search
+hp desc lr mypackage
+
+# Default to current directory
+hp desc train.lr
+```
+
+### Example Output
+
+#### List (Tree View)
+
+```
+Hyperparameters in myapp:
+----------------------------------------
+📁 train
+  📄 lr = 0.001
+  📄 batch_size = 32
+  📄 epochs = 10
+📁 model
+  📄 hidden_size = 256
+  📄 dropout = 0.1
+
+Total: 5 hyperparameters
+```
+
+#### Describe
+
+```
+============================================================
+Hyperparameter: train.lr
+============================================================
+
+  Default: 0.001
+  Type: float
+  Namespace: train
+  Function: train
+
+  Source: myapp
+  Location: train.py:15
+
+  Description: Training function with configurable learning rate.
+
+  Usage:
+    # Access via param_scope
+    value = param_scope.train.lr | <default>
+    
+    # Set via command line
+    --train.lr=<value>
+```

@@ -22,6 +22,9 @@ readme = "README.md"
 license = { text = "Apache License Version 2.0" }
 dependencies = ["toml>=0.10"]
 
+[project.scripts]
+hp = "hyperparameter.analyzer:main"
+
 
 [tool.black]
 line-length = 88

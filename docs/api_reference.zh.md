@@ -514,3 +514,132 @@ print(has_rust_backend)  # True/False
 ```bash
 export HYPERPARAMETER_BACKEND=PYTHON
 ```
+
+---
+
+## 命令行工具：hp
+
+Hyperparameter 提供 `hp` 命令行工具，用于分析 Python 包中的超参数使用情况。
+
+### 安装
+
+安装 hyperparameter 后，`hp` 命令即可使用：
+
+```bash
+pip install hyperparameter
+hp --help
+```
+
+### 命令
+
+#### hp list / hp ls
+
+列出超参数：
+
+```bash
+# 列出所有使用 hyperparameter 的包
+hp ls
+hp list
+
+# 列出包中的超参数
+hp ls mypackage
+
+# 树状显示
+hp ls mypackage --tree
+hp ls mypackage -t
+
+# 范围选项
+hp ls mypackage --self       # 仅自身（默认）
+hp ls mypackage --all        # 包含依赖
+hp ls mypackage --deps       # 仅依赖
+
+# 输出格式
+hp ls mypackage -f text      # 默认文本格式
+hp ls mypackage -f markdown  # Markdown 格式
+hp ls mypackage -f json      # JSON 格式
+
+# 保存到文件
+hp ls mypackage -o report.md -f markdown
+```
+
+#### 包发现
+
+不带参数运行 `hp ls` 时，会扫描所有已安装的包：
+
+```
+Packages using hyperparameter (3):
+============================================================
+Package                        Version      Params   Funcs
+------------------------------------------------------------
+myapp                          1.0.0        15       5
+ml-toolkit                     0.2.1        8        3
+config-manager                 2.1.0        4        2
+------------------------------------------------------------
+
+Use 'hp ls <package>' to see hyperparameters in a package.
+```
+
+#### hp describe / hp desc
+
+查看超参数详情：
+
+```bash
+# 精确匹配
+hp desc train.lr mypackage
+
+# 模糊搜索
+hp desc lr mypackage
+
+# 默认当前目录
+hp desc train.lr
+```
+
+### 示例输出
+
+#### 列表（树状视图）
+
+```
+Hyperparameters in myapp:
+----------------------------------------
+📁 train
+  📄 lr = 0.001
+  📄 batch_size = 32
+  📄 epochs = 10
+📁 model
+  📄 hidden_size = 256
+  📄 dropout = 0.1
+
+Total: 5 hyperparameters
+```
+
+#### 描述
+
+```
+============================================================
+Hyperparameter: train.lr
+============================================================
+
+  Default: 0.001
+  Type: float
+  Namespace: train
+  Function: train
+
+  Source: myapp
+  Location: train.py:15
+
+  Description: Training function with configurable learning rate.
+
+  Usage:
+    # 通过 param_scope 访问
+    value = param_scope.train.lr | <default>
+    
+    # 通过命令行设置
+    --train.lr=<value>
+```
+
+### 使用场景
+
+1. **项目审计**：快速了解项目中所有可配置的超参数
+2. **文档生成**：自动生成超参数文档
+3. **依赖分析**：发现依赖库中的超参数，统一管理
+4. **代码审查**：检查超参数使用是否规范
