@@ -2,6 +2,10 @@ name: codecov
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+  id-token: write # Required for Codecov tokenless uploads (public repos)
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,18 +14,14 @@ jobs:
       run:
         working-directory: .
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.9'
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        profile: minimal
-        components: llvm-tools-preview
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
+      with:
+        components: llvm-tools-preview
     - name: Install cargo-llvm-cov
       uses: taiki-e/install-action@cargo-llvm-cov
     - name: Install requirements
@@ -43,4 +43,5 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         files: coverage.lcov,coverage.xml
-        token: ${{ secrets.CODECOV }}
+        token: ${{ secrets.CODECOV_TOKEN || secrets.CODECOV }}
+        fail_ci_if_error: true
