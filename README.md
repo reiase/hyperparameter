@@ -14,6 +14,30 @@
 
 Hyperparameter is a versatile library designed to streamline the management and control of hyperparameters in machine learning algorithms and system development. Tailored for AI researchers and Machine Learning Systems (MLSYS) developers, Hyperparameter offers a unified solution with a focus on ease of use in Python, high-performance access in Rust and C++, and a set of macros for seamless hyperparameter management.
 
+## 5-Minute Try
+
+```bash
+pip install hyperparameter
+
+# Run a ready-to-use demo
+python -m hyperparameter.examples.quickstart
+
+# Try the @auto_param CLI: override defaults from the command line
+python -m hyperparameter.examples.quickstart --define greet.name=Alice --enthusiasm=3
+
+# Inspect params and defaults
+python -m hyperparameter.examples.quickstart -lps
+python -m hyperparameter.examples.quickstart -ep greet.name
+
+# Running from source? Use module mode or install editable
+# python -m hyperparameter.examples.quickstart
+# or: pip install -e .
+```
+
+What it shows:
+- default values vs scoped overrides (`param_scope`)
+- `@auto_param` + `launch` exposing a CLI with `-D/--define` for quick overrides
+
 ## Key Features
 
 ### For Python Users
@@ -60,7 +84,7 @@ with param_scope(**{"foo.x": 2}):
 ```rust
 fn foo() -> i32 {
     with_params! {
-        get x = foo.x or 1i32; // Read hyperparameter with default value
+        @get x = foo.x or 1i32; // Read hyperparameter with default value
 
         println!("x={}", x);
     }
@@ -70,7 +94,7 @@ fn main() {
     foo(); // x=1
 
     with_params! {
-        set foo.x = 2i32; // Set hyperparameter
+        @set foo.x = 2i32; // Set hyperparameter
 
         foo(); // x=2
     }
@@ -106,7 +130,7 @@ x = param_scope.foo.x | "default value"
 #### Rust
 
 ```rust
-get x = foo.x or "default value";
+@get x = foo.x or "default value";
 ```
 
 ### Scope Control of Parameter Values
@@ -126,10 +150,10 @@ with param_scope() as ps: # 1st scope start
 
 ```rust
 with_params!{ // 1st scope start
-    set foo.x=1;
+    @set foo.x=1;
 
     with_params!{ //2nd scope start
-        set foo.y=2
+        @set foo.y=2
 
         ...
     } // 2nd scope end
@@ -157,7 +181,7 @@ with param_scope() as ps:
 ```rust
 fn foo() { // Print hyperparameter foo.x
     with_params!{
-        get x = foo.x or 1;
+        @get x = foo.x or 1;
 
         println!("foo.x={}", x);
     }
@@ -165,7 +189,7 @@ fn foo() { // Print hyperparameter foo.x
 
 fn main() {
     with_params!{
-        set foo.x = 2; // Modify foo.x in the current thread
+        @set foo.x = 2; // Modify foo.x in the current thread
         
         foo(); // foo.x=2
         thread::spawn(foo); // foo.x=1, new thread's hyperparameter value is not affected by the main thread
@@ -223,8 +247,8 @@ fn main() {
 
 fn foo() {
     with_params! {
-        get a = example.a or 0;
-        get b = example.b or 1;
+        @get a = example.a or 0;
+        @get b = example.b or 1;
         
         println!("example.a={}, example.b={}",a ,b);
     }

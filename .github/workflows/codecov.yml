@@ -2,6 +2,10 @@ name: codecov
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+  id-token: write # Required for Codecov tokenless uploads (public repos)
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,37 +14,38 @@ jobs:
       run:
         working-directory: .
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.9'
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        profile: minimal
-        components: llvm-tools-preview
+        cache: 'pip'
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
+      with:
+        components: llvm-tools-preview
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: "src/core -> src/core/target"
     - name: Install cargo-llvm-cov
       uses: taiki-e/install-action@cargo-llvm-cov
     - name: Install requirements
       run: |
-        pip install pytest pytest-cov && pip install -e .
+        pip install pytest pytest-cov pytest-asyncio && pip install -e .
     - name: Run tests and collect coverage
       run: |
-        cd core/
+        cd src/core/
         source <(cargo llvm-cov show-env --export-prefix)
         export CARGO_TARGET_DIR=$CARGO_LLVM_COV_TARGET_DIR
         export CARGO_INCREMENTAL=1
         cargo llvm-cov clean --workspace
         cargo test
-        cd ..
+        cd ../..
         pytest --cov=./ --cov-report=xml
-        cd core/
-        cargo llvm-cov --no-run --lcov --output-path ../coverage.lcov
+        cd src/core/
+        cargo llvm-cov --no-run --lcov --output-path ../../coverage.lcov
     - name: Upload coverage reports to Codecov with GitHub Action
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v5
       with:
         files: coverage.lcov,coverage.xml
-        token: ${{ secrets.CODECOV }}
+        token: ${{ secrets.CODECOV_TOKEN || secrets.CODECOV }}
+        fail_ci_if_error: true

@@ -15,9 +15,11 @@ plugins:
         zh:
           home: 首页
           quick: 快速开始
+          API Reference: API 参考
         en:
           home: Home
           quick: Quick Start
+          API 参考: API Reference
   - mkdocstrings:
       handlers:
         python:
@@ -37,6 +39,8 @@ nav:
   - Examples:
     - Hyperparameter Optimization: examples/optimization.md
     - 参数优化: examples/optimization.zh.md
+  - API Reference: api_reference.md
+  - API 参考: api_reference.zh.md
   - Reference: reference.md
 
 watch:

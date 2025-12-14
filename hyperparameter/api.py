@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import argparse
 import functools
 import inspect
-import sys
-from typing import Any, Callable, Dict, Optional, Union, TypeVar, overload, List, Tuple
+from typing import Any, Callable, Dict, Optional, Union, TypeVar, overload
 
 from hyperparameter.storage import TLSKVStorage, has_rust_backend, xxh64
 
 from .tune import Suggester
 
 T = TypeVar("T")
+_MISSING = object()
 
 
 def _repr_dict(d: Dict[str, Any]) -> List[Tuple[str, Any]]:
@@ -260,8 +259,21 @@ class _ParamAccessor:
             return bool(value())
         return bool(value)
 
-    def __call__(self, default: Optional[T] = None) -> Union[T, Any]:
-        """shortcut for get_or_else"""
+    def __call__(self, default: Union[T, object] = _MISSING) -> Union[T, Any]:
+        """Get parameter value.
+
+        If default is not provided, the parameter is considered required and will raise KeyError if missing.
+        If default is provided, it acts as get_or_else(default).
+        """
+        if default is _MISSING:
+            value = self._root.get(self._name)
+            if isinstance(value, _ParamAccessor):
+                raise KeyError(
+                    f"Hyperparameter '{self._name}' is required but not defined."
+                )
+            if isinstance(value, Suggester):
+                return value()
+            return value
         return self.get_or_else(default)
 
     def __or__(self, default: T) -> Union[T, Any]:
@@ -426,85 +438,6 @@ def _coerce_with_default(value: Any, default: Any) -> Any:
     if default_type is str:
         return str(value)
     return value
-
-
-def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
-    """Parse param help from docstring (Google/NumPy/reST)."""
-    if not doc:
-        return {}
-    lines = [line.rstrip() for line in doc.splitlines()]
-    help_map: Dict[str, str] = {}
-
-    # Google style: Args:/Arguments:
-    def parse_google():
-        in_args = False
-        for line in lines:
-            if not in_args:
-                if line.strip().lower() in ("args:", "arguments:"):
-                    in_args = True
-                continue
-            if line.strip() == "":
-                if in_args:
-                    break
-                continue
-            if not line.startswith(" "):
-                break
-            stripped = line.strip()
-            if ":" in stripped:
-                name_part, desc = stripped.split(":", 1)
-                name_part = name_part.strip()
-                if "(" in name_part and ")" in name_part:
-                    name_part = name_part.split("(")[0].strip()
-                if name_part:
-                    help_map.setdefault(name_part, desc.strip())
-
-    # NumPy style: Parameters
-    def parse_numpy():
-        in_params = False
-        current_name = None
-        for line in lines:
-            if not in_params:
-                if line.strip().lower() == "parameters":
-                    in_params = True
-                continue
-            if line.strip() == "":
-                if current_name is not None:
-                    current_name = None
-                continue
-            if not line.startswith(" "):
-                # section ended
-                break
-            # parameter line: name : type
-            if ":" in line:
-                name_part = line.split(":", 1)[0].strip()
-                current_name = name_part
-                # description may follow on same line after type, but we skip
-                if current_name and current_name not in help_map:
-                    # next indented lines are description
-                    continue
-            elif current_name:
-                desc = line.strip()
-                if desc:
-                    help_map.setdefault(current_name, desc)
-
-    # reST/Sphinx: :param name: desc
-    def parse_rest():
-        for line in lines:
-            striped = line.strip()
-            if striped.startswith(":param"):
-                # forms: :param name: desc  or :param type name: desc
-                parts = striped.split(":param", 1)[1].strip()
-                if ":" in parts:
-                    before, desc = parts.split(":", 1)
-                    tokens = before.split()
-                    name = tokens[-1] if tokens else ""
-                    if name:
-                        help_map.setdefault(name, desc.strip())
-
-    parse_google()
-    parse_numpy()
-    parse_rest()
-    return help_map
 
 
 @_dynamic_dispatch
@@ -805,141 +738,5 @@ def auto_param(
     return wrapper
 
 
-def _arg_type_from_default(default: Any) -> Optional[Callable[[str], Any]]:
-    if isinstance(default, bool):
-        def _to_bool(v: str) -> bool:
-            return v.lower() in ("1", "true", "t", "yes", "y", "on")
-        return _to_bool
-    if default is None:
-        return None
-    return type(default)
-
-
-def _build_parser_for_func(func: Callable, prog: Optional[str] = None) -> argparse.ArgumentParser:
-    sig = inspect.signature(func)
-    parser = argparse.ArgumentParser(prog=prog or func.__name__, description=func.__doc__)
-    parser.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
-    param_help = _parse_param_help(func.__doc__)
-
-    for name, param in sig.parameters.items():
-        if param.default is inspect._empty:
-            parser.add_argument(name, type=param.annotation if param.annotation is not inspect._empty else str, help=param_help.get(name))
-        else:
-            arg_type = _arg_type_from_default(param.default)
-            help_text = param_help.get(name)
-            if help_text:
-                help_text = f"{help_text} (default: {param.default})"
-            else:
-                help_text = f"(default from auto_param: {param.default})"
-            parser.add_argument(
-                f"--{name}",
-                dest=name,
-                type=arg_type,
-                default=argparse.SUPPRESS,
-                help=help_text,
-            )
-    return parser
-
-
-def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_locals=None) -> None:
-    """Launch CLI for @auto_param functions.
-
-    - launch(f): expose a single @auto_param function f as CLI.
-    - launch(): expose all @auto_param functions in the caller module as subcommands.
-    """
-    if _caller_globals is None or _caller_locals is None:
-        caller_frame = inspect.currentframe().f_back  # type: ignore
-        caller_globals = caller_frame.f_globals if caller_frame else {}
-        caller_locals = caller_frame.f_locals if caller_frame else {}
-    else:
-        caller_globals = _caller_globals
-        caller_locals = _caller_locals
-
-    if func is None:
-        seen_ids = set()
-        candidates = []
-        for obj in list(caller_locals.values()) + list(caller_globals.values()):
-            if not callable(obj):
-                continue
-            ns = getattr(obj, "_auto_param_namespace", None)
-            if not isinstance(ns, str):
-                continue
-            # Skip private helpers (e.g., _foo) when exposing subcommands.
-            name = getattr(obj, "__name__", "")
-            if isinstance(name, str) and name.startswith("_"):
-                continue
-            oid = id(obj)
-            if oid in seen_ids:
-                continue
-            seen_ids.add(oid)
-            candidates.append(obj)
-        if not candidates:
-            raise RuntimeError("No @auto_param functions found to launch.")
-
-        if len(candidates) == 1:
-            import sys
-            
-            func = candidates[0]
-            parser = _build_parser_for_func(func)
-            argv = sys.argv[1:]
-            if argv and argv[0] == func.__name__:
-                argv = argv[1:]
-            args = parser.parse_args(argv)
-            args_dict = vars(args)
-            defines = args_dict.pop("define", [])
-            with param_scope(*defines):
-                return func(**args_dict)
-
-        parser = argparse.ArgumentParser(description="hyperparameter auto-param CLI")
-        subparsers = parser.add_subparsers(dest="command", required=True)
-        func_map: Dict[str, Callable] = {}
-        for f in candidates:
-            sub = subparsers.add_parser(f.__name__, help=f.__doc__)
-            func_map[f.__name__] = f
-            sub.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
-            sig = inspect.signature(f)
-            param_help = _parse_param_help(f.__doc__)
-            for name, param in sig.parameters.items():
-                if param.default is inspect._empty:
-                    sub.add_argument(name, type=param.annotation if param.annotation is not inspect._empty else str, help=param_help.get(name))
-                else:
-                    arg_type = _arg_type_from_default(param.default)
-                    help_text = param_help.get(name)
-                    if help_text:
-                        help_text = f"{help_text} (default: {param.default})"
-                    else:
-                        help_text = f"(default from auto_param: {param.default})"
-                    sub.add_argument(
-                        f"--{name}",
-                        dest=name,
-                        type=arg_type,
-                        default=argparse.SUPPRESS,
-                        help=help_text,
-                    )
-        args = parser.parse_args()
-        args_dict = vars(args)
-        cmd = args_dict.pop("command")
-        defines = args_dict.pop("define", [])
-        target = func_map[cmd]
-        with param_scope(*defines):
-            # Freeze first so new threads spawned inside target inherit these overrides.
-            param_scope.frozen()
-            return target(**args_dict)
-
-    if not hasattr(func, "_auto_param_namespace"):
-        raise ValueError("launch() expects a function decorated with @auto_param")
-    parser = _build_parser_for_func(func)
-    args = parser.parse_args()
-    args_dict = vars(args)
-    defines = args_dict.pop("define", [])
-    with param_scope(*defines):
-        param_scope.frozen()
-        return func(**args_dict)
-
-
-def run_cli(func: Optional[Callable] = None) -> None:
-    """Alias for launch() with a less collision-prone name."""
-    caller_frame = inspect.currentframe().f_back  # type: ignore
-    caller_globals = caller_frame.f_globals if caller_frame else {}
-    caller_locals = caller_frame.f_locals if caller_frame else {}
-    return launch(func, _caller_globals=caller_globals, _caller_locals=caller_locals)
+# Import CLI functions from cli.py to maintain backward compatibility
+from .cli import launch, run_cli

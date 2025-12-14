@@ -1,0 +1,27 @@
+[package]
+name = "hyperparameter-py"
+version = "0.5.14"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "pyhparam"
+crate-type = ["cdylib"]
+
+[dependencies]
+# hyperparameter = { version = "0.5.4", path = "../base" }
+backtrace = "0.3.69"
+hyperparameter = { path = "../core" }
+pyo3 = { version = "0.20.0", features = [
+  "extension-module",
+  "abi3",
+  "abi3-py37",
+] }
+lazy_static = "1.4.0"
+phf = { version = "0.11", features = ["macros"] }
+signal-hook = "0.3.17"
+tokio = { version = "1.31.0", features = ["full"] }
+
+[profile.dev]
+overflow-checks = false

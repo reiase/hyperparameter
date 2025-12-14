@@ -60,7 +60,7 @@ with param_scope(**{"foo.x": 2}):
 ```rust
 fn foo() -> i32 {
     with_params! {
-        get x = foo.x or 1i32; // 读取带有默认值的超参数
+        @get x = foo.x or 1i32; // 读取带有默认值的超参数
 
         println!("x={}", x);
     }
@@ -70,7 +70,7 @@ fn main() {
     foo(); // x=1
 
     with_params! {
-        set foo.x = 2i32; // 设置超参数
+        @set foo.x = 2i32; // 设置超参数
 
         foo(); // x=2
     }
@@ -106,7 +106,7 @@ x = param_scope.foo.x | "default value"
 #### Rust
 
 ```rust
-get x = foo.x or "default value";
+@get x = foo.x or "default value";
 ```
 
 ### 控制参数值的作用域
@@ -126,10 +126,10 @@ with param_scope() as ps: # 第1个作用域开始
 
 ```rust
 with_params!{ // 第1个作用域开始
-    set foo.x=1;
+    @set foo.x=1;
 
     with_params!{ //第2个作用域开始
-        set foo.y=2
+        @set foo.y=2
 
         ...
     } // 第2个作用域结束
@@ -159,7 +159,7 @@ with param_scope() as ps:
 ```rust
 fn foo() { // 打印超参数 foo.x
     with_params!{
-        get x = foo.x or 1;
+        @get x = foo.x or 1;
 
         println!("foo.x={}", x);
     }
@@ -167,7 +167,7 @@ fn foo() { // 打印超参数 foo.x
 
 fn main() {
     with_params!{
-        set foo.x = 2; // 在当前线程中修改 foo.x
+        @set foo.x = 2; // 在当前线程中修改 foo.x
         
         foo(); // foo.x=2
         thread::spawn(foo); // foo.x=1，新线程的超参数值不受主线程的影响
@@ -225,8 +225,8 @@ fn main() {
 
 fn foo() {
     with_params! {
-        get a = example.a or 0;
-        get b = example.b or 1;
+        @get a = example.a or 0;
+        @get b = example.b or 1;
         
         println!("example.a={}, example.b={}",a ,b);
     }

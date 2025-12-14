@@ -2,7 +2,7 @@ import sys
 from unittest import TestCase
 
 from hyperparameter import auto_param, launch, param_scope, run_cli
-import hyperparameter.api as hp_api
+import hyperparameter.cli as hp_cli
 
 
 # Module-level auto_param to test global discovery
@@ -113,7 +113,7 @@ class TestLaunch(TestCase):
             """
             return a, b
 
-        parser = hp_api._build_parser_for_func(doc_func)
+        parser = hp_cli._build_parser_for_func(doc_func)
         actions = {action.dest: action for action in parser._actions}
         self.assertEqual(actions["a"].help, "first arg")
         self.assertEqual(actions["b"].help, "second arg (default: 2)")
@@ -140,12 +140,12 @@ class TestLaunch(TestCase):
             """
             return p, q
 
-        parser_numpy = hp_api._build_parser_for_func(numpy_style)
+        parser_numpy = hp_cli._build_parser_for_func(numpy_style)
         actions_numpy = {action.dest: action for action in parser_numpy._actions}
         self.assertEqual(actions_numpy["x"].help, "the x value")
         self.assertIn("y", actions_numpy)
 
-        parser_rest = hp_api._build_parser_for_func(rest_style)
+        parser_rest = hp_cli._build_parser_for_func(rest_style)
         actions_rest = {action.dest: action for action in parser_rest._actions}
         self.assertEqual(actions_rest["p"].help, "first param")
         self.assertEqual(actions_rest["q"].help, "second param (default: 3)")
