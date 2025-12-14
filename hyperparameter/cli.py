@@ -9,33 +9,48 @@ import inspect
 import sys
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+
 # Import param_scope locally to avoid circular import
 # param_scope is defined in api.py, but we import it here to avoid circular dependency
 def _get_param_scope():
     """Lazy import of param_scope to avoid circular imports."""
     from .api import param_scope
+
     return param_scope
 
 
 # Custom help action that checks if --help (not -h) was used
 class ConditionalHelpAction(argparse.Action):
     """Help action that shows advanced parameters only when --help is used, not -h."""
-    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
-        super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
+
+    def __init__(
+        self,
+        option_strings,
+        dest=argparse.SUPPRESS,
+        default=argparse.SUPPRESS,
+        help=None,
+    ):
+        super().__init__(
+            option_strings=option_strings,
+            dest=dest,
+            default=default,
+            nargs=0,
+            help=help,
+        )
         self.option_strings = option_strings
-    
+
     def __call__(self, parser, namespace, values, option_string=None):
         # Check if --help was used (not -h)
         # option_string will be the actual option used (either "-h" or "--help")
         # Also check sys.argv as a fallback
         show_advanced = (option_string == "--help") or "--help" in sys.argv
-        
+
         # Only load advanced parameters when --help is used (lazy loading for performance)
         if show_advanced:
             # Get func and caller_globals from parser (stored during parser creation)
-            func = getattr(parser, '_auto_param_func', None)
-            caller_globals = getattr(parser, '_auto_param_caller_globals', None)
-            
+            func = getattr(parser, "_auto_param_func", None)
+            caller_globals = getattr(parser, "_auto_param_caller_globals", None)
+
             if func and caller_globals:
                 # Lazy load: only now do we import and find related functions
                 related_funcs = _find_related_auto_param_functions(func, caller_globals)
@@ -44,9 +59,9 @@ class ConditionalHelpAction(argparse.Action):
         else:
             # For -h, ensure epilog is None (don't show advanced parameters)
             parser.epilog = None
-        
+
         parser.print_help()
-        
+
         # Restore original epilog (which was None for -h, or newly set for --help)
         # No need to restore since we're exiting anyway
         parser.exit()
@@ -90,14 +105,14 @@ def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
                 if current_name and current_desc_lines:
                     help_map.setdefault(current_name, " ".join(current_desc_lines))
                     current_desc_lines = []
-                
+
                 parts = stripped.split(":", 1)
                 name_part = parts[0].strip()
                 # Remove type annotation if present: "name (type)" -> "name"
                 if "(" in name_part and ")" in name_part:
                     name_part = name_part.split("(")[0].strip()
                 current_name = name_part
-                
+
                 # Check if description follows on same line after colon
                 if len(parts) > 1:
                     after_colon = parts[1].strip()
@@ -108,7 +123,7 @@ def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
                 desc = line.strip()
                 if desc:
                     current_desc_lines.append(desc)
-        
+
         # Save last parameter description if any
         if current_name and current_desc_lines:
             help_map.setdefault(current_name, " ".join(current_desc_lines))
@@ -141,11 +156,11 @@ def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
                 if current_name and current_desc_lines:
                     help_map.setdefault(current_name, " ".join(current_desc_lines))
                     current_desc_lines = []
-                
+
                 parts = line.split(":", 1)
                 name_part = parts[0].strip()
                 current_name = name_part
-                
+
                 # Check if description follows on same line after type
                 # In NumPy style, if there's only a type after colon (no description),
                 # we should ignore it and wait for the description on the next line
@@ -163,7 +178,7 @@ def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
                 desc = line.strip()
                 if desc:
                     current_desc_lines.append(desc)
-        
+
         # Save last parameter description if any
         if current_name and current_desc_lines:
             help_map.setdefault(current_name, " ".join(current_desc_lines))
@@ -190,8 +205,10 @@ def _parse_param_help(doc: Optional[str]) -> Dict[str, str]:
 
 def _arg_type_from_default(default: Any) -> Optional[Callable[[str], Any]]:
     if isinstance(default, bool):
+
         def _to_bool(v: str) -> bool:
             return v.lower() in ("1", "true", "t", "yes", "y", "on")
+
         return _to_bool
     if default is None:
         return None
@@ -200,48 +217,59 @@ def _arg_type_from_default(default: Any) -> Optional[Callable[[str], Any]]:
 
 def _extract_first_paragraph(docstring: Optional[str]) -> Optional[str]:
     """Extract the first paragraph from a docstring for cleaner help output.
-    
+
     The first paragraph is defined as text up to the first blank line or
     the first line that starts with common docstring section markers like
     'Args:', 'Returns:', 'Examples:', etc.
     """
     if not docstring:
         return None
-    
-    lines = docstring.strip().split('\n')
+
+    lines = docstring.strip().split("\n")
     first_paragraph = []
-    
+
     for line in lines:
         stripped = line.strip()
         # Stop at blank lines
         if not stripped:
             break
         # Stop at common docstring section markers
-        if stripped.lower() in ('args:', 'arguments:', 'parameters:', 'returns:', 
-                                'raises:', 'examples:', 'note:', 'warning:', 
-                                'see also:', 'todo:'):
+        if stripped.lower() in (
+            "args:",
+            "arguments:",
+            "parameters:",
+            "returns:",
+            "raises:",
+            "examples:",
+            "note:",
+            "warning:",
+            "see also:",
+            "todo:",
+        ):
             break
         first_paragraph.append(stripped)
-    
-    result = ' '.join(first_paragraph).strip()
+
+    result = " ".join(first_paragraph).strip()
     return result if result else None
 
 
-def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[Dict] = None) -> List[Tuple[str, Callable]]:
+def _find_related_auto_param_functions(
+    func: Callable, caller_globals: Optional[Dict] = None
+) -> List[Tuple[str, Callable]]:
     """Find all @auto_param functions in the call chain of the given function.
-    
+
     Uses AST analysis to discover functions that are actually called by the entry
     function, then recursively analyzes those functions to build the complete
     call graph of @auto_param decorated functions.
-    
+
     Returns a list of (full_namespace, function) tuples.
     """
     current_namespace = getattr(func, "_auto_param_namespace", func.__name__)
-    
+
     related: List[Tuple[str, Callable]] = []
     visited_funcs: Set[int] = set()  # Track visited functions by id
     visited_funcs.add(id(func))  # Don't include the entry function itself
-    
+
     def _get_module_globals(f: Callable) -> Dict[str, Any]:
         """Get the global namespace of the module containing function f."""
         module_name = getattr(f, "__module__", None)
@@ -249,15 +277,17 @@ def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[
             mod = sys.modules[module_name]
             return vars(mod)
         return {}
-    
-    def _resolve_name(name: str, globals_dict: Dict[str, Any], module: Any) -> Optional[Callable]:
+
+    def _resolve_name(
+        name: str, globals_dict: Dict[str, Any], module: Any
+    ) -> Optional[Callable]:
         """Resolve a name to a callable, handling imports and attributes."""
         # Direct lookup in globals
         if name in globals_dict:
             obj = globals_dict[name]
             if callable(obj):
                 return obj
-        
+
         # Handle dotted names like "module.func"
         if "." in name:
             parts = name.split(".")
@@ -268,9 +298,9 @@ def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[
                 obj = getattr(obj, part, None)
             if callable(obj):
                 return obj
-        
+
         return None
-    
+
     def _extract_call_names(node: ast.AST) -> List[str]:
         """Extract function names from a Call node."""
         names = []
@@ -294,29 +324,33 @@ def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[
                     # Also try just the method name for cases like self.method()
                     names.append(func_node.attr)
         return names
-    
+
     def _resolve_local_imports(tree: ast.AST, func_module: str) -> Dict[str, Callable]:
         """Resolve local imports (from .xxx import yyy) within a function body."""
         local_imports: Dict[str, Callable] = {}
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 # Handle: from .module import func
                 if node.module is None:
                     continue
-                
+
                 # Resolve relative import
                 if node.level > 0 and func_module:
                     # Relative import: from .xxx import yyy
                     module_parts = func_module.rsplit(".", node.level)
                     if len(module_parts) > 1:
                         base_module = module_parts[0]
-                        full_module = f"{base_module}.{node.module}" if node.module else base_module
+                        full_module = (
+                            f"{base_module}.{node.module}"
+                            if node.module
+                            else base_module
+                        )
                     else:
                         full_module = node.module
                 else:
                     full_module = node.module
-                
+
                 # Try to import the module (silently ignore failures)
                 try:
                     imported_mod = importlib.import_module(full_module)
@@ -328,67 +362,67 @@ def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[
                 except Exception:
                     # Silently ignore any import errors
                     pass
-        
+
         return local_imports
-    
+
     def _analyze_function(f: Callable, depth: int = 0) -> None:
         """Recursively analyze a function to find @auto_param decorated callees."""
         if depth > 10:  # Prevent infinite recursion
             return
-        
+
         # Skip library functions to avoid unnecessary recursion
         func_module = getattr(f, "__module__", "")
         if func_module.startswith(("hyperparameter", "builtins", "typing")):
             return
-        
+
         # Get function source code
         try:
             source = inspect.getsource(f)
             tree = ast.parse(source)
         except (OSError, TypeError, IndentationError, SyntaxError):
             return
-        
+
         # Get the module globals for name resolution
         globals_dict = _get_module_globals(f)
         module = sys.modules.get(getattr(f, "__module__", ""), None)
-        
+
         # Also check __globals__ attribute of the function itself (for closures)
         if hasattr(f, "__globals__"):
             globals_dict = {**globals_dict, **f.__globals__}
-        
+
         # Resolve local imports within the function body
         local_imports = _resolve_local_imports(tree, func_module)
         globals_dict = {**globals_dict, **local_imports}
-        
+
         # Find all function calls in the AST
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
-            
+
             call_names = _extract_call_names(node)
-            
+
             for call_name in call_names:
                 # Try to resolve the called function
                 called_func = _resolve_name(call_name, globals_dict, module)
                 if called_func is None:
                     continue
-                
+
                 # Skip if already visited
                 if id(called_func) in visited_funcs:
                     continue
                 visited_funcs.add(id(called_func))
-                
+
                 # Check if it has @auto_param decorator
                 ns = getattr(called_func, "_auto_param_namespace", None)
                 if isinstance(ns, str) and ns != current_namespace:
                     related.append((ns, called_func))
-                
+
                 # Recursively analyze this function (always recurse, even if no @auto_param)
                 _analyze_function(called_func, depth + 1)
-    
+
     # Start analysis from the entry function
     _analyze_function(func)
-    
+
     # Sort by namespace for consistent output
     related.sort(key=lambda x: x[0])
     return related
@@ -398,51 +432,56 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
     """Format help text for advanced parameters available via -D."""
     if not related_funcs:
         return ""
-    
+
     lines = ["\nAdvanced parameters (via -D flag):"]
     lines.append("  Use -D <namespace>.<param>=<value> to configure advanced options.")
     lines.append("")
-    
+
     # Collect all parameters from all functions first
     all_param_items = []
     for full_ns, related_func in related_funcs:
         sig = inspect.signature(related_func)
         docstring = related_func.__doc__ or ""
-        
+
         # Parse docstring to extract parameter help
         param_help = _parse_param_help(docstring)
-        
+
         for name, param in sig.parameters.items():
             # Skip VAR_KEYWORD and VAR_POSITIONAL
-            if param.kind == inspect.Parameter.VAR_KEYWORD or param.kind == inspect.Parameter.VAR_POSITIONAL:
+            if (
+                param.kind == inspect.Parameter.VAR_KEYWORD
+                or param.kind == inspect.Parameter.VAR_POSITIONAL
+            ):
                 continue
-            
+
             param_key = f"{full_ns}.{name}"
             all_param_items.append((param_key, name, param, param_help.get(name, "")))
-    
+
     if not all_param_items:
         return "\n".join(lines)
-    
+
     # Calculate max width for alignment (similar to argparse format)
     # Format: "  -D namespace.param=<value>"
-    max_param_width = max(len(f"  -D {key}=<value>") for key, _, _, _ in all_param_items)
+    max_param_width = max(
+        len(f"  -D {key}=<value>") for key, _, _, _ in all_param_items
+    )
     # Align to a standard width (argparse typically uses 24-28)
     align_width = max(max_param_width, 24)
-    
+
     # Format each parameter similar to argparse options format
     for param_key, name, param, help_text in all_param_items:
         # Build the left side: "  -D namespace.param=<value>"
         left_side = f"  -D {param_key}=<value>"
-        
+
         # Build help text with type and default info
         help_parts = []
-        
+
         # Add help text from docstring
         if help_text:
             # Clean up help text - take first line and strip
             help_text_clean = help_text.split("\n")[0].strip()
             help_parts.append(help_text_clean)
-        
+
         # Add type information (simplified)
         if param.annotation is not inspect.Parameter.empty:
             type_str = str(param.annotation)
@@ -456,7 +495,7 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
                     type_str = type_str.split("'")[1]
                 else:
                     type_str = type_str[1:-1]
-            
+
             # Handle typing module types
             if "typing." in type_str:
                 type_str = type_str.replace("typing.", "")
@@ -467,19 +506,21 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
                     if inner_type.startswith("<class '") and inner_type.endswith("'>"):
                         inner_type = inner_type[8:-2]
                     type_str = f"Optional[{inner_type}]"
-            
+
             # Get just the class name for qualified names
             if "." in type_str and not type_str.startswith("Optional["):
                 type_str = type_str.split(".")[-1]
-            
+
             help_parts.append(f"Type: {type_str}")
-        
+
         # Add default value
-        default = param.default if param.default is not inspect.Parameter.empty else None
+        default = (
+            param.default if param.default is not inspect.Parameter.empty else None
+        )
         if default is not None:
             default_str = repr(default) if isinstance(default, str) else str(default)
             help_parts.append(f"default: {default_str}")
-        
+
         # Combine help parts
         if help_parts:
             # Format similar to argparse: main help, then (Type: ..., default: ...)
@@ -494,41 +535,55 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
                     full_help = extra_info
         else:
             full_help = ""
-        
+
         # Format the line with alignment (similar to argparse)
         if full_help:
             # Pad left side to align_width, then add help text
             formatted_line = f"{left_side:<{align_width}} {full_help}"
         else:
             formatted_line = left_side
-        
+
         lines.append(formatted_line)
-    
+
     return "\n".join(lines)
 
 
-def _build_parser_for_func(func: Callable, prog: Optional[str] = None, caller_globals: Optional[Dict] = None) -> argparse.ArgumentParser:
+def _build_parser_for_func(
+    func: Callable, prog: Optional[str] = None, caller_globals: Optional[Dict] = None
+) -> argparse.ArgumentParser:
     sig = inspect.signature(func)
     # Use first paragraph of docstring for cleaner help output
     description = _extract_first_paragraph(func.__doc__) or func.__doc__
-    
+
     # Don't load advanced parameters here - delay until --help is used for better performance
     # epilog will be set lazily in ConditionalHelpAction when --help is used
-    
+
     parser = argparse.ArgumentParser(
         prog=prog or func.__name__,
         description=description,
         epilog=None,  # Will be set lazily in ConditionalHelpAction when --help is used
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        add_help=False  # We'll add custom help actions
+        add_help=False,  # We'll add custom help actions
     )
-    
+
     # Store func and caller_globals on parser for lazy loading in ConditionalHelpAction
     parser._auto_param_func = func
     parser._auto_param_caller_globals = caller_globals
-    
-    parser.add_argument("-h", "--help", action=ConditionalHelpAction, help="show this help message and exit")
-    parser.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
+
+    parser.add_argument(
+        "-h",
+        "--help",
+        action=ConditionalHelpAction,
+        help="show this help message and exit",
+    )
+    parser.add_argument(
+        "-D",
+        "--define",
+        nargs="*",
+        default=[],
+        action="extend",
+        help="Override params, e.g., a.b=1",
+    )
     parser.add_argument(
         "-lps",
         "--list-params",
@@ -546,7 +601,15 @@ def _build_parser_for_func(func: Callable, prog: Optional[str] = None, caller_gl
 
     for name, param in sig.parameters.items():
         if param.default is inspect.Parameter.empty:
-            parser.add_argument(name, type=param.annotation if param.annotation is not inspect.Parameter.empty else str, help=param_help.get(name))
+            parser.add_argument(
+                name,
+                type=(
+                    param.annotation
+                    if param.annotation is not inspect.Parameter.empty
+                    else str
+                ),
+                help=param_help.get(name),
+            )
         else:
             arg_type = _arg_type_from_default(param.default)
             help_text = param_help.get(name)
@@ -564,7 +627,9 @@ def _build_parser_for_func(func: Callable, prog: Optional[str] = None, caller_gl
     return parser
 
 
-def _describe_parameters(func: Callable, defines: List[str], arg_overrides: Dict[str, Any]) -> List[Tuple[str, str, str, Any, str, Any]]:
+def _describe_parameters(
+    func: Callable, defines: List[str], arg_overrides: Dict[str, Any]
+) -> List[Tuple[str, str, str, Any, str, Any]]:
     """Return [(func_name, param_name, full_key, value, source, default)] under current overrides."""
     namespace = getattr(func, "_auto_param_namespace", func.__name__)
     func_name = getattr(func, "__name__", namespace)
@@ -575,7 +640,11 @@ def _describe_parameters(func: Callable, defines: List[str], arg_overrides: Dict
     with ps(*defines) as hp:
         storage_snapshot = hp.storage().storage()
         for name, param in sig.parameters.items():
-            default = param.default if param.default is not inspect.Parameter.empty else _MISSING
+            default = (
+                param.default
+                if param.default is not inspect.Parameter.empty
+                else _MISSING
+            )
             if name in arg_overrides:
                 value = arg_overrides[name]
                 source = "cli-arg"
@@ -586,24 +655,38 @@ def _describe_parameters(func: Callable, defines: List[str], arg_overrides: Dict
                     value = "<required>"
                 else:
                     value = getattr(hp(), full_key).get_or_else(default)
-                source = "--define" if in_define else ("default" if default is not _MISSING else "required")
+                source = (
+                    "--define"
+                    if in_define
+                    else ("default" if default is not _MISSING else "required")
+                )
             printable_default = "<required>" if default is _MISSING else default
-            results.append((func_name, name, full_key, value, source, printable_default))
+            results.append(
+                (func_name, name, full_key, value, source, printable_default)
+            )
     return results
 
 
-def _maybe_explain_and_exit(func: Callable, args_dict: Dict[str, Any], defines: List[str]) -> bool:
+def _maybe_explain_and_exit(
+    func: Callable, args_dict: Dict[str, Any], defines: List[str]
+) -> bool:
     list_params = bool(args_dict.pop("list_params", False))
     explain_targets = args_dict.pop("explain_param", None)
     if explain_targets is not None and len(explain_targets) == 0:
-        print("No parameter names provided to --explain-param. Please specify at least one.")
+        print(
+            "No parameter names provided to --explain-param. Please specify at least one."
+        )
         sys.exit(1)
     if not list_params and not explain_targets:
         return False
 
     rows = _describe_parameters(func, defines, args_dict)
     target_set = set(explain_targets) if explain_targets is not None else None
-    if explain_targets is not None and target_set is not None and all(full_key not in target_set for _, _, full_key, _, _, _ in rows):
+    if (
+        explain_targets is not None
+        and target_set is not None
+        and all(full_key not in target_set for _, _, full_key, _, _, _ in rows)
+    ):
         missing = ", ".join(explain_targets)
         print(f"No matching parameters for: {missing}")
         sys.exit(1)
@@ -619,7 +702,13 @@ def _maybe_explain_and_exit(func: Callable, args_dict: Dict[str, Any], defines: 
     return True
 
 
-def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_locals=None, _caller_module=None) -> Any:
+def launch(
+    func: Optional[Callable] = None,
+    *,
+    _caller_globals=None,
+    _caller_locals=None,
+    _caller_module=None,
+) -> Any:
     """Launch CLI for @auto_param functions.
 
     - launch(f): expose a single @auto_param function f as CLI.
@@ -647,7 +736,7 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
                         mod = sys.modules[_caller_module]
                         caller_globals = mod.__dict__
                         caller_locals = mod.__dict__
-                elif hasattr(_caller_module, '__dict__'):
+                elif hasattr(_caller_module, "__dict__"):
                     caller_globals = _caller_module.__dict__
                     caller_locals = _caller_module.__dict__
             else:
@@ -659,7 +748,7 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
                     while current is not None:
                         globs = current.f_globals
                         # Check if this looks like a module (has __name__ and __file__)
-                        if '__name__' in globs and '__file__' in globs:
+                        if "__name__" in globs and "__file__" in globs:
                             caller_globals = globs
                             caller_locals = current.f_locals
                             break
@@ -710,26 +799,38 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
         for f in candidates:
             # Use first paragraph of docstring for cleaner help output
             help_text = _extract_first_paragraph(f.__doc__) or f.__doc__
-            
+
             # Don't load advanced parameters here - delay until --help is used for better performance
             # epilog will be set lazily in ConditionalHelpAction when --help is used
-            
+
             sub = subparsers.add_parser(
                 f.__name__,
                 help=help_text,
                 epilog=None,  # Will be set lazily in ConditionalHelpAction when --help is used
                 formatter_class=argparse.RawDescriptionHelpFormatter,
-                add_help=False  # We'll add custom help actions
+                add_help=False,  # We'll add custom help actions
             )
-            
+
             # Store func and caller_globals on subparser for lazy loading in ConditionalHelpAction
             sub._auto_param_func = f
             sub._auto_param_caller_globals = caller_globals
-            
+
             # Add the same conditional help action for subcommands
-            sub.add_argument("-h", "--help", action=ConditionalHelpAction, help="show this help message and exit")
+            sub.add_argument(
+                "-h",
+                "--help",
+                action=ConditionalHelpAction,
+                help="show this help message and exit",
+            )
             func_map[f.__name__] = f
-            sub.add_argument("-D", "--define", nargs="*", default=[], action="extend", help="Override params, e.g., a.b=1")
+            sub.add_argument(
+                "-D",
+                "--define",
+                nargs="*",
+                default=[],
+                action="extend",
+                help="Override params, e.g., a.b=1",
+            )
             sub.add_argument(
                 "-lps",
                 "--list-params",
@@ -747,7 +848,15 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
             param_help = _parse_param_help(f.__doc__)
             for name, param in sig.parameters.items():
                 if param.default is inspect.Parameter.empty:
-                    sub.add_argument(name, type=param.annotation if param.annotation is not inspect.Parameter.empty else str, help=param_help.get(name))
+                    sub.add_argument(
+                        name,
+                        type=(
+                            param.annotation
+                            if param.annotation is not inspect.Parameter.empty
+                            else str
+                        ),
+                        help=param_help.get(name),
+                    )
                 else:
                     arg_type = _arg_type_from_default(param.default)
                     help_text = param_help.get(name)
@@ -791,19 +900,19 @@ def launch(func: Optional[Callable] = None, *, _caller_globals=None, _caller_loc
 
 def run_cli(func: Optional[Callable] = None, *, _caller_module=None) -> Any:
     """Alias for launch() with a less collision-prone name.
-    
+
     Args:
         func: Optional function to launch. If None, discovers all @auto_param functions in caller module.
         _caller_module: Explicitly pass caller's module name or module object (for entry point support).
                        This is useful when called via entry points where frame inspection may fail.
                        Can be a string (module name) or a module object.
-    
+
     Examples:
         # In __main__.py or entry point script:
         if __name__ == "__main__":
             import sys
             run_cli(_caller_module=sys.modules[__name__])
-        
+
         # Or simply:
         if __name__ == "__main__":
             run_cli(_caller_module=__name__)
@@ -822,8 +931,13 @@ def run_cli(func: Optional[Callable] = None, *, _caller_module=None) -> Any:
                     mod = sys.modules[_caller_module]
                     caller_globals = mod.__dict__
                     caller_locals = mod.__dict__
-            elif hasattr(_caller_module, '__dict__'):
+            elif hasattr(_caller_module, "__dict__"):
                 caller_globals = _caller_module.__dict__
                 caller_locals = _caller_module.__dict__
-    
-    return launch(func, _caller_globals=caller_globals, _caller_locals=caller_locals, _caller_module=_caller_module)
+
+    return launch(
+        func,
+        _caller_globals=caller_globals,
+        _caller_locals=caller_locals,
+        _caller_module=_caller_module,
+    )

@@ -8,7 +8,9 @@ from textwrap import dedent
 try:
     from hyperparameter import auto_param, launch, param_scope
 except ModuleNotFoundError:
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+    repo_root = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)
+    )
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
     from hyperparameter import auto_param, launch, param_scope
@@ -47,20 +49,24 @@ def demo() -> None:
                 greet()  # inner overrides name only; enthusiasm inherited
         """
     ).strip()
-    cli_code = 'python -m hyperparameter.examples.quickstart -D greet.name=Alice --enthusiasm=3'
+    cli_code = "python -m hyperparameter.examples.quickstart -D greet.name=Alice --enthusiasm=3"
 
     print(f"{yellow}=== Function definition ==={reset}")
-    print(textwrap.indent(
-        dedent(
-            """
+    print(
+        textwrap.indent(
+            dedent(
+                """
             @auto_param
             def greet(name: str = "world", enthusiasm: int = 1) -> None:
                 suffix = "!" * max(1, enthusiasm)
                 print(f"hello, {name}{suffix}")
             """
-        ).strip(),
-        prefix=f"{cyan}"
-    ) + "\n" + reset)
+            ).strip(),
+            prefix=f"{cyan}",
+        )
+        + "\n"
+        + reset
+    )
 
     print(f"{yellow}=== Quickstart: default values ==={reset}")
     print(f"{cyan}{default_code}{reset}")

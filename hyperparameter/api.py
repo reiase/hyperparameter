@@ -268,7 +268,9 @@ class _ParamAccessor:
         if default is _MISSING:
             value = self._root.get(self._name)
             if isinstance(value, _ParamAccessor):
-                raise KeyError(f"Hyperparameter '{self._name}' is required but not defined.")
+                raise KeyError(
+                    f"Hyperparameter '{self._name}' is required but not defined."
+                )
             if isinstance(value, Suggester):
                 return value()
             return value
@@ -436,7 +438,6 @@ def _coerce_with_default(value: Any, default: Any) -> Any:
     if default_type is str:
         return str(value)
     return value
-
 
 
 @_dynamic_dispatch

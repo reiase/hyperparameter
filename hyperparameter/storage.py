@@ -7,7 +7,9 @@ from typing import Any, Callable, Dict, Iterable, Optional, Iterator, Tuple
 
 GLOBAL_STORAGE: Dict[str, Any] = {}
 GLOBAL_STORAGE_LOCK = threading.RLock()
-_CTX_STACK: ContextVar[Tuple["TLSKVStorage", ...]] = ContextVar("_HP_CTX_STACK", default=())
+_CTX_STACK: ContextVar[Tuple["TLSKVStorage", ...]] = ContextVar(
+    "_HP_CTX_STACK", default=()
+)
 
 
 def _get_ctx_stack() -> Tuple["TLSKVStorage", ...]:
@@ -246,12 +248,16 @@ class TLSKVStorage(Storage):
 
     def __init__(self, inner: Optional[Any] = None) -> None:
         stack = _get_ctx_stack()
-        
+
         if inner is not None:
             self._inner = inner
         elif stack:
             parent_storage = stack[-1]
-            parent = parent_storage._inner if hasattr(parent_storage, '_inner') else stack[-1].storage()
+            parent = (
+                parent_storage._inner
+                if hasattr(parent_storage, "_inner")
+                else stack[-1].storage()
+            )
             if hasattr(parent, "clone"):
                 self._inner = parent.clone()
             else:
@@ -264,18 +270,19 @@ class TLSKVStorage(Storage):
                 snapshot = dict(GLOBAL_STORAGE)
             if snapshot:
                 _copy_storage(snapshot, self._inner)
-        
+
         self._handler = id(self._inner)
         self._set_rust_handler(self._handler)
-    
+
     def _set_rust_handler(self, handler: Optional[int]) -> None:
         """Set Rust-side thread-local handler.
-        
+
         The handler is the storage object's address (id(storage)).
         """
         if has_rust_backend:
             try:
                 from hyperparameter.librbackend import set_python_handler
+
                 set_python_handler(handler)
             except Exception:
                 pass
