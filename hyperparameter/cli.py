@@ -585,6 +585,14 @@ def _build_parser_for_func(
         help="Override params, e.g., a.b=1",
     )
     parser.add_argument(
+        "-C",
+        "--config",
+        nargs="*",
+        default=[],
+        action="extend",
+        help="Load config files (JSON/TOML/YAML), e.g., -C config.toml",
+    )
+    parser.add_argument(
         "-lps",
         "--list-params",
         action="store_true",
@@ -627,8 +635,18 @@ def _build_parser_for_func(
     return parser
 
 
+# Import loader locally to avoid circular import (as loader might import other things)
+def _get_loader():
+    from . import loader
+
+    return loader
+
+
 def _describe_parameters(
-    func: Callable, defines: List[str], arg_overrides: Dict[str, Any]
+    func: Callable,
+    defines: List[str],
+    config_files: List[str],
+    arg_overrides: Dict[str, Any],
 ) -> List[Tuple[str, str, str, Any, str, Any]]:
     """Return [(func_name, param_name, full_key, value, source, default)] under current overrides."""
     namespace = getattr(func, "_auto_param_namespace", func.__name__)
@@ -637,7 +655,14 @@ def _describe_parameters(
     results: List[Tuple[str, str, str, Any, str, Any]] = []
     _MISSING = object()
     ps = _get_param_scope()
-    with ps(*defines) as hp:
+    ld = _get_loader()
+
+    # Load configs
+    loaded_config = {}
+    if config_files:
+        loaded_config = ld.load(config_files)
+
+    with ps(*defines, **loaded_config) as hp:
         storage_snapshot = hp.storage().storage()
         for name, param in sig.parameters.items():
             default = (
@@ -651,15 +676,28 @@ def _describe_parameters(
             else:
                 full_key = f"{namespace}.{name}"
                 in_define = full_key in storage_snapshot
+                # Check if it came from define or config
+                # Ideally we want to know if it was in config but overwritten by define
+                # But storage_snapshot contains merged result
+
+                # Check config first
+                in_config = False
+                # Simple check if key exists in flattened config is hard without flattening loaded_config
+                # But we can check if the value in hp matches what would be in config
+
                 if default is _MISSING:
                     value = "<required>"
                 else:
                     value = getattr(hp(), full_key).get_or_else(default)
-                source = (
-                    "--define"
-                    if in_define
-                    else ("default" if default is not _MISSING else "required")
-                )
+
+                if in_define:
+                    # It's in the storage, so it's either from define or config
+                    # We can't easily distinguish without tracking source, but 'define' usually implies user override
+                    # We might want to be more specific later
+                    source = "override (cli/config)"
+                else:
+                    source = "default" if default is not _MISSING else "required"
+
             printable_default = "<required>" if default is _MISSING else default
             results.append(
                 (func_name, name, full_key, value, source, printable_default)
@@ -668,7 +706,10 @@ def _describe_parameters(
 
 
 def _maybe_explain_and_exit(
-    func: Callable, args_dict: Dict[str, Any], defines: List[str]
+    func: Callable,
+    args_dict: Dict[str, Any],
+    defines: List[str],
+    config_files: List[str],
 ) -> bool:
     list_params = bool(args_dict.pop("list_params", False))
     explain_targets = args_dict.pop("explain_param", None)
@@ -680,7 +721,7 @@ def _maybe_explain_and_exit(
     if not list_params and not explain_targets:
         return False
 
-    rows = _describe_parameters(func, defines, args_dict)
+    rows = _describe_parameters(func, defines, config_files, args_dict)
     target_set = set(explain_targets) if explain_targets is not None else None
     if (
         explain_targets is not None
@@ -787,10 +828,18 @@ def launch(
             args = parser.parse_args(argv)
             args_dict = vars(args)
             defines = args_dict.pop("define", [])
-            if _maybe_explain_and_exit(func, args_dict, defines):
+            config_files = args_dict.pop("config", [])
+            if _maybe_explain_and_exit(func, args_dict, defines, config_files):
                 return None
+
+            # Load config files
+            loaded_config = {}
+            if config_files:
+                loader = _get_loader()
+                loaded_config = loader.load(config_files)
+
             param_scope = _get_param_scope()
-            with param_scope(*defines):
+            with param_scope(*defines, **loaded_config):
                 return func(**args_dict)
 
         parser = argparse.ArgumentParser(description="hyperparameter auto-param CLI")
@@ -830,6 +879,14 @@ def launch(
                 default=[],
                 action="extend",
                 help="Override params, e.g., a.b=1",
+            )
+            sub.add_argument(
+                "-C",
+                "--config",
+                nargs="*",
+                default=[],
+                action="extend",
+                help="Load config files (JSON/TOML/YAML), e.g., -C config.toml",
             )
             sub.add_argument(
                 "-lps",
@@ -875,11 +932,19 @@ def launch(
         args_dict = vars(args)
         cmd = args_dict.pop("command")
         defines = args_dict.pop("define", [])
+        config_files = args_dict.pop("config", [])
         target = func_map[cmd]
-        if _maybe_explain_and_exit(target, args_dict, defines):
+        if _maybe_explain_and_exit(target, args_dict, defines, config_files):
             return None
+
+        # Load config files
+        loaded_config = {}
+        if config_files:
+            loader = _get_loader()
+            loaded_config = loader.load(config_files)
+
         param_scope = _get_param_scope()
-        with param_scope(*defines):
+        with param_scope(*defines, **loaded_config):
             # Freeze first so new threads spawned inside target inherit these overrides.
             param_scope.frozen()
             return target(**args_dict)
@@ -890,10 +955,18 @@ def launch(
     args = parser.parse_args()
     args_dict = vars(args)
     defines = args_dict.pop("define", [])
-    if _maybe_explain_and_exit(func, args_dict, defines):
+    config_files = args_dict.pop("config", [])
+    if _maybe_explain_and_exit(func, args_dict, defines, config_files):
         return None
+
+    # Load config files
+    loaded_config = {}
+    if config_files:
+        loader = _get_loader()
+        loaded_config = loader.load(config_files)
+
     param_scope = _get_param_scope()
-    with param_scope(*defines):
+    with param_scope(*defines, **loaded_config):
         param_scope.frozen()
         return func(**args_dict)
 

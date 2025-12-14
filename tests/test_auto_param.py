@@ -8,6 +8,7 @@
 4. TestAutoParamClass: 类装饰器
 5. TestAutoParamNamespace: 命名空间
 """
+
 from unittest import TestCase
 
 from hyperparameter import auto_param, param_scope
@@ -18,6 +19,7 @@ class TestAutoParamBasic(TestCase):
 
     def test_basic_function(self):
         """基础函数装饰"""
+
         @auto_param("foo")
         def foo(a, b=1, c=2.0, d=False, e="str"):
             return a, b, c, d, e
@@ -27,6 +29,7 @@ class TestAutoParamBasic(TestCase):
 
     def test_all_default_args(self):
         """全默认参数"""
+
         @auto_param("func")
         def func(a=1, b=2, c=3):
             return a, b, c
@@ -35,6 +38,7 @@ class TestAutoParamBasic(TestCase):
 
     def test_no_default_args(self):
         """无默认参数"""
+
         @auto_param("func")
         def func(a, b, c):
             return a, b, c
@@ -43,6 +47,7 @@ class TestAutoParamBasic(TestCase):
 
     def test_mixed_args(self):
         """混合参数"""
+
         @auto_param("func")
         def func(a, b=2):
             return a, b
@@ -56,6 +61,7 @@ class TestAutoParamWithScope(TestCase):
 
     def test_scope_override_dict(self):
         """使用字典覆盖"""
+
         @auto_param("foo")
         def foo(a, b=1, c=2.0, d=False, e="str"):
             return a, b, c, d, e
@@ -68,6 +74,7 @@ class TestAutoParamWithScope(TestCase):
 
     def test_scope_override_direct(self):
         """直接属性覆盖"""
+
         @auto_param("foo")
         def foo(a, b=1, c=2.0, d=False, e="str"):
             return a, b, c, d, e
@@ -83,6 +90,7 @@ class TestAutoParamWithScope(TestCase):
 
     def test_scope_override_all(self):
         """覆盖所有参数"""
+
         @auto_param("func")
         def func(a=1, b=2, c=3):
             return a, b, c
@@ -92,6 +100,7 @@ class TestAutoParamWithScope(TestCase):
 
     def test_nested_scope_override(self):
         """嵌套作用域覆盖"""
+
         @auto_param("func")
         def func(x=1):
             return x
@@ -108,6 +117,7 @@ class TestAutoParamPriority(TestCase):
 
     def test_direct_arg_highest_priority(self):
         """直接传参优先级最高"""
+
         @auto_param("func")
         def func(x=1):
             return x
@@ -118,6 +128,7 @@ class TestAutoParamPriority(TestCase):
 
     def test_scope_over_default(self):
         """scope 覆盖默认值"""
+
         @auto_param("func")
         def func(x=1):
             return x
@@ -127,6 +138,7 @@ class TestAutoParamPriority(TestCase):
 
     def test_default_when_no_override(self):
         """无覆盖时使用默认值"""
+
         @auto_param("func")
         def func(x=1):
             return x
@@ -139,6 +151,7 @@ class TestAutoParamClass(TestCase):
 
     def test_class_init(self):
         """类 __init__ 参数"""
+
         @auto_param("MyClass")
         class MyClass:
             def __init__(self, x=1, y=2):
@@ -151,6 +164,7 @@ class TestAutoParamClass(TestCase):
 
     def test_class_with_scope(self):
         """类与 scope 配合"""
+
         @auto_param("MyClass")
         class MyClass:
             def __init__(self, x=1, y=2):
@@ -164,6 +178,7 @@ class TestAutoParamClass(TestCase):
 
     def test_class_direct_arg(self):
         """类直接传参"""
+
         @auto_param("MyClass")
         class MyClass:
             def __init__(self, x=1, y=2):
@@ -180,6 +195,7 @@ class TestAutoParamNamespace(TestCase):
 
     def test_custom_namespace(self):
         """自定义命名空间"""
+
         @auto_param("myns.func")
         def func(a=1):
             return a
@@ -189,6 +205,7 @@ class TestAutoParamNamespace(TestCase):
 
     def test_deep_namespace(self):
         """深层命名空间"""
+
         @auto_param("a.b.c.d.func")
         def func(x=1):
             return x
@@ -198,6 +215,7 @@ class TestAutoParamNamespace(TestCase):
 
     def test_no_namespace(self):
         """无命名空间（使用函数名）"""
+
         @auto_param
         def myfunc(x=1):
             return x
@@ -207,6 +225,7 @@ class TestAutoParamNamespace(TestCase):
 
     def test_multiple_functions_same_namespace(self):
         """同一命名空间多个函数"""
+
         @auto_param("shared")
         def func1(a=1):
             return a
@@ -225,6 +244,7 @@ class TestAutoParamTypeConversion(TestCase):
 
     def test_string_to_int(self):
         """字符串转整数"""
+
         @auto_param("func")
         def func(x=1):
             return x
@@ -235,6 +255,7 @@ class TestAutoParamTypeConversion(TestCase):
 
     def test_string_to_float(self):
         """字符串转浮点数"""
+
         @auto_param("func")
         def func(x=1.0):
             return x
@@ -245,6 +266,7 @@ class TestAutoParamTypeConversion(TestCase):
 
     def test_string_to_bool(self):
         """字符串转布尔"""
+
         @auto_param("func")
         def func(flag=False):
             return flag
@@ -258,4 +280,5 @@ class TestAutoParamTypeConversion(TestCase):
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v"])

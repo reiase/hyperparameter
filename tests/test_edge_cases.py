@@ -9,6 +9,7 @@
 5. 异常恢复
 6. 并发边界
 """
+
 import sys
 import threading
 from unittest import TestCase
@@ -172,14 +173,16 @@ class TestSpecialValues(TestCase):
 
     def test_boolean_strings(self):
         """布尔字符串转换"""
-        with param_scope(**{
-            "true_str": "true",
-            "false_str": "false",
-            "yes": "yes",
-            "no": "no",
-            "one": "1",
-            "zero": "0",
-        }) as ps:
+        with param_scope(
+            **{
+                "true_str": "true",
+                "false_str": "false",
+                "yes": "yes",
+                "no": "no",
+                "one": "1",
+                "zero": "0",
+            }
+        ) as ps:
             self.assertTrue(ps.true_str(False))
             self.assertFalse(ps.false_str(True))
             self.assertTrue(ps.yes(False))
@@ -353,7 +356,9 @@ class TestTypeConversionEdgeCases(TestCase):
             with param_scope(**{"flag": str_val}) as ps:
                 result = ps.flag(not expected)  # 使用相反值作为默认
                 self.assertEqual(
-                    result, expected, f"Failed for '{str_val}': expected {expected}, got {result}"
+                    result,
+                    expected,
+                    f"Failed for '{str_val}': expected {expected}, got {result}",
                 )
 
 

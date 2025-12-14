@@ -12,6 +12,7 @@ pytest 配置和公共 fixtures
 - test_rust_backend.py: Rust 后端
 - test_hash_consistency.py: hash 一致性
 """
+
 import pytest
 from hyperparameter import param_scope
 from hyperparameter.storage import has_rust_backend
