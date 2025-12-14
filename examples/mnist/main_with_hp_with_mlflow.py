@@ -7,13 +7,13 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 
-from hyperparameter import param_scope
+import hyperparameter as hp
 import mlflow
 
 
 class Net(nn.Module):
     def __init__(self):
-        with param_scope() as hp:
+        with hp.scope() as hp:
             print(hp)
             super(Net, self).__init__()
             self.conv1 = nn.Conv2d(1, 32, hp().cnn.kernel_size(3), 1)
@@ -180,7 +180,7 @@ def main():
     train_loader = torch.utils.data.DataLoader(dataset1, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
-    with param_scope(*args.define) as hp:
+    with hp.scope(*args.define) as hp:
         for k, v in hp.items():
             mlflow.log_param(k, v)
         model = Net().to(device)

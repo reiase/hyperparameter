@@ -1,15 +1,15 @@
-# Hyperparameter
+<p align="center">
+  <img src="hyperparameter.svg" alt="Hyperparameter Logo" width="180" height="180">
+</p>
 
-<h3 align="center">
-  <p style="text-align: center;">
-  <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
-  </p>
-</h3>
+<h1 align="center">Hyperparameter</h1>
 
 <p align="center">
+  <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
+</p>
 
-**Hyperparameter, Make configurable AI applications. Build for Python/Rust hackers.**
-
+<p align="center">
+  <strong>Make configurable AI applications. Build for Python/Rust hackers.</strong>
 </p>
 
 Hyperparameter is a versatile library designed to streamline the management and control of hyperparameters in machine learning algorithms and system development. Tailored for AI researchers and Machine Learning Systems (MLSYS) developers, Hyperparameter offers a unified solution with a focus on ease of use in Python, high-performance access in Rust and C++, and a set of macros for seamless hyperparameter management.
@@ -22,33 +22,64 @@ pip install hyperparameter
 # Run a ready-to-use demo
 python -m hyperparameter.examples.quickstart
 
-# Try the @auto_param CLI: override defaults from the command line
+# Try the @hp.param CLI: override defaults from the command line
 python -m hyperparameter.examples.quickstart --define greet.name=Alice --enthusiasm=3
 
 # Inspect params and defaults
 python -m hyperparameter.examples.quickstart -lps
-python -m hyperparameter.examples.quickstart -ep greet.name
-
-# Running from source? Use module mode or install editable
-# python -m hyperparameter.examples.quickstart
-# or: pip install -e .
-```
-
-What it shows:
-- default values vs scoped overrides (`param_scope`)
-- `@auto_param` + `launch` exposing a CLI with `-D/--define` for quick overrides
-
-## Key Features
+    python -m hyperparameter.examples.quickstart -ep greet.name
+    
+    # Running from source? Use module mode or install editable
+    # python -m hyperparameter.examples.quickstart
+    # or: pip install -e .
+    ```
+    
+    ## Why Hyperparameter?
+    
+    ### 🚀 Unmatched Performance (vs Hydra)
+    
+    Hyperparameter is built on a high-performance Rust backend, making it significantly faster than pure Python alternatives like Hydra, especially in inner-loop parameter access.
+    
+    | Method | Time (1M iters) | Speedup (vs Hydra) |
+    | :--- | :--- | :--- |
+    | **HP: Injected (Native Speed)** | **0.0184s** | **856.73x** 🚀 |
+    | **HP: Dynamic (Optimized)** | **2.4255s** | **6.50x** ⚡️ |
+    | **Hydra (Baseline)** | 15.7638s | 1.00x |
+    
+    > Benchmark scenario: Accessing a nested parameter `model.layers.0.size` 1,000,000 times in a loop.
+    > See `benchmark/` folder for reproduction scripts.
+    
+    ### ✨ Zero-Dependency Schema Validation
+    
+    Hyperparameter supports structural validation using standard Python type hints without introducing heavy dependencies (like Pydantic or OmegaConf).
+    
+    ```python
+    from dataclasses import dataclass
+    import hyperparameter as hp
+    
+    @dataclass
+    class AppConfig:
+        host: str
+        port: int
+        debug: bool = False
+    
+    # Validates types and converts automatically: "8080" -> 8080 (int)
+    cfg = hp.config("config.toml", schema=AppConfig)
+    ```
+    
+    ## Key Features
 
 ### For Python Users
 
 - **Pythonic Syntax:** Define hyperparameters using keyword argument syntax;
 
-- **Intuitive Scoping:** Control parameter scope through `with` statement;
-
-- **Configuration File:** Easy to load parameters from config files;
-
-### For Rust and C++ Users
+    - **Intuitive Scoping:** Control parameter scope through `with` statement;
+    
+    - **Configuration File:** Easy to load parameters from config files (JSON/TOML/YAML) with composition and interpolation support;
+    
+    - **Zero-Overhead Validation:** Optional schema validation using standard Python type hints;
+    
+    ### For Rust and C++ Users
 
 - **High-Performance Backend:** Hyperparameter is implemented in Rust, providing a robust and high-performance backend for hyperparameter management. Access hyperparameters in Rust and C++ with minimal overhead, making it ideal for ML and system developers who prioritize performance.
 
@@ -67,15 +98,15 @@ pip install hyperparameter
 ### Python
 
 ```python
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 
-@auto_param("foo")
+@hp.param("foo")
 def foo(x=1, y="a"):
     return f"x={x}, y={y}"
 
 foo()  # x=1, y='a'
 
-with param_scope(**{"foo.x": 2}):
+with hp.scope(**{"foo.x": 2}):
     foo()  # x=2, y='a'
 ```
 
@@ -124,7 +155,7 @@ ASSERT(1 == GET_PARAM(a.b, 1), "get undefined param");
 #### Python
 
 ```python
-x = param_scope.foo.x | "default value"
+x = hp.scope.foo.x | "default value"
 ```
 
 #### Rust
@@ -138,9 +169,9 @@ x = param_scope.foo.x | "default value"
 #### Python
 
 ```python
-with param_scope() as ps: # 1st scope start
+with hp.scope() as ps: # 1st scope start
     ps.foo.x=1
-    with param_scope() as ps2: # 2nd scope start
+    with hp.scope() as ps2: # 2nd scope start
         ps.foo.y=2
     # 2nd scope end
 # 1st scope end
@@ -165,11 +196,11 @@ with_params!{ // 1st scope start
 #### Python
 
 ```python
-@auto_param("foo")
+@hp.param("foo")
 def foo(x=1): # Print hyperparameter foo.x
     print(f"foo.x={x}")
 
-with param_scope() as ps:
+with hp.scope() as ps:
     ps.foo.x=2 # Modify foo.x in the current thread
     
     foo() # foo.x=2
@@ -205,9 +236,9 @@ In command line applications, it's common to define hyperparameters using comman
 
 ```python
 # example.py
-from hyperparameter import param_scope, auto_param
+import hyperparameter as hp
 
-@auto_param("example")
+@hp.param("example")
 def main(a=0, b=1):
     print(f"example.a={a}, example.b={b}")
 
@@ -218,7 +249,7 @@ if __name__ == "__main__":
     parser.add_argument("-D", "--define", nargs="*", default=[], action="extend")
     args = parser.parse_args()
 
-    with param_scope(*args.define):
+    with hp.scope(*args.define):
         main()
 ```
 

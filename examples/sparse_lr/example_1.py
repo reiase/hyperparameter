@@ -1,4 +1,4 @@
-from hyperparameter.hp import param_scope, Tracker
+from hyperparameter.hp import scope, Tracker
 from model import sparse_lr_plot
 import numpy as np
 
@@ -19,5 +19,5 @@ sparse_lr_plot(X, y)
 
 
 # run the lr model with another parameter
-with param_scope("model.sparse_lr_train.C=0.1"):
+with hp.scope("model.sparse_lr_train.C=0.1"):
     sparse_lr_plot(X, y)

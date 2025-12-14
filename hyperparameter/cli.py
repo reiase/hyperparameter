@@ -1,4 +1,4 @@
-"""CLI support for hyperparameter auto_param functions."""
+"""CLI support for hyperparameter @param decorated functions."""
 
 from __future__ import annotations
 
@@ -10,13 +10,13 @@ import sys
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 
-# Import param_scope locally to avoid circular import
-# param_scope is defined in api.py, but we import it here to avoid circular dependency
-def _get_param_scope():
-    """Lazy import of param_scope to avoid circular imports."""
-    from .api import param_scope
+# Import scope locally to avoid circular import
+# scope is defined in api.py, but we import it here to avoid circular dependency
+def _get_scope():
+    """Lazy import of scope to avoid circular imports."""
+    from .api import scope
 
-    return param_scope
+    return scope
 
 
 # Custom help action that checks if --help (not -h) was used
@@ -53,7 +53,7 @@ class ConditionalHelpAction(argparse.Action):
 
             if func and caller_globals:
                 # Lazy load: only now do we import and find related functions
-                related_funcs = _find_related_auto_param_functions(func, caller_globals)
+                related_funcs = _find_related_param_functions(func, caller_globals)
                 if related_funcs:
                     parser.epilog = _format_advanced_params_help(related_funcs)
         else:
@@ -253,14 +253,14 @@ def _extract_first_paragraph(docstring: Optional[str]) -> Optional[str]:
     return result if result else None
 
 
-def _find_related_auto_param_functions(
+def _find_related_param_functions(
     func: Callable, caller_globals: Optional[Dict] = None
 ) -> List[Tuple[str, Callable]]:
-    """Find all @auto_param functions in the call chain of the given function.
+    """Find all @param functions in the call chain of the given function.
 
     Uses AST analysis to discover functions that are actually called by the entry
     function, then recursively analyzes those functions to build the complete
-    call graph of @auto_param decorated functions.
+    call graph of @param decorated functions.
 
     Returns a list of (full_namespace, function) tuples.
     """
@@ -366,7 +366,7 @@ def _find_related_auto_param_functions(
         return local_imports
 
     def _analyze_function(f: Callable, depth: int = 0) -> None:
-        """Recursively analyze a function to find @auto_param decorated callees."""
+        """Recursively analyze a function to find @param decorated callees."""
         if depth > 10:  # Prevent infinite recursion
             return
 
@@ -412,12 +412,12 @@ def _find_related_auto_param_functions(
                     continue
                 visited_funcs.add(id(called_func))
 
-                # Check if it has @auto_param decorator
+                # Check if it has @param decorator
                 ns = getattr(called_func, "_auto_param_namespace", None)
                 if isinstance(ns, str) and ns != current_namespace:
                     related.append((ns, called_func))
 
-                # Recursively analyze this function (always recurse, even if no @auto_param)
+                # Recursively analyze this function (always recurse, even if no @param)
                 _analyze_function(called_func, depth + 1)
 
     # Start analysis from the entry function
@@ -446,16 +446,16 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
         # Parse docstring to extract parameter help
         param_help = _parse_param_help(docstring)
 
-        for name, param in sig.parameters.items():
+        for name, p in sig.parameters.items():
             # Skip VAR_KEYWORD and VAR_POSITIONAL
             if (
-                param.kind == inspect.Parameter.VAR_KEYWORD
-                or param.kind == inspect.Parameter.VAR_POSITIONAL
+                p.kind == inspect.Parameter.VAR_KEYWORD
+                or p.kind == inspect.Parameter.VAR_POSITIONAL
             ):
                 continue
 
             param_key = f"{full_ns}.{name}"
-            all_param_items.append((param_key, name, param, param_help.get(name, "")))
+            all_param_items.append((param_key, name, p, param_help.get(name, "")))
 
     if not all_param_items:
         return "\n".join(lines)
@@ -469,7 +469,7 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
     align_width = max(max_param_width, 24)
 
     # Format each parameter similar to argparse options format
-    for param_key, name, param, help_text in all_param_items:
+    for param_key, name, p, help_text in all_param_items:
         # Build the left side: "  -D namespace.param=<value>"
         left_side = f"  -D {param_key}=<value>"
 
@@ -483,8 +483,8 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
             help_parts.append(help_text_clean)
 
         # Add type information (simplified)
-        if param.annotation is not inspect.Parameter.empty:
-            type_str = str(param.annotation)
+        if p.annotation is not inspect.Parameter.empty:
+            type_str = str(p.annotation)
             # Clean up type string
             # Handle <class 'str'> format
             if type_str.startswith("<class '") and type_str.endswith("'>"):
@@ -514,9 +514,7 @@ def _format_advanced_params_help(related_funcs: List[Tuple[str, Callable]]) -> s
             help_parts.append(f"Type: {type_str}")
 
         # Add default value
-        default = (
-            param.default if param.default is not inspect.Parameter.empty else None
-        )
+        default = p.default if p.default is not inspect.Parameter.empty else None
         if default is not None:
             default_str = repr(default) if isinstance(default, str) else str(default)
             help_parts.append(f"default: {default_str}")
@@ -585,6 +583,14 @@ def _build_parser_for_func(
         help="Override params, e.g., a.b=1",
     )
     parser.add_argument(
+        "-C",
+        "--config",
+        nargs="*",
+        default=[],
+        action="extend",
+        help="Load config files (JSON/TOML/YAML), e.g., -C config.toml",
+    )
+    parser.add_argument(
         "-lps",
         "--list-params",
         action="store_true",
@@ -599,24 +605,22 @@ def _build_parser_for_func(
     )
     param_help = _parse_param_help(func.__doc__)
 
-    for name, param in sig.parameters.items():
-        if param.default is inspect.Parameter.empty:
+    for name, p in sig.parameters.items():
+        if p.default is inspect.Parameter.empty:
             parser.add_argument(
                 name,
                 type=(
-                    param.annotation
-                    if param.annotation is not inspect.Parameter.empty
-                    else str
+                    p.annotation if p.annotation is not inspect.Parameter.empty else str
                 ),
                 help=param_help.get(name),
             )
         else:
-            arg_type = _arg_type_from_default(param.default)
+            arg_type = _arg_type_from_default(p.default)
             help_text = param_help.get(name)
             if help_text:
-                help_text = f"{help_text} (default: {param.default})"
+                help_text = f"{help_text} (default: {p.default})"
             else:
-                help_text = f"(default from auto_param: {param.default})"
+                help_text = f"(default from @param: {p.default})"
             parser.add_argument(
                 f"--{name}",
                 dest=name,
@@ -627,8 +631,18 @@ def _build_parser_for_func(
     return parser
 
 
+# Import loader locally to avoid circular import (as loader might import other things)
+def _get_loader():
+    from . import loader
+
+    return loader
+
+
 def _describe_parameters(
-    func: Callable, defines: List[str], arg_overrides: Dict[str, Any]
+    func: Callable,
+    defines: List[str],
+    config_files: List[str],
+    arg_overrides: Dict[str, Any],
 ) -> List[Tuple[str, str, str, Any, str, Any]]:
     """Return [(func_name, param_name, full_key, value, source, default)] under current overrides."""
     namespace = getattr(func, "_auto_param_namespace", func.__name__)
@@ -636,30 +650,46 @@ def _describe_parameters(
     sig = inspect.signature(func)
     results: List[Tuple[str, str, str, Any, str, Any]] = []
     _MISSING = object()
-    ps = _get_param_scope()
-    with ps(*defines) as hp:
+    ps = _get_scope()
+    ld = _get_loader()
+
+    # Load configs
+    loaded_config = {}
+    if config_files:
+        loaded_config = ld.load(config_files)
+
+    with ps(*defines, **loaded_config) as hp:
         storage_snapshot = hp.storage().storage()
-        for name, param in sig.parameters.items():
-            default = (
-                param.default
-                if param.default is not inspect.Parameter.empty
-                else _MISSING
-            )
+        for name, p in sig.parameters.items():
+            default = p.default if p.default is not inspect.Parameter.empty else _MISSING
             if name in arg_overrides:
                 value = arg_overrides[name]
                 source = "cli-arg"
             else:
                 full_key = f"{namespace}.{name}"
                 in_define = full_key in storage_snapshot
+                # Check if it came from define or config
+                # Ideally we want to know if it was in config but overwritten by define
+                # But storage_snapshot contains merged result
+
+                # Check config first
+                in_config = False
+                # Simple check if key exists in flattened config is hard without flattening loaded_config
+                # But we can check if the value in hp matches what would be in config
+
                 if default is _MISSING:
                     value = "<required>"
                 else:
                     value = getattr(hp(), full_key).get_or_else(default)
-                source = (
-                    "--define"
-                    if in_define
-                    else ("default" if default is not _MISSING else "required")
-                )
+
+                if in_define:
+                    # It's in the storage, so it's either from define or config
+                    # We can't easily distinguish without tracking source, but 'define' usually implies user override
+                    # We might want to be more specific later
+                    source = "override (cli/config)"
+                else:
+                    source = "default" if default is not _MISSING else "required"
+
             printable_default = "<required>" if default is _MISSING else default
             results.append(
                 (func_name, name, full_key, value, source, printable_default)
@@ -668,7 +698,10 @@ def _describe_parameters(
 
 
 def _maybe_explain_and_exit(
-    func: Callable, args_dict: Dict[str, Any], defines: List[str]
+    func: Callable,
+    args_dict: Dict[str, Any],
+    defines: List[str],
+    config_files: List[str],
 ) -> bool:
     list_params = bool(args_dict.pop("list_params", False))
     explain_targets = args_dict.pop("explain_param", None)
@@ -680,7 +713,7 @@ def _maybe_explain_and_exit(
     if not list_params and not explain_targets:
         return False
 
-    rows = _describe_parameters(func, defines, args_dict)
+    rows = _describe_parameters(func, defines, config_files, args_dict)
     target_set = set(explain_targets) if explain_targets is not None else None
     if (
         explain_targets is not None
@@ -709,13 +742,13 @@ def launch(
     _caller_locals=None,
     _caller_module=None,
 ) -> Any:
-    """Launch CLI for @auto_param functions.
+    """Launch CLI for @param functions.
 
-    - launch(f): expose a single @auto_param function f as CLI.
-    - launch(): expose all @auto_param functions in the caller module as subcommands.
+    - launch(f): expose a single @param function f as CLI.
+    - launch(): expose all @param functions in the caller module as subcommands.
 
     Args:
-        func: Optional function to launch. If None, discovers all @auto_param functions in caller module.
+        func: Optional function to launch. If None, discovers all @param functions in caller module.
         _caller_globals: Explicitly pass caller's globals dict (for entry point support).
         _caller_locals: Explicitly pass caller's locals dict (for entry point support).
         _caller_module: Explicitly pass caller's module name or module object (for entry point support).
@@ -776,7 +809,7 @@ def launch(
             seen_ids.add(oid)
             candidates.append(obj)
         if not candidates:
-            raise RuntimeError("No @auto_param functions found to launch.")
+            raise RuntimeError("No @param functions found to launch.")
 
         if len(candidates) == 1:
             func = candidates[0]
@@ -787,13 +820,21 @@ def launch(
             args = parser.parse_args(argv)
             args_dict = vars(args)
             defines = args_dict.pop("define", [])
-            if _maybe_explain_and_exit(func, args_dict, defines):
+            config_files = args_dict.pop("config", [])
+            if _maybe_explain_and_exit(func, args_dict, defines, config_files):
                 return None
-            param_scope = _get_param_scope()
-            with param_scope(*defines):
+
+            # Load config files
+            loaded_config = {}
+            if config_files:
+                loader = _get_loader()
+                loaded_config = loader.load(config_files)
+
+            scope = _get_scope()
+            with scope(*defines, **loaded_config):
                 return func(**args_dict)
 
-        parser = argparse.ArgumentParser(description="hyperparameter auto-param CLI")
+        parser = argparse.ArgumentParser(description="hyperparameter CLI")
         subparsers = parser.add_subparsers(dest="command", required=True)
         func_map: Dict[str, Callable] = {}
         for f in candidates:
@@ -832,6 +873,14 @@ def launch(
                 help="Override params, e.g., a.b=1",
             )
             sub.add_argument(
+                "-C",
+                "--config",
+                nargs="*",
+                default=[],
+                action="extend",
+                help="Load config files (JSON/TOML/YAML), e.g., -C config.toml",
+            )
+            sub.add_argument(
                 "-lps",
                 "--list-params",
                 action="store_true",
@@ -846,24 +895,24 @@ def launch(
             )
             sig = inspect.signature(f)
             param_help = _parse_param_help(f.__doc__)
-            for name, param in sig.parameters.items():
-                if param.default is inspect.Parameter.empty:
+            for name, p in sig.parameters.items():
+                if p.default is inspect.Parameter.empty:
                     sub.add_argument(
                         name,
                         type=(
-                            param.annotation
-                            if param.annotation is not inspect.Parameter.empty
+                            p.annotation
+                            if p.annotation is not inspect.Parameter.empty
                             else str
                         ),
                         help=param_help.get(name),
                     )
                 else:
-                    arg_type = _arg_type_from_default(param.default)
+                    arg_type = _arg_type_from_default(p.default)
                     help_text = param_help.get(name)
                     if help_text:
-                        help_text = f"{help_text} (default: {param.default})"
+                        help_text = f"{help_text} (default: {p.default})"
                     else:
-                        help_text = f"(default from auto_param: {param.default})"
+                        help_text = f"(default from @param: {p.default})"
                     sub.add_argument(
                         f"--{name}",
                         dest=name,
@@ -875,69 +924,40 @@ def launch(
         args_dict = vars(args)
         cmd = args_dict.pop("command")
         defines = args_dict.pop("define", [])
+        config_files = args_dict.pop("config", [])
         target = func_map[cmd]
-        if _maybe_explain_and_exit(target, args_dict, defines):
+        if _maybe_explain_and_exit(target, args_dict, defines, config_files):
             return None
-        param_scope = _get_param_scope()
-        with param_scope(*defines):
+
+        # Load config files
+        loaded_config = {}
+        if config_files:
+            loader = _get_loader()
+            loaded_config = loader.load(config_files)
+
+        scope = _get_scope()
+        with scope(*defines, **loaded_config):
             # Freeze first so new threads spawned inside target inherit these overrides.
-            param_scope.frozen()
+            scope.frozen()
             return target(**args_dict)
 
     if not hasattr(func, "_auto_param_namespace"):
-        raise ValueError("launch() expects a function decorated with @auto_param")
+        raise ValueError("launch() expects a function decorated with @param")
     parser = _build_parser_for_func(func, caller_globals=caller_globals)
     args = parser.parse_args()
     args_dict = vars(args)
     defines = args_dict.pop("define", [])
-    if _maybe_explain_and_exit(func, args_dict, defines):
+    config_files = args_dict.pop("config", [])
+    if _maybe_explain_and_exit(func, args_dict, defines, config_files):
         return None
-    param_scope = _get_param_scope()
-    with param_scope(*defines):
-        param_scope.frozen()
+
+    # Load config files
+    loaded_config = {}
+    if config_files:
+        loader = _get_loader()
+        loaded_config = loader.load(config_files)
+
+    scope = _get_scope()
+    with scope(*defines, **loaded_config):
+        scope.frozen()
         return func(**args_dict)
-
-
-def run_cli(func: Optional[Callable] = None, *, _caller_module=None) -> Any:
-    """Alias for launch() with a less collision-prone name.
-
-    Args:
-        func: Optional function to launch. If None, discovers all @auto_param functions in caller module.
-        _caller_module: Explicitly pass caller's module name or module object (for entry point support).
-                       This is useful when called via entry points where frame inspection may fail.
-                       Can be a string (module name) or a module object.
-
-    Examples:
-        # In __main__.py or entry point script:
-        if __name__ == "__main__":
-            import sys
-            run_cli(_caller_module=sys.modules[__name__])
-
-        # Or simply:
-        if __name__ == "__main__":
-            run_cli(_caller_module=__name__)
-    """
-    caller_frame = inspect.currentframe().f_back  # type: ignore
-    if caller_frame is not None:
-        caller_globals = caller_frame.f_globals
-        caller_locals = caller_frame.f_locals
-    else:
-        caller_globals = {}
-        caller_locals = {}
-        # Try to use _caller_module if provided
-        if _caller_module is not None:
-            if isinstance(_caller_module, str):
-                if _caller_module in sys.modules:
-                    mod = sys.modules[_caller_module]
-                    caller_globals = mod.__dict__
-                    caller_locals = mod.__dict__
-            elif hasattr(_caller_module, "__dict__"):
-                caller_globals = _caller_module.__dict__
-                caller_locals = _caller_module.__dict__
-
-    return launch(
-        func,
-        _caller_globals=caller_globals,
-        _caller_locals=caller_locals,
-        _caller_module=_caller_module,
-    )

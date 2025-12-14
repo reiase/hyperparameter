@@ -2,8 +2,8 @@
 Hyperparameter Analyzer - 分析 Python 包中的超参数使用情况
 
 功能：
-1. 扫描包中所有 @auto_param 装饰的函数/类
-2. 扫描 param_scope 的使用
+1. 扫描包中所有 @param 装饰的函数/类
+2. 扫描 scope 的使用
 3. 分析依赖包中的超参数
 4. 生成超参数报告
 """
@@ -36,7 +36,7 @@ class ParamInfo:
 
 @dataclass
 class FunctionInfo:
-    """@auto_param 函数信息"""
+    """@param 函数信息"""
 
     name: str  # 函数名
     namespace: str  # 命名空间
@@ -49,7 +49,7 @@ class FunctionInfo:
 
 @dataclass
 class ScopeUsage:
-    """param_scope 使用信息"""
+    """scope 使用信息"""
 
     key: str  # 参数键
     file: str  # 文件路径
@@ -192,7 +192,7 @@ class HyperparameterAnalyzer:
                                     content = py_file.read_text(encoding="utf-8")
                                     if (
                                         "hyperparameter" in content
-                                        or "param_scope" in content
+                                        or "scope" in content
                                     ):
                                         return True
                                 except Exception:
@@ -201,7 +201,7 @@ class HyperparameterAnalyzer:
                 elif spec.origin:
                     with open(spec.origin, "r", encoding="utf-8") as f:
                         content = f.read()
-                    return "hyperparameter" in content or "param_scope" in content
+                    return "hyperparameter" in content or "scope" in content
         except Exception:
             pass
         return False
@@ -295,7 +295,7 @@ class HyperparameterAnalyzer:
         lines.append(f"{prefix}{'=' * 60}")
 
         if result.functions:
-            lines.append(f"\n{prefix}@auto_param Functions ({len(result.functions)}):")
+            lines.append(f"\n{prefix}@param Functions ({len(result.functions)}):")
             lines.append(f"{prefix}{'-' * 40}")
 
             # 按命名空间分组
@@ -316,7 +316,7 @@ class HyperparameterAnalyzer:
                         lines.append(f"{prefix}      - {ns}.{param.name}{default_str}")
 
         if result.scope_usages:
-            lines.append(f"\n{prefix}param_scope Usages ({len(result.scope_usages)}):")
+            lines.append(f"\n{prefix}scope Usages ({len(result.scope_usages)}):")
             lines.append(f"{prefix}{'-' * 40}")
 
             # 按 key 分组
@@ -346,9 +346,9 @@ class HyperparameterAnalyzer:
         unique_keys = set(u.key for u in result.scope_usages)
 
         lines.append(f"\n{prefix}Summary:")
-        lines.append(f"{prefix}  - {len(result.functions)} @auto_param functions")
+        lines.append(f"{prefix}  - {len(result.functions)} @param functions")
         lines.append(f"{prefix}  - {total_params} hyperparameters")
-        lines.append(f"{prefix}  - {len(unique_keys)} unique param_scope keys")
+        lines.append(f"{prefix}  - {len(unique_keys)} unique scope keys")
 
         return "\n".join(lines)
 
@@ -360,7 +360,7 @@ class HyperparameterAnalyzer:
         lines.append("")
 
         if result.functions:
-            lines.append("## @auto_param Functions")
+            lines.append("## @param Functions")
             lines.append("")
             lines.append("| Namespace | Function | File | Parameters |")
             lines.append("|-----------|----------|------|------------|")
@@ -374,7 +374,7 @@ class HyperparameterAnalyzer:
             lines.append("")
 
         if result.scope_usages:
-            lines.append("## param_scope Usage")
+            lines.append("## scope Usage")
             lines.append("")
 
             by_key: Dict[str, List[ScopeUsage]] = {}
@@ -405,9 +405,9 @@ class HyperparameterAnalyzer:
 
         lines.append("## Summary")
         lines.append("")
-        lines.append(f"- **@auto_param functions**: {len(result.functions)}")
+        lines.append(f"- **@param functions**: {len(result.functions)}")
         lines.append(f"- **Hyperparameters**: {total_params}")
-        lines.append(f"- **Unique param_scope keys**: {len(unique_keys)}")
+        lines.append(f"- **Unique scope keys**: {len(unique_keys)}")
 
         return "\n".join(lines)
 
@@ -465,8 +465,8 @@ class _ASTAnalyzer(ast.NodeVisitor):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """访问类定义"""
-        # 检查是否有 @auto_param 装饰器
-        namespace = self._get_auto_param_namespace(node.decorator_list)
+        # 检查是否有 @param 装饰器
+        namespace = self._get_param_namespace(node.decorator_list)
         if namespace:
             self._add_function_info(node, namespace, is_class=True)
 
@@ -485,32 +485,45 @@ class _ASTAnalyzer(ast.NodeVisitor):
 
     def _visit_function(self, node) -> None:
         """分析函数定义"""
-        # 检查是否有 @auto_param 装饰器
-        namespace = self._get_auto_param_namespace(node.decorator_list)
+        # 检查是否有 @param 装饰器
+        namespace = self._get_param_namespace(node.decorator_list)
         if namespace:
             self._add_function_info(node, namespace)
 
-        # 分析函数体中的 param_scope 使用
+        # 分析函数体中的 scope 使用
         self._analyze_scope_usages(node)
 
         self.generic_visit(node)
 
-    def _get_auto_param_namespace(self, decorators: List[ast.expr]) -> Optional[str]:
-        """获取 @auto_param 的命名空间"""
+    def _get_param_namespace(self, decorators: List[ast.expr]) -> Optional[str]:
+        """获取 @param 或 @auto_param 的命名空间（兼容新旧用法）
+        
+        支持：
+        - @param 或 @param("ns")
+        - @auto_param 或 @auto_param("ns")
+        - @hp.param 或 @hp.param("ns")
+        """
+        param_names = ("param", "auto_param")  # 支持新旧两种名称
         for dec in decorators:
-            if isinstance(dec, ast.Name) and dec.id == "auto_param":
+            # @param (无括号)
+            if isinstance(dec, ast.Name) and dec.id in param_names:
+                return None  # 无参数，使用函数名
+            # @hp.param (无括号，属性访问形式)
+            elif isinstance(dec, ast.Attribute) and dec.attr in param_names:
                 return None  # 无参数，使用函数名
             elif isinstance(dec, ast.Call):
                 func = dec.func
-                if isinstance(func, ast.Name) and func.id == "auto_param":
+                # @param("ns")
+                if isinstance(func, ast.Name) and func.id in param_names:
                     if dec.args and isinstance(dec.args[0], ast.Constant):
                         return dec.args[0].value
                     return None  # 无参数
-                elif isinstance(func, ast.Attribute) and func.attr == "auto_param":
+                # @hp.param("ns")
+                elif isinstance(func, ast.Attribute) and func.attr in param_names:
                     if dec.args and isinstance(dec.args[0], ast.Constant):
                         return dec.args[0].value
                     return None
-        return None  # 没有 @auto_param
+        return None  # 没有 @param
 
     def _add_function_info(
         self, node, namespace: Optional[str], is_class: bool = False
@@ -632,11 +645,11 @@ class _ASTAnalyzer(ast.NodeVisitor):
         return None
 
     def _analyze_scope_usages(self, node) -> None:
-        """分析 param_scope 使用"""
+        """分析 scope 使用"""
         for child in ast.walk(node):
-            # 查找 param_scope.xxx 或 param_scope.xxx.yyy
+            # 查找 scope.xxx 或 scope.xxx.yyy
             if isinstance(child, ast.Attribute):
-                key = self._extract_param_scope_key(child)
+                key = self._extract_scope_key(child)
                 if key:
                     context = self._get_source_line(child.lineno)
                     usage = ScopeUsage(
@@ -647,8 +660,15 @@ class _ASTAnalyzer(ast.NodeVisitor):
                     )
                     self.scope_usages.append(usage)
 
-    def _extract_param_scope_key(self, node: ast.Attribute) -> Optional[str]:
-        """提取 param_scope 的键"""
+    def _extract_scope_key(self, node: ast.Attribute) -> Optional[str]:
+        """提取 scope 或 param_scope 的键（兼容新旧两种用法）
+        
+        支持：
+        - scope.train.lr (旧用法)
+        - param_scope.train.lr (旧用法)
+        - hp.scope.train.lr (新用法，hp 是任意别名)
+        """
+        scope_names = ("scope", "param_scope")  # 支持新旧两种名称
         parts = []
         current = node
 
@@ -656,9 +676,17 @@ class _ASTAnalyzer(ast.NodeVisitor):
             parts.append(current.attr)
             current = current.value
 
-        if isinstance(current, ast.Name) and current.id == "param_scope":
+        # 方式 1: scope.xxx 或 param_scope.xxx
+        if isinstance(current, ast.Name) and current.id in scope_names:
             parts.reverse()
             return ".".join(parts)
+        
+        # 方式 2: hp.scope.xxx (hp 可以是任意名称)
+        if isinstance(current, ast.Name) and parts and parts[-1] in scope_names:
+            parts.pop()  # 移除 "scope"
+            parts.reverse()
+            if parts:  # 确保还有内容
+                return ".".join(parts)
 
         return None
 
@@ -828,8 +856,8 @@ def _print_param_detail(name: str, info: Dict[str, Any]):
 
     # 使用示例
     print(f"\n  Usage:")
-    print(f"    # 通过 param_scope 访问")
-    print(f"    value = param_scope.{name} | <default>")
+    print(f"    # 通过 scope 访问")
+    print(f"    value = scope.{name} | <default>")
     print(f"    ")
     print(f"    # 通过命令行设置")
     parts = name.split(".")

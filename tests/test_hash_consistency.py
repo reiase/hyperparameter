@@ -12,4 +12,6 @@ class TestHashConsistency(TestCase):
             xxh64("12345678901234567890123456789012345678901234567890"),
             5815762531248152886,
         )
-        self.assertEqual(xxh64("0123456789abcdefghijklmnopqrstuvwxyz"), 5308235351123835395)
+        self.assertEqual(
+            xxh64("0123456789abcdefghijklmnopqrstuvwxyz"), 5308235351123835395
+        )

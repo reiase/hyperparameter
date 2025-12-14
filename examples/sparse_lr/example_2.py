@@ -1,4 +1,4 @@
-from hyperparameter import param_scope, Tracker
+import hyperparameter as hp
 from model import sparse_lr_plot
 
 from sklearn import datasets
@@ -13,7 +13,7 @@ y = (y > 4).astype(int)
 
 def run(args):
     # run the lr model with parameter from cmdline
-    with param_scope(*args.define):  # set parameters according to cmd line
+    with hp.scope(*args.define):  # set parameters according to cmd line
         sparse_lr_plot(X, y)
 
 

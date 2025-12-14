@@ -1,15 +1,15 @@
-# Hyperparameter
+<p align="center">
+  <img src="hyperparameter.svg" alt="Hyperparameter Logo" width="180" height="180">
+</p>
 
-<h3 align="center">
-  <p style="text-align: center;">
-  <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
-  </p>
-</h3>
+<h1 align="center">Hyperparameter</h1>
 
 <p align="center">
+  <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
+</p>
 
-**Hyperparameter, Make configurable AI applications. Build for Python/Rust hackers.**
-
+<p align="center">
+  <strong>Make configurable AI applications. Build for Python/Rust hackers.</strong>
 </p>
 
 `Hyperparameter` 是一个多功能超参数管理库，旨在简化机器学习算法和系统开发中超参数的管理和控制。专为机器学习系统（MLSYS）开发者设计，超参数提供了一个统一的解决方案，侧重于在Python中易于使用、在Rust和C++中高性能访问，并提供了一组宏，以实现无缝超参数管理。
@@ -20,11 +20,13 @@
 
 - **Pythonic语法：** 使用keyword参数语法定义超参数；
   
-- **直观的作用域：** 通过`with`语句控制参数的作用域；
-  
-- **配置文件：** 从配置文件轻松加载参数；
-
-### 针对Rust和C++用户
+    - **直观的作用域：** 通过`with`语句控制参数的作用域；
+    
+    - **强大的配置加载：** 支持 JSON/TOML/YAML 多文件组合加载 (Composition) 与变量插值 (Interpolation)；
+    
+    - **零开销校验：** 支持可选的基于 Python Type Hints 的 Schema 校验；
+    
+    ### 针对Rust和C++用户
 
 - **高性能后端：** 超参数在Rust中实现，提供了强大且高性能的超参数管理后端。在Rust和C++中以最小开销访问超参数，非常适合注重性能的ML和系统开发者。
 
@@ -43,15 +45,15 @@ pip install hyperparameter
 ### Python
 
 ```python
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 
-@auto_param("foo")
+@hp.param("foo")
 def foo(x=1, y="a"):
     return f"x={x}, y={y}"
 
 foo()  # x=1, y='a'
 
-with param_scope(**{"foo.x": 2}):
+with hp.scope(**{"foo.x": 2}):
     foo()  # x=2, y='a'
 ```
 
@@ -100,7 +102,7 @@ ASSERT(1 == GET_PARAM(a.b, 1), "get undefined param");
 #### Python
 
 ```python
-x = param_scope.foo.x | "default value"
+x = hp.scope.foo.x | "default value"
 ```
 
 #### Rust
@@ -114,9 +116,9 @@ x = param_scope.foo.x | "default value"
 #### Python
 
 ```python
-with param_scope() as ps: # 第1个作用域开始
+with hp.scope() as ps: # 第1个作用域开始
     ps.foo.x=1
-    with param_scope() as ps2: # 第2个作用域开始
+    with hp.scope() as ps2: # 第2个作用域开始
         ps.foo.y=2
     # 第2个作用域结束
 # 第1个作用域结束
@@ -141,14 +143,12 @@ with_params!{ // 第1个作用域开始
 #### Python
 
 ```python
-@auto_param("foo")
+@hp.param("foo")
 def foo(x=1): # 打印超参数 foo.x
     print(f"foo.x={x}")
 
-with param_scope() as ps:
-    ps.foo.x=2 # 在当前线程设置foo.x 
-
-中修改 foo.x
+with hp.scope() as ps:
+    ps.foo.x=2 # 在当前线程中修改 foo.x
     
     foo() # foo.x=2
     threading.Thread(target=foo).start() # foo.x=1，新线程的超参数值不受主线程的影响
@@ -183,9 +183,9 @@ fn main() {
 
 ```python
 # example.py
-from hyperparameter import param_scope, auto_param
+import hyperparameter as hp
 
-@auto_param("example")
+@hp.param("example")
 def main(a=0, b=1):
     print(f"example.a={a}, example.b={b}")
 
@@ -196,7 +196,7 @@ if __name__ == "__main__":
     parser.add_argument("-D", "--define", nargs="*", default=[], action="extend")
     args = parser.parse_args()
 
-    with param_scope(*args.define):
+    with hp.scope(*args.define):
         main()
 ```
 

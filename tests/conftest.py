@@ -2,33 +2,44 @@
 pytest 配置和公共 fixtures
 
 测试模块组织：
-- test_param_scope.py: param_scope 基础功能（创建、访问、作用域、类型转换）
-- test_auto_param.py: @auto_param 装饰器
-- test_param_scope_thread.py: 线程隔离
-- test_param_scope_async_thread.py: 异步+线程混合
+- test_scope.py: scope 基础功能（创建、访问、作用域、类型转换）
+- test_param.py: @hp.param 装饰器
+- test_scope_thread.py: 线程隔离
+- test_scope_async_thread.py: 异步+线程混合
 - test_stress_async_threads.py: 压力测试
 - test_edge_cases.py: 边界条件测试
 - test_launch.py: CLI launch 功能
 - test_rust_backend.py: Rust 后端
 - test_hash_consistency.py: hash 一致性
 """
+
 import pytest
-from hyperparameter import param_scope
-from hyperparameter.storage import has_rust_backend
+import hyperparameter as hp
+from hyperparameter.storage import has_rust_backend, GLOBAL_STORAGE, GLOBAL_STORAGE_LOCK
+
+
+@pytest.fixture(autouse=True)
+def clean_global_storage():
+    """Clean global storage before and after each test to prevent state leakage."""
+    with GLOBAL_STORAGE_LOCK:
+        GLOBAL_STORAGE.clear()
+    yield
+    with GLOBAL_STORAGE_LOCK:
+        GLOBAL_STORAGE.clear()
 
 
 @pytest.fixture
 def clean_scope():
-    """提供一个干净的 param_scope 环境"""
-    with param_scope.empty() as ps:
+    """提供一个干净的 scope 环境"""
+    with hp.scope.empty() as ps:
         yield ps
 
 
 @pytest.fixture
 def nested_scope():
-    """提供一个嵌套的 param_scope 环境"""
-    with param_scope(**{"level1.a": 1, "level1.b": 2}) as outer:
-        with param_scope(**{"level2.c": 3}) as inner:
+    """提供一个嵌套的 scope 环境"""
+    with hp.scope(**{"level1.a": 1, "level1.b": 2}) as outer:
+        with hp.scope(**{"level2.c": 3}) as inner:
             yield outer, inner
 
 

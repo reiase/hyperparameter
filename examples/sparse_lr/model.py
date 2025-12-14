@@ -2,12 +2,12 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 import matplotlib.pyplot as plt
 
-from hyperparameter import auto_param, param_scope, set_tracker
+import hyperparameter as hp
 
-MyLogisticRegression = auto_param(LogisticRegression)
+MyLogisticRegression = hp.param(LogisticRegression)
 
 
-@auto_param
+@hp.param
 def sparse_lr_plot(X, y, learning_rate=0.01, penalty="l1", C=0.01, tol=0.01):
     LR = MyLogisticRegression(C=C, penalty=penalty, tol=tol, solver="saga")
 

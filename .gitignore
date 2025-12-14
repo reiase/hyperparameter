@@ -147,3 +147,4 @@ examples/sparse_lr/mlruns/
 Cargo.lock
 .trunk/
 proptest-regressions/
+benchmark/outputs/

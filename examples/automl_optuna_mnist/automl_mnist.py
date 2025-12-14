@@ -6,10 +6,10 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 import optuna
 
-from hyperparameter import param_scope, auto_param, lazy_dispatch
+import hyperparameter as hp
 
 
-@auto_param
+@hp.param
 class Backbone(nn.Module):
     def __init__(
         self,
@@ -33,7 +33,7 @@ class Backbone(nn.Module):
         return torch.flatten(x, 1)
 
 
-@auto_param
+@hp.param
 class Head(nn.Module):
     def __init__(
         self,
@@ -114,7 +114,7 @@ def test(model, test_loader):
     return test_loss / len(test_loader.dataset)
 
 
-@auto_param
+@hp.param
 def train_model(batch_size=128, epochs=1, lr=1.0, momentum=0.9, step_lr_gamma=0.7):
     torch.manual_seed(0)
     transform = transforms.Compose(
@@ -137,7 +137,7 @@ def train_model(batch_size=128, epochs=1, lr=1.0, momentum=0.9, step_lr_gamma=0.
 
 def wrapper(trial):
     trial = lazy_dispatch(trial)
-    with param_scope(
+    with hp.scope(
         **{
             "train_model.lr": trial.suggest_categorical("train_model.lr", [0.1, 0.01]),
             "train_model.momentum": trial.suggest_categorical(

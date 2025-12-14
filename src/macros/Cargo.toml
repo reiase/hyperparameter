@@ -1,6 +1,6 @@
 [package]
 name = "hyperparameter-macros"
-version = "0.5.14"
+version = "0.6.0"
 license = "Apache-2.0"
 description = "Procedural macros for hyperparameter crate"
 homepage = "https://reiase.github.io/hyperparameter/"
