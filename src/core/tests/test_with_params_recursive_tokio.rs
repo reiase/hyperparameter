@@ -172,11 +172,8 @@ async fn test_random_depth_2() {
     let test_id = next_test_id();
     let depth = random_depth(test_id, 10);
     let result = recursive_test_inner(0, depth, test_id).await;
-    let expected = if depth > 1 {
-        (depth - 2) * (depth - 1) / 2
-    } else {
-        0
-    };
+    // max_depth=depth 时，读取到的应该是 depth-1
+    let expected = if depth > 0 { (depth - 1) as i64 } else { -1 };
     assert_eq!(result, expected as i64);
 }
 
@@ -185,11 +182,8 @@ async fn test_random_depth_3() {
     let test_id = next_test_id();
     let depth = random_depth(test_id, 15);
     let result = recursive_test_inner(0, depth, test_id).await;
-    let expected = if depth > 1 {
-        (depth - 2) * (depth - 1) / 2
-    } else {
-        0
-    };
+    // max_depth=depth 时，读取到的应该是 depth-1
+    let expected = if depth > 0 { (depth - 1) as i64 } else { -1 };
     assert_eq!(result, expected as i64);
 }
 
@@ -198,11 +192,8 @@ async fn test_random_depth_4() {
     let test_id = next_test_id();
     let depth = random_depth(test_id, 20);
     let result = recursive_test_inner(0, depth, test_id).await;
-    let expected = if depth > 1 {
-        (depth - 2) * (depth - 1) / 2
-    } else {
-        0
-    };
+    // max_depth=depth 时，读取到的应该是 depth-1
+    let expected = if depth > 0 { (depth - 1) as i64 } else { -1 };
     assert_eq!(result, expected as i64);
 }
 
@@ -211,11 +202,8 @@ async fn test_random_depth_5() {
     let test_id = next_test_id();
     let depth = random_depth(test_id, 25);
     let result = recursive_test_inner(0, depth, test_id).await;
-    let expected = if depth > 1 {
-        (depth - 2) * (depth - 1) / 2
-    } else {
-        0
-    };
+    // max_depth=depth 时，读取到的应该是 depth-1
+    let expected = if depth > 0 { (depth - 1) as i64 } else { -1 };
     assert_eq!(result, expected as i64);
 }
 
@@ -224,11 +212,8 @@ async fn test_random_depth_6() {
     let test_id = next_test_id();
     let depth = random_depth(test_id, 30);
     let result = recursive_test_inner(0, depth, test_id).await;
-    let expected = if depth > 1 {
-        (depth - 2) * (depth - 1) / 2
-    } else {
-        0
-    };
+    // max_depth=depth 时，读取到的应该是 depth-1
+    let expected = if depth > 0 { (depth - 1) as i64 } else { -1 };
     assert_eq!(result, expected as i64);
 }
 
