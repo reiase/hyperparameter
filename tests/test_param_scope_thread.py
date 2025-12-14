@@ -6,6 +6,7 @@
 2. TestFrozenPropagation: frozen() 传播
 3. TestMultipleThreads: 多线程并发
 """
+
 from threading import Thread
 from unittest import TestCase
 
@@ -182,4 +183,5 @@ class TestMultipleThreads(TestCase):
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v"])

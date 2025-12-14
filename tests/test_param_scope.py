@@ -10,6 +10,7 @@ param_scope 核心功能测试
 6. TestParamScopeMissingVsDefault: 缺失值与默认值
 7. TestParamScopeClear: 清空操作
 """
+
 from unittest import TestCase
 
 from hyperparameter import param_scope
@@ -213,10 +214,18 @@ class TestParamScopeTypeConversion(TestCase):
 
     def test_bool_string_conversion(self):
         """布尔字符串转换"""
-        with param_scope(**{
-            "t1": "true", "t2": "True", "t3": "yes", "t4": "1",
-            "f1": "false", "f2": "False", "f3": "no", "f4": "0",
-        }) as ps:
+        with param_scope(
+            **{
+                "t1": "true",
+                "t2": "True",
+                "t3": "yes",
+                "t4": "1",
+                "f1": "false",
+                "f2": "False",
+                "f3": "no",
+                "f4": "0",
+            }
+        ) as ps:
             self.assertTrue(ps.t1(False))
             self.assertTrue(ps.t2(False))
             self.assertTrue(ps.t3(False))
@@ -327,4 +336,5 @@ class TestParamScopeIteration(TestCase):
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v"])

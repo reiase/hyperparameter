@@ -79,7 +79,9 @@ def test_many_threads_async_interactions():
     # Seed base value and freeze so new threads inherit it.
     with param_scope(**{"X": 999}):
         param_scope.frozen()
-        threads = [threading.Thread(target=worker, args=(i,)) for i in range(num_threads)]
+        threads = [
+            threading.Thread(target=worker, args=(i,)) for i in range(num_threads)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -91,7 +93,10 @@ def test_many_threads_async_interactions():
     assert len(thread_results) == num_threads
     for idx, res in thread_results:
         assert res[0] == 999  # inherited base
-        assert set(res[2:4]) == {idx * 100, idx * 100 + 1}  # nested overrides (order may vary)
+        assert set(res[2:4]) == {
+            idx * 100,
+            idx * 100 + 1,
+        }  # nested overrides (order may vary)
         # ensure thread-local override is present somewhere after nested overrides
         assert idx in res[1:]
         # final value should be restored to parent (base or thread override), but allow inner due to backend differences

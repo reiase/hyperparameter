@@ -27,28 +27,59 @@ python -m hyperparameter.examples.quickstart --define greet.name=Alice --enthusi
 
 # Inspect params and defaults
 python -m hyperparameter.examples.quickstart -lps
-python -m hyperparameter.examples.quickstart -ep greet.name
-
-# Running from source? Use module mode or install editable
-# python -m hyperparameter.examples.quickstart
-# or: pip install -e .
-```
-
-What it shows:
-- default values vs scoped overrides (`param_scope`)
-- `@auto_param` + `launch` exposing a CLI with `-D/--define` for quick overrides
-
-## Key Features
+    python -m hyperparameter.examples.quickstart -ep greet.name
+    
+    # Running from source? Use module mode or install editable
+    # python -m hyperparameter.examples.quickstart
+    # or: pip install -e .
+    ```
+    
+    ## Why Hyperparameter?
+    
+    ### 🚀 Unmatched Performance (vs Hydra)
+    
+    Hyperparameter is built on a high-performance Rust backend, making it significantly faster than pure Python alternatives like Hydra, especially in inner-loop parameter access.
+    
+    | Method | Time (1M iters) | Speedup (vs Hydra) |
+    | :--- | :--- | :--- |
+    | **HP: Injected (Native Speed)** | **0.0184s** | **856.73x** 🚀 |
+    | **HP: Dynamic (Optimized)** | **2.4255s** | **6.50x** ⚡️ |
+    | **Hydra (Baseline)** | 15.7638s | 1.00x |
+    
+    > Benchmark scenario: Accessing a nested parameter `model.layers.0.size` 1,000,000 times in a loop.
+    > See `benchmark/` folder for reproduction scripts.
+    
+    ### ✨ Zero-Dependency Schema Validation
+    
+    Hyperparameter supports structural validation using standard Python type hints without introducing heavy dependencies (like Pydantic or OmegaConf).
+    
+    ```python
+    from dataclasses import dataclass
+    from hyperparameter import loader
+    
+    @dataclass
+    class AppConfig:
+        host: str
+        port: int
+        debug: bool = False
+    
+    # Validates types and converts automatically: "8080" -> 8080 (int)
+    cfg = loader.load("config.toml", schema=AppConfig)
+    ```
+    
+    ## Key Features
 
 ### For Python Users
 
 - **Pythonic Syntax:** Define hyperparameters using keyword argument syntax;
 
-- **Intuitive Scoping:** Control parameter scope through `with` statement;
-
-- **Configuration File:** Easy to load parameters from config files;
-
-### For Rust and C++ Users
+    - **Intuitive Scoping:** Control parameter scope through `with` statement;
+    
+    - **Configuration File:** Easy to load parameters from config files (JSON/TOML/YAML) with composition and interpolation support;
+    
+    - **Zero-Overhead Validation:** Optional schema validation using standard Python type hints;
+    
+    ### For Rust and C++ Users
 
 - **High-Performance Backend:** Hyperparameter is implemented in Rust, providing a robust and high-performance backend for hyperparameter management. Access hyperparameters in Rust and C++ with minimal overhead, making it ideal for ML and system developers who prioritize performance.
 
