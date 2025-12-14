@@ -1,15 +1,15 @@
-# Hyperparameter
+<p align="center">
+  <img src="hyperparameter.svg" alt="Hyperparameter Logo" width="180" height="180">
+</p>
 
-<h3 align="center">
-  <p style="text-align: center;">
-  <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
-  </p>
-</h3>
+<h1 align="center">Hyperparameter</h1>
 
 <p align="center">
+  <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
+</p>
 
-**Hyperparameter, Make configurable AI applications. Build for Python/Rust hackers.**
-
+<p align="center">
+  <strong>Make configurable AI applications. Build for Python/Rust hackers.</strong>
 </p>
 
 Hyperparameter is a versatile library designed to streamline the management and control of hyperparameters in machine learning algorithms and system development. Tailored for AI researchers and Machine Learning Systems (MLSYS) developers, Hyperparameter offers a unified solution with a focus on ease of use in Python, high-performance access in Rust and C++, and a set of macros for seamless hyperparameter management.

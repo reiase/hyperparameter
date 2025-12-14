@@ -1,15 +1,15 @@
-# Hyperparameter
+<p align="center">
+  <img src="hyperparameter.svg" alt="Hyperparameter Logo" width="180" height="180">
+</p>
 
-<h3 align="center">
-  <p style="text-align: center;">
-  <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
-  </p>
-</h3>
+<h1 align="center">Hyperparameter</h1>
 
 <p align="center">
+  <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
+</p>
 
-**Hyperparameter, Make configurable AI applications. Build for Python/Rust hackers.**
-
+<p align="center">
+  <strong>Make configurable AI applications. Build for Python/Rust hackers.</strong>
 </p>
 
 `Hyperparameter` 是一个多功能超参数管理库，旨在简化机器学习算法和系统开发中超参数的管理和控制。专为机器学习系统（MLSYS）开发者设计，超参数提供了一个统一的解决方案，侧重于在Python中易于使用、在Rust和C++中高性能访问，并提供了一组宏，以实现无缝超参数管理。
