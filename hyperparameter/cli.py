@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import ast
+import importlib
 import inspect
 import sys
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 # Import param_scope locally to avoid circular import
 # param_scope is defined in api.py, but we import it here to avoid circular dependency
@@ -226,140 +228,166 @@ def _extract_first_paragraph(docstring: Optional[str]) -> Optional[str]:
 
 
 def _find_related_auto_param_functions(func: Callable, caller_globals: Optional[Dict] = None) -> List[Tuple[str, Callable]]:
-    """Find all @auto_param functions related to the given function's namespace.
+    """Find all @auto_param functions in the call chain of the given function.
+    
+    Uses AST analysis to discover functions that are actually called by the entry
+    function, then recursively analyzes those functions to build the complete
+    call graph of @auto_param decorated functions.
     
     Returns a list of (full_namespace, function) tuples.
-    
-    This function finds related functions by:
-    1. Functions with namespaces starting with base_ns + "." (e.g., "transformers.runtime")
-    2. Functions in the same module/package (to expose shared configuration)
-    3. Common shared namespaces like "runtime", "backend" that may be used across backends
     """
-    namespace = getattr(func, "_auto_param_namespace", func.__name__)
-    if not isinstance(namespace, str):
-        return []
+    current_namespace = getattr(func, "_auto_param_namespace", func.__name__)
     
-    # Extract base namespace (e.g., "transformers" from "transformers.runtime")
-    base_ns = namespace.split(".")[0]
+    related: List[Tuple[str, Callable]] = []
+    visited_funcs: Set[int] = set()  # Track visited functions by id
+    visited_funcs.add(id(func))  # Don't include the entry function itself
     
-    # Common shared namespaces that should be included
-    shared_namespaces = {"runtime", "backend", "config"}
+    def _get_module_globals(f: Callable) -> Dict[str, Any]:
+        """Get the global namespace of the module containing function f."""
+        module_name = getattr(f, "__module__", None)
+        if module_name and module_name in sys.modules:
+            mod = sys.modules[module_name]
+            return vars(mod)
+        return {}
     
-    related = []
-    seen = set()
-    
-    def should_include(obj_ns: str, current_namespace: str) -> bool:
-        """Determine if a namespace should be included as related."""
-        if obj_ns == current_namespace:
-            return False
+    def _resolve_name(name: str, globals_dict: Dict[str, Any], module: Any) -> Optional[Callable]:
+        """Resolve a name to a callable, handling imports and attributes."""
+        # Direct lookup in globals
+        if name in globals_dict:
+            obj = globals_dict[name]
+            if callable(obj):
+                return obj
         
-        # Include if starts with base_ns + "."
-        if obj_ns.startswith(base_ns + "."):
-            return True
+        # Handle dotted names like "module.func"
+        if "." in name:
+            parts = name.split(".")
+            obj = globals_dict.get(parts[0])
+            for part in parts[1:]:
+                if obj is None:
+                    break
+                obj = getattr(obj, part, None)
+            if callable(obj):
+                return obj
         
-        # Include if it's a shared namespace (e.g., "runtime", "backend")
-        ns_parts = obj_ns.split(".")
-        if len(ns_parts) > 0 and ns_parts[0] in shared_namespaces:
-            return True
-        
-        # Include if it's in the same module/package context
-        # This allows backend-specific configs to be found
-        return False
+        return None
     
-    # Check caller_globals (current module)
-    if caller_globals:
-        for obj in caller_globals.values():
-            if not callable(obj) or id(obj) in seen:
-                continue
-            seen.add(id(obj))
-            obj_ns = getattr(obj, "_auto_param_namespace", None)
-            if isinstance(obj_ns, str) and should_include(obj_ns, namespace):
-                related.append((obj_ns, obj))
+    def _extract_call_names(node: ast.AST) -> List[str]:
+        """Extract function names from a Call node."""
+        names = []
+        if isinstance(node, ast.Call):
+            func_node = node.func
+            if isinstance(func_node, ast.Name):
+                # Simple call: func()
+                names.append(func_node.id)
+            elif isinstance(func_node, ast.Attribute):
+                # Attribute call: obj.method() or module.func()
+                # Try to get the full dotted name
+                parts = []
+                current = func_node
+                while isinstance(current, ast.Attribute):
+                    parts.append(current.attr)
+                    current = current.value
+                if isinstance(current, ast.Name):
+                    parts.append(current.id)
+                    parts.reverse()
+                    names.append(".".join(parts))
+                    # Also try just the method name for cases like self.method()
+                    names.append(func_node.attr)
+        return names
+    
+    def _resolve_local_imports(tree: ast.AST, func_module: str) -> Dict[str, Callable]:
+        """Resolve local imports (from .xxx import yyy) within a function body."""
+        local_imports: Dict[str, Callable] = {}
         
-        # Check imported modules
-        for name, obj in caller_globals.items():
-            if inspect.ismodule(obj):
-                try:
-                    for attr_name in dir(obj):
-                        if attr_name.startswith("_"):
-                            continue
-                        try:
-                            attr = getattr(obj, attr_name, None)
-                            if callable(attr) and id(attr) not in seen:
-                                seen.add(id(attr))
-                                obj_ns = getattr(attr, "_auto_param_namespace", None)
-                                if isinstance(obj_ns, str) and should_include(obj_ns, namespace):
-                                    related.append((obj_ns, attr))
-                        except (AttributeError, TypeError):
-                            continue
-                except Exception:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                # Handle: from .module import func
+                if node.module is None:
                     continue
-    
-    # Also check the function's own module and related modules in the same package
-    func_module = getattr(func, "__module__", None)
-    modules_to_check = []
-    
-    if func_module and func_module in sys.modules:
-        modules_to_check.append(sys.modules[func_module])
-    
-    # Check for related modules in the same package
-    # e.g., if func is in pulsing.cli.__main__, check pulsing.cli.transformers_backend
-    if func_module:
-        module_parts = func_module.split(".")
-        if len(module_parts) > 1:
-            package_name = ".".join(module_parts[:-1])
-            
-            # Try to find backend modules in the same package
-            # Check all modules in sys.modules that are in the same package
-            package_prefix = package_name + "."
-            for mod_name, mod in sys.modules.items():
-                if mod_name.startswith(package_prefix) and mod_name != func_module:
-                    # Check if it's a backend module (contains _backend or backend in name)
-                    if "_backend" in mod_name or mod_name.endswith("backend"):
-                        if mod not in modules_to_check:
-                            modules_to_check.append(mod)
-            
-            # Also try to import related backend modules if they exist but aren't loaded
-            # This handles lazy imports. Try both absolute and relative import styles
-            try:
-                import importlib
-                # Try common backend module names with different patterns
-                backend_patterns = [
-                    f"{package_name}.transformers_backend",
-                    f"{package_name}.vllm_backend",
-                ]
-                # Add base_ns specific backend if base_ns is available
-                if base_ns:
-                    backend_patterns.append(f"{package_name}.{base_ns}_backend")
                 
-                for backend_name in backend_patterns:
-                    if backend_name not in sys.modules:
-                        try:
-                            mod = importlib.import_module(backend_name)
-                            if mod not in modules_to_check:
-                                modules_to_check.append(mod)
-                        except (ImportError, ModuleNotFoundError, ValueError):
-                            pass
-            except Exception:
-                pass
-    
-    # Check all identified modules
-    for mod in modules_to_check:
-        try:
-            for attr_name in dir(mod):
-                if attr_name.startswith("_"):
-                    continue
+                # Resolve relative import
+                if node.level > 0 and func_module:
+                    # Relative import: from .xxx import yyy
+                    module_parts = func_module.rsplit(".", node.level)
+                    if len(module_parts) > 1:
+                        base_module = module_parts[0]
+                        full_module = f"{base_module}.{node.module}" if node.module else base_module
+                    else:
+                        full_module = node.module
+                else:
+                    full_module = node.module
+                
+                # Try to import the module (silently ignore failures)
                 try:
-                    attr = getattr(mod, attr_name, None)
-                    if callable(attr) and id(attr) not in seen:
-                        seen.add(id(attr))
-                        obj_ns = getattr(attr, "_auto_param_namespace", None)
-                        if isinstance(obj_ns, str) and should_include(obj_ns, namespace):
-                            related.append((obj_ns, attr))
-                except (AttributeError, TypeError):
+                    imported_mod = importlib.import_module(full_module)
+                    for alias in node.names:
+                        name = alias.asname if alias.asname else alias.name
+                        obj = getattr(imported_mod, alias.name, None)
+                        if callable(obj):
+                            local_imports[name] = obj
+                except Exception:
+                    # Silently ignore any import errors
+                    pass
+        
+        return local_imports
+    
+    def _analyze_function(f: Callable, depth: int = 0) -> None:
+        """Recursively analyze a function to find @auto_param decorated callees."""
+        if depth > 10:  # Prevent infinite recursion
+            return
+        
+        # Skip library functions to avoid unnecessary recursion
+        func_module = getattr(f, "__module__", "")
+        if func_module.startswith(("hyperparameter", "builtins", "typing")):
+            return
+        
+        # Get function source code
+        try:
+            source = inspect.getsource(f)
+            tree = ast.parse(source)
+        except (OSError, TypeError, IndentationError, SyntaxError):
+            return
+        
+        # Get the module globals for name resolution
+        globals_dict = _get_module_globals(f)
+        module = sys.modules.get(getattr(f, "__module__", ""), None)
+        
+        # Also check __globals__ attribute of the function itself (for closures)
+        if hasattr(f, "__globals__"):
+            globals_dict = {**globals_dict, **f.__globals__}
+        
+        # Resolve local imports within the function body
+        local_imports = _resolve_local_imports(tree, func_module)
+        globals_dict = {**globals_dict, **local_imports}
+        
+        # Find all function calls in the AST
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            
+            call_names = _extract_call_names(node)
+            
+            for call_name in call_names:
+                # Try to resolve the called function
+                called_func = _resolve_name(call_name, globals_dict, module)
+                if called_func is None:
                     continue
-        except Exception:
-            continue
+                
+                # Skip if already visited
+                if id(called_func) in visited_funcs:
+                    continue
+                visited_funcs.add(id(called_func))
+                
+                # Check if it has @auto_param decorator
+                ns = getattr(called_func, "_auto_param_namespace", None)
+                if isinstance(ns, str) and ns != current_namespace:
+                    related.append((ns, called_func))
+                
+                # Recursively analyze this function (always recurse, even if no @auto_param)
+                _analyze_function(called_func, depth + 1)
+    
+    # Start analysis from the entry function
+    _analyze_function(func)
     
     # Sort by namespace for consistent output
     related.sort(key=lambda x: x[0])

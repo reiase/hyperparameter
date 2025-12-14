@@ -1,6 +1,6 @@
 [package]
 name = "hyperparameter"
-version = "0.5.13"
+version = "0.5.14"
 license = "Apache-2.0"
 description = "A high performance configuration system for Rust."
 homepage = "https://reiase.github.io/hyperparameter/"
