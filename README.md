@@ -1,5 +1,9 @@
 # Hyperparameter
 
+<p align="center">
+  <img src="hyperparameter.svg" alt="Hyperparameter logo" width="180" />
+</p>
+
 <h3 align="center">
   <p style="text-align: center;">
   <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
