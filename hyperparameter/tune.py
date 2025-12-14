@@ -23,8 +23,8 @@ def suggest_from(callback: Callable) -> Suggester:
     ...         index, self._offset = self._offset % len(self._lst), self._offset + 1
     ...         return self._lst[index]
 
-    >>> from hyperparameter import param_scope
-    >>> with param_scope(suggested = suggest_from(ValueWrapper([1,2,3]))) as ps:
+    >>> import hyperparameter as hp
+    >>> with hp.scope(suggested = suggest_from(ValueWrapper([1,2,3]))) as ps:
     ...     ps().suggested()
     ...     ps().suggested()
     ...     ps().suggested()

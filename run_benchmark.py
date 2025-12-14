@@ -44,15 +44,15 @@ def run_bench():
     )
 
     # 2. Hyperparameter: Dynamic Access (Optimized)
-    # The one we optimized before: ps = param_scope(); loop { ps.x }
+    # The one we optimized before: ps = hp.scope(); loop { ps.x }
     results["HP: Dynamic (Optimized)"] = run_script(
         "bench_hp.py",
         "Running HP: Dynamic Access (Scope Cached)"
     )
 
     # 3. Hyperparameter: Dynamic Access (Global Proxy)
-    # bench_hp_dynamic_global.py uses param_scope.x (global proxy access)
-    # Needs -D to set value as it uses run_cli()
+    # bench_hp_dynamic_global.py uses hp.scope.x (global proxy access)
+    # Needs -D to set value as it uses hp.launch()
     results["HP: Dynamic (Global Proxy)"] = run_script(
         "bench_hp_dynamic_global.py",
         "Running HP: Dynamic Access (Global Proxy)",
@@ -60,7 +60,7 @@ def run_bench():
     )
 
     # 4. Hyperparameter: Dynamic Access (Local Context)
-    # bench_hp_dynamic_local.py uses with param_scope() as ps INSIDE loop (stress test)
+    # bench_hp_dynamic_local.py uses with hp.scope() as ps INSIDE loop (stress test)
     results["HP: Dynamic (Local Context)"] = run_script(
         "bench_hp_dynamic_local.py",
         "Running HP: Dynamic Access (Scope Created in Loop)"
@@ -68,7 +68,7 @@ def run_bench():
 
     # 5. Hyperparameter: Injected (Fastest)
     # bench_hp_injected.py uses function arguments (native python speed)
-    # Needs -D to set value as it uses run_cli()
+    # Needs -D to set value as it uses hp.launch()
     results["HP: Injected (Native Speed)"] = run_script(
         "bench_hp_injected.py",
         "Running HP: Argument Injection",

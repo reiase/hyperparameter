@@ -1,5 +1,5 @@
 """
-Simple CLI starter using hyperparameter.param + run_cli().
+Simple CLI starter using hp.param + hp.launch().
 
 Usage:
   # Default args
@@ -12,7 +12,7 @@ Usage:
   # -D can also drive values used inside other commands (e.g., foo.value for greet)
   python examples/cli_autoparam.py greet -D foo.value=42
 
-  # Thread-safe: run_cli freezes the scope so threads spawned inside see the overrides.
+  # Thread-safe: hp.launch freezes the scope so threads spawned inside see the overrides.
 """
 
 import threading
@@ -46,7 +46,7 @@ def calc(a: int = 1, b: int = 2):
 
 @hp.param("worker")
 def spawn_child(task: str = "noop"):
-    """Show that threads see CLI / -D overrides after run_cli freezes hp.scope."""
+    """Show that threads see CLI / -D overrides after hp.launch freezes hp.scope."""
 
     def child():
         print(f"[child] task={hp.scope.worker.task()}")
@@ -58,4 +58,4 @@ def spawn_child(task: str = "noop"):
 
 
 if __name__ == "__main__":
-    run_cli()
+    hp.launch()

@@ -1,7 +1,7 @@
 import time
-from hyperparameter import auto_param, param_scope, run_cli
+import hyperparameter as hp
 
-@auto_param
+@hp.param
 def main(layer_size: int = 10):
     start = time.time()
     acc = 0
@@ -14,4 +14,4 @@ def main(layer_size: int = 10):
     return duration
 
 if __name__ == "__main__":
-    run_cli()
+    hp.launch()

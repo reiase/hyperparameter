@@ -378,14 +378,16 @@ def config(
 
     Can be used in two ways:
 
-    1. As a function call returning config dict/object:
-       >>> cfg = config("config.toml")
-       >>> cfg = config(["base.toml", "override.toml"])
-       >>> cfg = config("config.toml", schema=AppConfig)
+    1. As a function call returning config dict/object::
 
-    2. As a context manager (auto-inject into scope):
-       >>> with config("config.toml"):
-       ...     train()
+       cfg = config("config.toml")
+       cfg = config(["base.toml", "override.toml"])
+       cfg = config("config.toml", schema=AppConfig)
+
+    2. As a context manager (auto-inject into scope)::
+
+       with config("config.toml"):
+           train()
 
     If a list of files is provided, they are loaded in order and merged.
     Later files override earlier ones. Nested dictionaries are merged recursively.
