@@ -211,14 +211,14 @@ def _coerce_type(value: Any, target_type: Any) -> Any:
     return value
 
 
-def validate(config: Dict[str, Any], schema_cls: Type[T]) -> T:
+def validate(data: Dict[str, Any], schema_cls: Type[T]) -> T:
     """Validate and coerce configuration dictionary against a class schema.
 
-    This function creates an instance of `schema_cls` populated with values from `config`.
+    This function creates an instance of `schema_cls` populated with values from `data`.
     It performs type coercion based on type hints in `schema_cls`.
 
     Args:
-        config: Configuration dictionary.
+        data: Configuration dictionary.
         schema_cls: Class with type annotations defining the schema.
 
     Returns:
@@ -228,8 +228,8 @@ def validate(config: Dict[str, Any], schema_cls: Type[T]) -> T:
         ValueError: If required fields are missing.
         TypeError: If type coercion fails.
     """
-    if not isinstance(config, dict):
-        raise TypeError(f"Config must be a dictionary, got {type(config)}")
+    if not isinstance(data, dict):
+        raise TypeError(f"Config must be a dictionary, got {type(data)}")
 
     # Create instance
     # We don't call __init__ to avoid requiring specific signature
@@ -240,8 +240,8 @@ def validate(config: Dict[str, Any], schema_cls: Type[T]) -> T:
 
     for name, type_hint in annotations.items():
         # Check if field exists
-        if name in config:
-            raw_value = config[name]
+        if name in data:
+            raw_value = data[name]
             try:
                 coerced_value = _coerce_type(raw_value, type_hint)
                 setattr(instance, name, coerced_value)
@@ -305,6 +305,107 @@ def _load_single_file(path: str) -> Dict[str, Any]:
         return toml.load(f)
 
 
+class _ConfigLoader:
+    """Config loader that can be used as context manager."""
+
+    def __init__(
+        self,
+        path: Union[str, List[str], Dict[str, Any]],
+        schema: typing.Optional[Type[T]] = None,
+    ):
+        self._path = path
+        self._schema = schema
+        self._config: Union[Dict[str, Any], T, None] = None
+        self._scope = None
+
+    def _load(self) -> Union[Dict[str, Any], T]:
+        """Load and return the configuration."""
+        cfg: Dict[str, Any] = {}
+
+        if isinstance(self._path, dict):
+            cfg = self._path
+        elif isinstance(self._path, str):
+            cfg = _load_single_file(self._path)
+        elif isinstance(self._path, list):
+            for p in self._path:
+                new_config = _load_single_file(p)
+                cfg = _merge_dicts(cfg, new_config)
+        else:
+            raise TypeError(
+                f"path must be a string, a list of strings, or a dict, got {type(self._path)}"
+            )
+
+        # Apply interpolation
+        cfg = _resolve_interpolations(cfg)
+
+        # Apply validation if schema provided
+        if self._schema is not None:
+            return validate(cfg, self._schema)
+
+        return cfg
+
+    def __enter__(self) -> "scope":
+        """Enter context and inject config into scope."""
+        from .api import scope
+
+        if self._config is None:
+            self._config = self._load()
+
+        # If schema was used, convert to dict for scope
+        if isinstance(self._config, dict):
+            config_dict = self._config
+        else:
+            # Convert validated object to dict
+            config_dict = {
+                k: getattr(self._config, k)
+                for k in typing.get_type_hints(type(self._config)).keys()
+            }
+
+        self._scope = scope(**config_dict)
+        return self._scope.__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit context."""
+        if self._scope is not None:
+            return self._scope.__exit__(exc_type, exc_val, exc_tb)
+
+
+def config(
+    path: Union[str, List[str], Dict[str, Any]],
+    schema: typing.Optional[Type[T]] = None,
+) -> Union[Dict[str, Any], T, _ConfigLoader]:
+    """Load configuration from a file or a list of files.
+
+    Can be used in two ways:
+
+    1. As a function call returning config dict/object:
+       >>> cfg = config("config.toml")
+       >>> cfg = config(["base.toml", "override.toml"])
+       >>> cfg = config("config.toml", schema=AppConfig)
+
+    2. As a context manager (auto-inject into scope):
+       >>> with config("config.toml"):
+       ...     train()
+
+    If a list of files is provided, they are loaded in order and merged.
+    Later files override earlier ones. Nested dictionaries are merged recursively.
+
+    Supports variable interpolation: ${key.subkey}
+
+    Args:
+        path: Single file path, list of file paths, or a dictionary config.
+        schema: Optional class with type annotations for validation and coercion.
+
+    Supported formats:
+    - JSON (.json)
+    - YAML (.yaml, .yml) - requires PyYAML
+    - TOML (.toml) - requires toml (default)
+    """
+    loader = _ConfigLoader(path, schema)
+    return loader._load()
+
+
+# Keep load and loads for backward compatibility and direct usage
 def load(
     path: Union[str, List[str], Dict[str, Any]], schema: typing.Optional[Type[T]] = None
 ) -> Union[Dict[str, Any], T]:
@@ -324,35 +425,10 @@ def load(
     - YAML (.yaml, .yml) - requires PyYAML
     - TOML (.toml) - requires toml (default)
     """
-    config: Dict[str, Any] = {}
-
-    if isinstance(path, dict):
-        config = path
-    elif isinstance(path, str):
-        config = _load_single_file(path)
-    elif isinstance(path, list):
-        for p in path:
-            new_config = _load_single_file(p)
-            config = _merge_dicts(config, new_config)
-    else:
-        raise TypeError(
-            f"path must be a string, a list of strings, or a dict, got {type(path)}"
-        )
-
-    # Apply interpolation
-    try:
-        config = _resolve_interpolations(config)
-    except Exception as e:
-        raise e
-
-    # Apply validation if schema provided
-    if schema is not None:
-        return validate(config, schema)
-
-    return config
+    return config(path, schema)
 
 
-def loads(config: str):
+def loads(cfg: str):
     try:
         import toml
     except Exception as e:
@@ -360,11 +436,11 @@ def loads(config: str):
             "package toml is required by hyperparameter, please install toml with `pip install toml`"
         )
         raise e
-    val = toml.loads(config)
+    val = toml.loads(cfg)
     return _resolve_interpolations(val)
 
 
-def dumps(config) -> str:
+def dumps(cfg) -> str:
     try:
         import toml
     except Exception as e:
@@ -372,4 +448,4 @@ def dumps(config) -> str:
             "package toml is required by hyperparameter, please install toml with `pip install toml`"
         )
         raise e
-    return toml.dumps(config)
+    return toml.dumps(cfg)

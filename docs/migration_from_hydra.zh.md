@@ -39,15 +39,15 @@ hidden_size = 256
 dropout = 0.1
 
 # main.py
-from hyperparameter import auto_param, param_scope, loader
+import hyperparameter as hp
 
-@auto_param("model")
+@hp.param("model")
 def build_model(hidden_size=128, dropout=0.0):
     print(hidden_size)  # 256 (来自配置文件)
 
 if __name__ == "__main__":
-    cfg = loader.load("config.toml")
-    with param_scope(**cfg):
+    cfg = hp.config("config.toml")
+    with hp.scope(**cfg):
         build_model()
 ```
 
@@ -68,12 +68,12 @@ layers: 50
 
 **Hyperparameter:**
 ```python
-from hyperparameter import loader, param_scope
+import hyperparameter as hp
 
 # 加载并合并多个配置（后面的文件覆盖前面的）
-cfg = loader.load(["base.toml", "model/resnet.toml", "dataset/imagenet.toml"])
+cfg = hp.config(["base.toml", "model/resnet.toml", "dataset/imagenet.toml"])
 
-with param_scope(**cfg):
+with hp.scope(**cfg):
     train()
 ```
 
@@ -114,7 +114,7 @@ cs.store(name="model_config", node=ModelConfig)
 **Hyperparameter:**
 ```python
 from dataclasses import dataclass
-from hyperparameter import loader
+import hyperparameter as hp
 
 @dataclass
 class ModelConfig:
@@ -122,7 +122,7 @@ class ModelConfig:
     dropout: float = 0.1
 
 # 直接校验，无需 ConfigStore
-cfg = loader.load("config.toml", schema=ModelConfig)
+cfg = hp.config("config.toml", schema=ModelConfig)
 print(cfg.hidden_size)  # IDE 自动补全可用！
 ```
 
@@ -145,26 +145,26 @@ python train.py -C config.toml -D model.hidden_size=512
 这是 Hydra **很难做到**的：
 
 ```python
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 
-@auto_param("layer")
+@hp.param("layer")
 def create_layer(dropout=0.1):
     return f"Layer with dropout={dropout}"
 
 # 不同层使用不同的 dropout —— 无需修改代码！
-with param_scope(**{"layer.dropout": 0.1}):
+with hp.scope(**{"layer.dropout": 0.1}):
     layer1 = create_layer()  # dropout=0.1
 
-with param_scope(**{"layer.dropout": 0.5}):
+with hp.scope(**{"layer.dropout": 0.5}):
     layer2 = create_layer()  # dropout=0.5
 ```
 
 ## 迁移清单
 
 - [ ] **配置文件**: 将 YAML 转换为 TOML/JSON（或安装 PyYAML 后继续使用 YAML）
-- [ ] **装饰器**: 将 `@hydra.main` 替换为 `@auto_param` + `launch()`
-- [ ] **配置访问**: 将 `cfg.x.y` 替换为 `param_scope.x.y | default` 或函数注入
-- [ ] **配置组合**: 将 `defaults` 列表替换为 `loader.load([file1, file2])`
+- [ ] **装饰器**: 将 `@hydra.main` 替换为 `@hp.param` + `hp.launch()`
+- [ ] **配置访问**: 将 `cfg.x.y` 替换为 `hp.scope.x.y | default` 或函数注入
+- [ ] **配置组合**: 将 `defaults` 列表替换为 `hp.config([file1, file2])`
 - [ ] **变量插值**: 相同的 `${key}` 语法可直接使用
 - [ ] **命令行**: 将位置参数覆盖替换为 `-D key=value`
 

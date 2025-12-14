@@ -1,12 +1,12 @@
 import sys
 from unittest import TestCase
 
-from hyperparameter import auto_param, launch, param_scope, run_cli
+import hyperparameter as hp
 import hyperparameter.cli as hp_cli
 
 
-# Module-level auto_param to test global discovery
-@auto_param("global_func")
+# Module-level param to test global discovery
+@hp.param("global_func")
 def global_func(x=1):
     return ("global", x)
 
@@ -15,7 +15,7 @@ class TestLaunch(TestCase):
     def test_launch_single_function(self):
         calls = []
 
-        @auto_param("foo")
+        @hp.param("foo")
         def foo(a=1, b=2):
             calls.append((a, b))
             return a, b
@@ -23,7 +23,7 @@ class TestLaunch(TestCase):
         argv_backup = sys.argv
         sys.argv = ["prog", "--b", "5"]
         try:
-            result = launch(foo)
+            result = hp.launch(foo)
         finally:
             sys.argv = argv_backup
 
@@ -33,12 +33,12 @@ class TestLaunch(TestCase):
     def test_launch_subcommands_and_define(self):
         calls = {"foo": [], "bar": []}
 
-        @auto_param("foo")
+        @hp.param("foo")
         def foo(a=1, b=2):
             calls["foo"].append((a, b))
             return a, b
 
-        @auto_param("bar")
+        @hp.param("bar")
         def bar(x=0):
             calls["bar"].append(x)
             return x
@@ -46,7 +46,7 @@ class TestLaunch(TestCase):
         argv_backup = sys.argv
         sys.argv = ["prog", "foo", "-D", "foo.b=7"]
         try:
-            result = launch()
+            result = hp.launch()
         finally:
             sys.argv = argv_backup
 
@@ -57,12 +57,12 @@ class TestLaunch(TestCase):
     def test_launch_subcommands_positional_and_types(self):
         calls = {"foo": [], "bar": []}
 
-        @auto_param("foo")
+        @hp.param("foo")
         def foo(a, b: int = 2, c: float = 0.5, flag: bool = True):
             calls["foo"].append((a, b, c, flag))
             return a, b, c, flag
 
-        @auto_param("bar")
+        @hp.param("bar")
         def bar(x=0):
             calls["bar"].append(x)
             return x
@@ -70,7 +70,7 @@ class TestLaunch(TestCase):
         argv_backup = sys.argv
         sys.argv = ["prog", "foo", "3", "--b", "4", "--c", "1.5", "--flag", "False"]
         try:
-            result = run_cli()
+            result = hp.launch()
         finally:
             sys.argv = argv_backup
 
@@ -80,14 +80,14 @@ class TestLaunch(TestCase):
 
     def test_launch_collects_locals_and_globals(self):
         def local_runner():
-            @auto_param("local_func")
+            @hp.param("local_func")
             def local_func(y=2):
                 return ("local", y)
 
             argv_backup = sys.argv
             sys.argv = ["prog", "local_func", "--y", "5"]
             try:
-                return launch()
+                return hp.launch()
             finally:
                 sys.argv = argv_backup
 
@@ -97,13 +97,13 @@ class TestLaunch(TestCase):
         argv_backup = sys.argv
         sys.argv = ["prog", "global_func", "--x", "9"]
         try:
-            result_global = launch()
+            result_global = hp.launch()
         finally:
             sys.argv = argv_backup
         self.assertEqual(result_global, ("global", 9))
 
     def test_help_from_docstring(self):
-        @auto_param("doc_func")
+        @hp.param("doc_func")
         def doc_func(a, b=2):
             """Doc summary.
 
@@ -119,7 +119,7 @@ class TestLaunch(TestCase):
         self.assertEqual(actions["b"].help, "second arg (default: 2)")
 
     def test_help_from_numpy_and_rest(self):
-        @auto_param("numpy_style")
+        @hp.param("numpy_style")
         def numpy_style(x, y=1):
             """NumPy style.
 
@@ -132,7 +132,7 @@ class TestLaunch(TestCase):
             """
             return x, y
 
-        @auto_param("rest_style")
+        @hp.param("rest_style")
         def rest_style(p, q=3):
             """
             :param p: first param

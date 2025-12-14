@@ -7,12 +7,12 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 
 class Net(nn.Module):
     def __init__(self):
-        with param_scope() as hp:
+        with hp.scope() as hp:
             super(Net, self).__init__()
             self.conv1 = nn.Conv2d(1, 32, 3, 1)
             self.conv2 = nn.Conv2d(32, 64, 3, 1)
@@ -174,7 +174,7 @@ def main():
     train_loader = torch.utils.data.DataLoader(dataset1, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
-    with param_scope(*args.define):
+    with hp.scope(*args.define):
         model = Net().to(device)
     optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 

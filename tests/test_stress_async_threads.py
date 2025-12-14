@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Tuple, Set
 import pytest
 
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 
 class TestStressAsyncThreads:
@@ -25,11 +25,11 @@ class TestStressAsyncThreads:
         results: List[Tuple[int, int]] = []
 
         async def worker(task_id: int):
-            with param_scope(**{"TASK_ID": task_id}):
+            with hp.scope(**{"TASK_ID": task_id}):
                 # 模拟一些异步操作
                 await asyncio.sleep(0.001)
                 # 验证参数隔离
-                val = param_scope.TASK_ID()
+                val = hp.scope.TASK_ID()
                 results.append((task_id, val))
                 return val
 
@@ -54,10 +54,10 @@ class TestStressAsyncThreads:
             """每个线程运行自己的异步事件循环"""
 
             async def async_worker(task_id: int):
-                with param_scope(**{"THREAD_ID": thread_id, "TASK_ID": task_id}):
+                with hp.scope(**{"THREAD_ID": thread_id, "TASK_ID": task_id}):
                     await asyncio.sleep(0.001)
-                    thread_val = param_scope.THREAD_ID()
-                    task_val = param_scope.TASK_ID()
+                    thread_val = hp.scope.THREAD_ID()
+                    task_val = hp.scope.TASK_ID()
                     return (thread_id, task_id, thread_val, task_val)
 
             async def run_all():
@@ -107,23 +107,23 @@ class TestStressAsyncThreads:
 
         async def worker(task_id: int):
             # 外层作用域
-            with param_scope(**{"OUTER": task_id * 10}):
-                outer_val = param_scope.OUTER()
+            with hp.scope(**{"OUTER": task_id * 10}):
+                outer_val = hp.scope.OUTER()
 
                 # 内层作用域
-                with param_scope(**{"INNER": task_id * 100}):
-                    inner_val = param_scope.INNER()
-                    outer_val_inside = param_scope.OUTER()
+                with hp.scope(**{"INNER": task_id * 100}):
+                    inner_val = hp.scope.INNER()
+                    outer_val_inside = hp.scope.OUTER()
                     await asyncio.sleep(0.001)
 
                     # 创建嵌套异步任务
                     async def nested():
-                        with param_scope(**{"NESTED": task_id * 1000}):
+                        with hp.scope(**{"NESTED": task_id * 1000}):
                             await asyncio.sleep(0.001)
                             return (
-                                param_scope.OUTER(),
-                                param_scope.INNER(),
-                                param_scope.NESTED(),
+                                hp.scope.OUTER(),
+                                hp.scope.INNER(),
+                                hp.scope.NESTED(),
                             )
 
                     nested_vals = await nested()
@@ -132,7 +132,7 @@ class TestStressAsyncThreads:
                     )
 
                 # 退出内层后应该恢复外层
-                outer_val_after = param_scope.OUTER()
+                outer_val_after = hp.scope.OUTER()
                 results.append((outer_val, outer_val_after))
 
         tasks = [worker(i) for i in range(num_tasks)]
@@ -174,9 +174,9 @@ class TestStressAsyncThreads:
         def thread_worker(thread_id: int):
             async def async_worker(task_id: int):
                 # 每个任务设置自己的参数
-                with param_scope(**{"ID": thread_id * 10000 + task_id}):
+                with hp.scope(**{"ID": thread_id * 10000 + task_id}):
                     await asyncio.sleep(0.0001)
-                    val = param_scope.ID()
+                    val = hp.scope.ID()
                     return (task_id, val)
 
             async def run_all():
@@ -214,12 +214,12 @@ class TestStressAsyncThreads:
         results: List[Tuple[int, int, int]] = []
 
         async def outer_worker(outer_id: int):
-            with param_scope(**{"OUTER_ID": outer_id}):
+            with hp.scope(**{"OUTER_ID": outer_id}):
 
                 async def inner_worker(inner_id: int):
-                    with param_scope(**{"INNER_ID": inner_id}):
+                    with hp.scope(**{"INNER_ID": inner_id}):
                         await asyncio.sleep(0.001)
-                        return (param_scope.OUTER_ID(), param_scope.INNER_ID())
+                        return (hp.scope.OUTER_ID(), hp.scope.INNER_ID())
 
                 inner_tasks = [
                     inner_worker(i) for i in range(num_inner_tasks_per_outer)
@@ -250,21 +250,21 @@ class TestStressAsyncThreads:
         def thread_worker(thread_id: int):
             async def async_worker(task_id: int):
                 try:
-                    with param_scope(**{"ID": thread_id * 1000 + task_id}):
-                        val1 = param_scope.ID()
+                    with hp.scope(**{"ID": thread_id * 1000 + task_id}):
+                        val1 = hp.scope.ID()
                         # 嵌套作用域
                         try:
-                            with param_scope(**{"ID": task_id}):
-                                val2 = param_scope.ID()
+                            with hp.scope(**{"ID": task_id}):
+                                val2 = hp.scope.ID()
                                 # 模拟异常
                                 if task_id % 10 == 0:
                                     raise ValueError(
                                         f"Test exception for task {task_id}"
                                     )
                         except ValueError:
-                            val3 = param_scope.ID()
+                            val3 = hp.scope.ID()
                             return val1 == val3
-                        val3 = param_scope.ID()
+                        val3 = hp.scope.ID()
                         return val1 == val3
                 except Exception:
                     return False
@@ -301,9 +301,9 @@ class TestStressAsyncThreads:
         async def worker(task_id: int):
             # 快速切换多个作用域
             for i in range(10):
-                with param_scope(**{"VALUE": task_id * 10 + i}):
+                with hp.scope(**{"VALUE": task_id * 10 + i}):
                     await asyncio.sleep(0.0001)
-                    val = param_scope.VALUE()
+                    val = hp.scope.VALUE()
                     results.append(val)
                     # 验证值正确
                     assert (
@@ -324,9 +324,9 @@ class TestStressAsyncThreads:
 
         def thread_worker(thread_id: int):
             async def async_worker(task_id: int):
-                with param_scope(**{"ID": thread_id * 10000 + task_id}):
+                with hp.scope(**{"ID": thread_id * 10000 + task_id}):
                     await asyncio.sleep(0.0001)
-                    return param_scope.ID()
+                    return hp.scope.ID()
 
             async def run_all():
                 tasks = [async_worker(i) for i in range(tasks_per_thread)]
@@ -352,21 +352,21 @@ class TestStressAsyncThreads:
     # async def test_stress_frozen_propagation_async(self):
     #     """测试frozen参数在异步环境下的传播"""
     #     # 设置全局frozen值
-    #     with param_scope(**{"GLOBAL": 9999}):
-    #         param_scope.frozen()
+    #     with hp.scope(**{"GLOBAL": 9999}):
+    #         hp.scope.frozen()
     #
     #     num_tasks = 500
     #     results: List[int] = []
     #
     #     async def worker(task_id: int):
     #         # 应该继承frozen的值
-    #         global_val = param_scope.GLOBAL()
-    #         with param_scope(**{"LOCAL": task_id}):
-    #             local_val = param_scope.LOCAL()
+    #         global_val = hp.scope.GLOBAL()
+    #         with hp.scope(**{"LOCAL": task_id}):
+    #             local_val = hp.scope.LOCAL()
     #             # 创建嵌套任务
     #             async def nested():
     #                 # 嵌套任务也应该看到frozen值
-    #                 nested_global = param_scope.GLOBAL()
+    #                 nested_global = hp.scope.GLOBAL()
     #                 return nested_global
     #
     #             nested_global = await nested()
@@ -391,10 +391,10 @@ class TestStressAsyncThreads:
         results: List[Tuple[int, int]] = []
 
         async def worker(task_id: int):
-            with param_scope(**{"ID": task_id}):
+            with hp.scope(**{"ID": task_id}):
                 # 模拟一些计算
                 await asyncio.sleep(0.0001)
-                val = param_scope.ID()
+                val = hp.scope.ID()
                 results.append((task_id, val))
                 return val
 
@@ -425,10 +425,10 @@ class TestStressAsyncThreads:
 
         def thread_worker(thread_id: int):
             async def async_iteration(iteration: int):
-                with param_scope(**{"THREAD_ID": thread_id, "ITER": iteration}):
+                with hp.scope(**{"THREAD_ID": thread_id, "ITER": iteration}):
                     await asyncio.sleep(0.001)
-                    t_id = param_scope.THREAD_ID()
-                    it = param_scope.ITER()
+                    t_id = hp.scope.THREAD_ID()
+                    it = hp.scope.ITER()
                     if t_id != thread_id or it != iteration:
                         with lock:
                             thread_results.append(-1)  # 错误标记
@@ -487,24 +487,24 @@ class TestStressAsyncThreads:
         def thread_worker(thread_id: int):
             async def async_worker(task_id: int):
                 # 多层嵌套作用域
-                with param_scope(**{"THREAD": thread_id}):
-                    with param_scope(**{"TASK": task_id}):
-                        with param_scope(**{"COMBINED": thread_id * 100000 + task_id}):
+                with hp.scope(**{"THREAD": thread_id}):
+                    with hp.scope(**{"TASK": task_id}):
+                        with hp.scope(**{"COMBINED": thread_id * 100000 + task_id}):
                             await asyncio.sleep(0.0001)
                             # 验证所有层级的值
-                            t = param_scope.THREAD()
-                            task = param_scope.TASK()
-                            combined = param_scope.COMBINED()
+                            t = hp.scope.THREAD()
+                            task = hp.scope.TASK()
+                            combined = hp.scope.COMBINED()
 
                             # 创建嵌套异步任务验证隔离
                             async def nested():
-                                with param_scope(**{"NESTED": task_id * 1000}):
+                                with hp.scope(**{"NESTED": task_id * 1000}):
                                     await asyncio.sleep(0.0001)
                                     return (
-                                        param_scope.THREAD(),
-                                        param_scope.TASK(),
-                                        param_scope.COMBINED(),
-                                        param_scope.NESTED(),
+                                        hp.scope.THREAD(),
+                                        hp.scope.TASK(),
+                                        hp.scope.COMBINED(),
+                                        hp.scope.NESTED(),
                                     )
 
                             nested_vals = await nested()

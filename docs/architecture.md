@@ -7,15 +7,15 @@ This document explains the internal architecture of Hyperparameter, including ho
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Python User Code                         │
-│  @auto_param, param_scope, loader.load(), etc.              │
+│  @hp.param, scope, hp.config(), etc.              │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Python API Layer                           │
 │  hyperparameter/api.py, hyperparameter/cli.py               │
-│  - Decorators (@auto_param)                                 │
-│  - Context managers (param_scope)                           │
+│  - Decorators (@hp.param)                                 │
+│  - Context managers (scope)                           │
 │  - CLI argument parsing                                     │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -46,23 +46,23 @@ This is what users interact with directly.
 
 **Key Classes:**
 
-- **`param_scope`**: A context manager that creates a new parameter scope.
+- **`scope`**: A context manager that creates a new parameter hp.scope.
   ```python
-  with param_scope(foo=1, bar=2) as ps:
+  with hp.scope(foo=1, bar=2) as ps:
       # ps.foo() returns 1
       # Nested scopes inherit from parent
   ```
 
-- **`_ParamAccessor`**: Handles the `param_scope.x.y.z | default` syntax.
+- **`_ParamAccessor`**: Handles the `hp.scope.x.y.z | default` syntax.
   ```python
-  # This chain: param_scope.model.layers.size | 10
+  # This chain: hp.scope.model.layers.size | 10
   # Creates: _ParamAccessor(root, "model.layers.size")
   # The `|` operator calls get_or_else(10)
   ```
 
-- **`auto_param` decorator**: Inspects function signature and injects values.
+- **`param` decorator**: Inspects function signature and injects values.
   ```python
-  @auto_param("model")
+  @hp.param("model")
   def foo(hidden_size=256):  # Looks up "model.hidden_size"
       pass
   ```
@@ -165,25 +165,25 @@ def load(path, schema=None):
 Let's trace what happens when you run:
 
 ```python
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 
-@auto_param("model")
+@hp.param("model")
 def train(lr=0.001):
     print(lr)
 
-with param_scope(**{"model.lr": 0.01}):
+with hp.scope(**{"model.lr": 0.01}):
     train()
 ```
 
 **Step-by-step:**
 
-1. **`param_scope(**{"model.lr": 0.01})`**:
+1. **`scope(**{"model.lr": 0.01})`**:
    - Creates new `TLSKVStorage` scope
    - Computes hash: `xxhash("model.lr")` → `0x1234...`
    - Stores: `{0x1234...: 0.01}` in current thread's scope stack
 
 2. **`train()` called**:
-   - `@auto_param` wrapper runs
+   - `@hp.param` wrapper runs
    - For each kwarg with default (`lr=0.001`):
      - Computes hash: `xxhash("model.lr")`
      - Calls `storage.get_entry(0x1234...)`
@@ -191,7 +191,7 @@ with param_scope(**{"model.lr": 0.01}):
    - Calls `train(lr=0.01)`
 
 3. **Scope exit**:
-   - `param_scope.__exit__()` called
+   - `hp.scope.__exit__()` called
    - Pops scope from stack
    - `model.lr` no longer accessible
 
@@ -210,17 +210,17 @@ with param_scope(**{"model.lr": 0.01}):
 
 | Pattern | Speed | Use Case |
 | :--- | :--- | :--- |
-| `@auto_param` injection | 🚀🚀🚀 Fastest | Hot loops, performance-critical |
-| `with param_scope() as ps: ps.x` | 🚀🚀 Fast | Most code |
-| `param_scope.x` (global) | 🚀 Moderate | Convenience, one-off access |
+| `@hp.param` injection | 🚀🚀🚀 Fastest | Hot loops, performance-critical |
+| `with hp.scope() as ps: ps.x` | 🚀🚀 Fast | Most code |
+| `hp.scope.x` (global) | 🚀 Moderate | Convenience, one-off access |
 
 ## Thread Safety Model
 
 ```
 Thread 1                    Thread 2
 ────────                    ────────
-param_scope(a=1)           
-│                          param_scope(a=2)
+hp.scope(a=1)           
+│                          scope(a=2)
 │   a = 1                  │   a = 2
 │                          │
 └── exit                   └── exit
@@ -232,8 +232,8 @@ Each thread has **independent scope stacks**. Changes in one thread never affect
 **`frozen()` for cross-thread defaults:**
 
 ```python
-with param_scope(a=1):
-    param_scope.frozen()  # Snapshot current scope as global default
+with hp.scope(a=1):
+    hp.scope.frozen()  # Snapshot current scope as global default
     
 # New threads will see a=1 as their initial state
 ```
@@ -274,8 +274,8 @@ def _coerce_type(value, target_type):
 ```
 hyperparameter/
 ├── __init__.py          # Public API exports
-├── api.py               # Core Python API (param_scope, auto_param)
-├── cli.py               # CLI support (launch, run_cli)
+├── api.py               # Core Python API (scope, param)
+├── cli.py               # CLI support (launch, launch)
 ├── loader.py            # Config loading, interpolation, validation
 ├── storage.py           # Storage abstraction, TLS
 └── tune.py              # Hyperparameter tuning utilities

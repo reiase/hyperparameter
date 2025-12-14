@@ -2,9 +2,10 @@ import importlib.metadata
 import os
 import warnings
 
-from .api import auto_param, launch, param_scope, run_cli
+from .api import scope, param, launch
+from .loader import config
 
-__all__ = ["param_scope", "auto_param", "launch", "run_cli"]
+__all__ = ["scope", "param", "launch", "config"]
 
 
 def _load_version() -> str:

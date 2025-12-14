@@ -13,66 +13,66 @@ pip install hyperparameter
 ### 1.1 Reading Parameters with Defaults
 
 ```python
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 # Use | operator to provide default values
-lr = param_scope.train.lr | 0.001
-batch_size = param_scope.train.batch_size | 32
+lr = hp.scope.train.lr | 0.001
+batch_size = hp.scope.train.batch_size | 32
 
 # Use function call syntax (equivalent to |)
-use_cache = param_scope.model.cache(True)
+use_cache = hp.scope.model.cache(True)
 
 # Call without arguments: raises KeyError if missing
-required_value = param_scope.model.required_key()  # KeyError if missing
+required_value = hp.scope.model.required_key()  # KeyError if missing
 ```
 
-`param_scope.key(default)` is equivalent to `param_scope.key | default`. Calling `param_scope.key()` without arguments treats the parameter as required and raises `KeyError` if missing.
+`hp.scope.key(default)` is equivalent to `hp.scope.key | default`. Calling `hp.scope.key()` without arguments treats the parameter as required and raises `KeyError` if missing.
 
 ### 1.2 Scoping and Auto-Rollback
 
 ```python
-from hyperparameter import param_scope
+import hyperparameter as hp
 
-print(param_scope.model.dropout | 0.1)  # 0.1
+print(hp.scope.model.dropout | 0.1)  # 0.1
 
-with param_scope(**{"model.dropout": 0.3}):
-    print(param_scope.model.dropout | 0.1)  # 0.3
+with hp.scope(**{"model.dropout": 0.3}):
+    print(hp.scope.model.dropout | 0.1)  # 0.3
 
-print(param_scope.model.dropout | 0.1)  # 0.1, auto-rollback on scope exit
+print(hp.scope.model.dropout | 0.1)  # 0.1, auto-rollback on scope exit
 ```
 
 All parameter modifications within a `with` block are automatically reverted when the scope exits.
 
 ---
 
-## 2. @auto_param Decorator
+## 2. @hp.param Decorator
 
 ### 2.1 Automatic Parameter Binding
 
 ```python
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 
-@auto_param("train")
+@hp.param("train")
 def train(lr=1e-3, batch_size=32, epochs=10):
     print(f"lr={lr}, batch_size={batch_size}, epochs={epochs}")
 
 train()  # Uses function signature defaults
 
-with param_scope(**{"train.lr": 5e-4, "train.batch_size": 64}):
+with hp.scope(**{"train.lr": 5e-4, "train.batch_size": 64}):
     train()  # lr=0.0005, batch_size=64, epochs=10
 
 train(lr=1e-2)  # Direct arguments take highest priority
 ```
 
-Parameter resolution priority: direct arguments > param_scope overrides > function signature defaults.
+Parameter resolution priority: direct arguments > scope overrides > function signature defaults.
 
 ### 2.2 CLI Override
 
 ```python
 # train.py
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 
-@auto_param("train")
+@hp.param("train")
 def train(lr=1e-3, batch_size=32, warmup_steps=500):
     print(f"lr={lr}, batch_size={batch_size}, warmup={warmup_steps}")
 
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("-D", "--define", nargs="*", default=[], action="extend")
     args = parser.parse_args()
 
-    with param_scope(*args.define):
+    with hp.scope(*args.define):
         train()
 ```
 
@@ -99,13 +99,13 @@ Override parameters at runtime with `-D key=value` without modifying code.
 ### 3.1 Multi-Model Comparison
 
 ```python
-from hyperparameter import param_scope, auto_param
+import hyperparameter as hp
 
-@auto_param("modelA")
+@hp.param("modelA")
 def run_model_a(dropout=0.1, hidden=128):
     print(f"ModelA: dropout={dropout}, hidden={hidden}")
 
-@auto_param("modelB")
+@hp.param("modelB")
 def run_model_b(dropout=0.2, hidden=256):
     print(f"ModelB: dropout={dropout}, hidden={hidden}")
 
@@ -115,9 +115,9 @@ variants = [
     {"modelB.hidden": 512, "modelB.dropout": 0.15},
 ]
 
-with param_scope(**base):
+with hp.scope(**base):
     for cfg in variants:
-        with param_scope(**cfg):
+        with hp.scope(**cfg):
             run_model_a()
             run_model_b()
 ```
@@ -127,14 +127,14 @@ Outer scopes set shared configuration; inner scopes override specific parameters
 ### 3.2 Dynamic Key Access
 
 ```python
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 def train_task(task_name):
-    lr = param_scope[f"task.{task_name}.lr"] | 1e-3
-    wd = param_scope[f"task.{task_name}.weight_decay"] | 0.01
+    lr = scope[f"task.{task_name}.lr"] | 1e-3
+    wd = scope[f"task.{task_name}.weight_decay"] | 0.01
     print(f"{task_name}: lr={lr}, weight_decay={wd}")
 
-with param_scope(**{
+with hp.scope(**{
     "task.cls.lr": 1e-3,
     "task.cls.weight_decay": 0.01,
     "task.seg.lr": 5e-4,
@@ -144,7 +144,7 @@ with param_scope(**{
     train_task("seg")
 ```
 
-Use `param_scope[key]` syntax for dynamically constructed keys.
+Use `scope[key]` syntax for dynamically constructed keys.
 
 ---
 
@@ -153,32 +153,32 @@ Use `param_scope[key]` syntax for dynamically constructed keys.
 ### 4.1 Request-Level Isolation
 
 ```python
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 def rerank(items):
-    use_new = param_scope.rerank.use_new(False)
-    threshold = param_scope.rerank.threshold | 0.8
+    use_new = hp.scope.rerank.use_new(False)
+    threshold = hp.scope.rerank.threshold | 0.8
     if use_new:
         return [x for x in items if x.score >= threshold]
     return items
 
 def handle_request(request):
-    with param_scope(**request.overrides):
+    with hp.scope(**request.overrides):
         return rerank(request.items)
 ```
 
-Each request executes in an isolated scope. Configuration changes do not affect other concurrent requests.
+Each request executes in an isolated hp.scope. Configuration changes do not affect other concurrent requests.
 
 ### 4.2 Multi-threaded Data Processing
 
 ```python
 import concurrent.futures
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 def preprocess(shard, cfg):
-    with param_scope(**cfg):
-        clean = param_scope.pre.clean_noise(False)
-        norm = param_scope.pre.norm | "zscore"
+    with hp.scope(**cfg):
+        clean = hp.scope.pre.clean_noise(False)
+        norm = hp.scope.pre.norm | "zscore"
         # Processing logic
         return processed_shard
 
@@ -191,7 +191,7 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
 
 Thread safety guarantees:
 - Configuration dicts can be safely passed to multiple threads
-- Each thread's `param_scope` modifications are isolated
+- Each thread's `scope` modifications are isolated
 - Automatic cleanup on scope exit
 
 ---
@@ -201,25 +201,25 @@ Thread safety guarantees:
 ### 5.1 LLM Inference Configuration
 
 ```python
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 def generate(prompt):
-    max_tokens = param_scope.llm.max_tokens | 256
-    temperature = param_scope.llm.temperature | 0.7
+    max_tokens = hp.scope.llm.max_tokens | 256
+    temperature = hp.scope.llm.temperature | 0.7
     return llm_call(prompt, max_tokens=max_tokens, temperature=temperature)
 
 # Default configuration
 generate("hello")
 
 # Temporary override
-with param_scope(**{"llm.max_tokens": 64, "llm.temperature": 0.2}):
+with hp.scope(**{"llm.max_tokens": 64, "llm.temperature": 0.2}):
     generate("short answer")
 ```
 
 ### 5.2 A/B Testing
 
 ```python
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 def get_experiment_config(user_id):
     if hash(user_id) % 100 < 10:  # 10% traffic
@@ -227,25 +227,25 @@ def get_experiment_config(user_id):
     return {}
 
 def search(query):
-    algo = param_scope.search.algo | "v1"
-    boost = param_scope.search.boost | 1.0
+    algo = hp.scope.search.algo | "v1"
+    boost = hp.scope.search.boost | 1.0
     # Search logic
 
 def handle_request(user_id, query):
-    with param_scope(**get_experiment_config(user_id)):
+    with hp.scope(**get_experiment_config(user_id)):
         return search(query)
 ```
 
 ### 5.3 ETL Job Configuration
 
 ```python
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 def run_job(name, overrides=None):
-    with param_scope(**(overrides or {})):
-        batch = param_scope.etl.batch_size | 500
-        retry = param_scope.etl.retry | 3
-        timeout = param_scope.etl.timeout | 30
+    with hp.scope(**(overrides or {})):
+        batch = hp.scope.etl.batch_size | 500
+        retry = hp.scope.etl.retry | 3
+        timeout = hp.scope.etl.timeout | 30
         # ETL logic
 
 run_job("daily")
@@ -255,11 +255,11 @@ run_job("full_rebuild", {"etl.batch_size": 5000, "etl.timeout": 300})
 ### 5.4 Early Stopping
 
 ```python
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 def check_early_stop(metric, best, wait):
-    patience = param_scope.scheduler.patience | 5
-    delta = param_scope.scheduler.min_delta | 0.001
+    patience = hp.scope.scheduler.patience | 5
+    delta = hp.scope.scheduler.min_delta | 0.001
     
     if metric > best + delta:
         return False, metric, 0
@@ -341,13 +341,13 @@ fn main() {
 
 | Usage | Description |
 |-------|-------------|
-| `param_scope.a.b \| default` | Read parameter with default value |
-| `param_scope.a.b(default)` | Same as above, function call syntax |
-| `param_scope.a.b()` | Read required parameter, raises KeyError if missing |
-| `param_scope["a.b"]` | Dynamic key access |
-| `with param_scope(**dict):` | Create scope with parameter overrides |
-| `with param_scope(*list):` | Create scope from string list (e.g., CLI args) |
-| `@auto_param("ns")` | Decorator to bind function parameters to `ns.*` |
+| `hp.scope.a.b \| default` | Read parameter with default value |
+| `hp.scope.a.b(default)` | Same as above, function call syntax |
+| `hp.scope.a.b()` | Read required parameter, raises KeyError if missing |
+| `scope["a.b"]` | Dynamic key access |
+| `with hp.scope(**dict):` | Create scope with parameter overrides |
+| `with hp.scope(*list):` | Create scope from string list (e.g., CLI args) |
+| `@hp.param("ns")` | Decorator to bind function parameters to `ns.*` |
 
 ---
 

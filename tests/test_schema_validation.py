@@ -2,7 +2,7 @@ import dataclasses
 from typing import Any, Dict, Type, Union
 
 import pytest
-from hyperparameter import loader
+import hyperparameter as hp
 
 
 @dataclasses.dataclass
@@ -26,7 +26,7 @@ def test_schema_validation_basic():
     }
 
     # Load with schema
-    loaded = loader.load(config, schema=AppConfig)
+    loaded = hp.config(config, schema=AppConfig)
 
     assert isinstance(loaded, AppConfig)
     assert loaded.name == "my-app"
@@ -43,7 +43,7 @@ def test_schema_validation_type_error():
     # dacite or similar library usually raises TypeError or custom error
     # For now, let's just assert it raises *some* exception
     with pytest.raises(Exception):
-        loader.load(config, schema=AppConfig)
+        hp.config(config, schema=AppConfig)
 
 
 def test_schema_validation_missing_required():
@@ -53,12 +53,12 @@ def test_schema_validation_missing_required():
     }
 
     with pytest.raises(Exception):
-        loader.load(config, schema=AppConfig)
+        hp.config(config, schema=AppConfig)
 
 
 def test_load_without_schema():
     # Backward compatibility
     config = {"a": 1}
-    loaded = loader.load(config)
+    loaded = hp.config(config)
     assert isinstance(loaded, dict)
     assert loaded["a"] == 1

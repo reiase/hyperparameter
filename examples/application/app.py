@@ -1,10 +1,10 @@
-from hyperparameter import param_scope, auto_param
+import hyperparameter as hp
 
 
-@auto_param
+@hp.param
 def main(a="default a", b="default b"):  # inline默认值
     print(f"a={a}, b={b}")
-    with param_scope() as ps:
+    with hp.scope() as ps:
         print(f"params in main = {ps}")
 
 
@@ -23,6 +23,6 @@ if __name__ == "__main__":
     else:
         cfg = {}
 
-    with param_scope(**cfg):  # 配置文件的scope
-        with param_scope(*args.define):  # 命令行参数的scope
+    with hp.scope(**cfg):  # 配置文件的scope
+        with hp.scope(*args.define):  # 命令行参数的scope
             main()

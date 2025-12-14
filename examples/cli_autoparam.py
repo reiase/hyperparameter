@@ -1,5 +1,5 @@
 """
-Simple CLI starter using hyperparameter.auto_param + run_cli().
+Simple CLI starter using hyperparameter.param + run_cli().
 
 Usage:
   # Default args
@@ -17,14 +17,14 @@ Usage:
 
 import threading
 
-from hyperparameter import auto_param, param_scope, run_cli
+import hyperparameter as hp
 
 
-@auto_param("foo")
+@hp.param("foo")
 def _foo(value=1):
     return value
 
-@auto_param("greet")
+@hp.param("greet")
 def greet(name: str = "world", times: int = 1, excited: bool = False):
     """Print greeting messages; internal foo.value is also override-able via -D foo.value=..."""
     msg = f"Hello, {name}. foo={_foo()}"
@@ -35,7 +35,7 @@ def greet(name: str = "world", times: int = 1, excited: bool = False):
     return msg
 
 
-@auto_param("calc")
+@hp.param("calc")
 def calc(a: int = 1, b: int = 2):
     """Tiny calculator that prints sum and product."""
     s = int(a) + int(b)
@@ -44,12 +44,12 @@ def calc(a: int = 1, b: int = 2):
     return s, p
 
 
-@auto_param("worker")
+@hp.param("worker")
 def spawn_child(task: str = "noop"):
-    """Show that threads see CLI / -D overrides after run_cli freezes scope."""
+    """Show that threads see CLI / -D overrides after run_cli freezes hp.scope."""
 
     def child():
-        print(f"[child] task={param_scope.worker.task()}")
+        print(f"[child] task={hp.scope.worker.task()}")
 
     t = threading.Thread(target=child)
     t.start()

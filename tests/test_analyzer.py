@@ -36,12 +36,12 @@ class TestHyperparameterAnalyzer(TestCase):
             f.write(content)
         return path
 
-    def test_analyze_auto_param_function(self):
-        """测试分析 @auto_param 函数"""
+    def test_analyze_param_function(self):
+        """测试分析 @hp.param 函数"""
         code = '''
-from hyperparameter import auto_param
+import hyperparameter as hp
 
-@auto_param("train")
+@hp.param("train")
 def train(lr=0.001, batch_size=32, epochs=10):
     """Training function."""
     pass
@@ -60,12 +60,11 @@ def train(lr=0.001, batch_size=32, epochs=10):
         self.assertIn("batch_size", param_names)
         self.assertIn("epochs", param_names)
 
-    def test_analyze_auto_param_class(self):
-        """测试分析 @auto_param 类"""
+    def test_analyze_param_class(self):
+        """测试分析 @hp.param 类"""
         code = """
-from hyperparameter import auto_param
 
-@auto_param("Model")
+@hp.param("Model")
 class Model:
     def __init__(self, hidden_size=256, dropout=0.1):
         self.hidden_size = hidden_size
@@ -80,14 +79,13 @@ class Model:
         self.assertEqual(func.namespace, "Model")
         self.assertEqual(len(func.params), 2)
 
-    def test_analyze_param_scope_usage(self):
-        """测试分析 param_scope 使用"""
+    def test_analyze_scope_usage(self):
+        """测试分析 scope 使用"""
         code = """
-from hyperparameter import param_scope
 
 def func():
-    lr = param_scope.train.lr | 0.001
-    batch_size = param_scope.train.batch_size | 32
+    lr = hp.scope.train.lr | 0.001
+    batch_size = hp.scope.train.batch_size | 32
 """
         self._write_temp_file("usage.py", code)
         result = self.analyzer.analyze_package(self.temp_dir)
@@ -100,9 +98,8 @@ def func():
     def test_analyze_nested_namespace(self):
         """测试嵌套命名空间"""
         code = """
-from hyperparameter import auto_param
 
-@auto_param("app.config.train")
+@hp.param("app.config.train")
 def train(lr=0.001):
     pass
 """
@@ -187,16 +184,14 @@ def train(lr=0.001):
     def test_analyze_multiple_files(self):
         """测试分析多个文件"""
         code1 = """
-from hyperparameter import auto_param
 
-@auto_param("module1")
+@hp.param("module1")
 def func1(x=1):
     pass
 """
         code2 = """
-from hyperparameter import auto_param
 
-@auto_param("module2")
+@hp.param("module2")
 def func2(y=2):
     pass
 """
@@ -213,9 +208,8 @@ def func2(y=2):
     def test_param_default_values(self):
         """测试提取默认值"""
         code = """
-from hyperparameter import auto_param
 
-@auto_param("test")
+@hp.param("test")
 def test_func(
     int_param=42,
     float_param=3.14,

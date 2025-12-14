@@ -4,59 +4,59 @@
 
 ---
 
-## param_scope
+## scope
 
-`param_scope` 是管理超参数的核心类，提供线程安全的作用域控制。
+`scope` 是管理超参数的核心类，提供线程安全的作用域控制。
 
 ### 导入
 
 ```python
-from hyperparameter import param_scope
+import hyperparameter as hp
 ```
 
-### 创建 param_scope
+### 创建 scope
 
 ```python
 # 空作用域
-ps = param_scope()
+ps = hp.scope()
 
 # 从关键字参数创建
-ps = param_scope(lr=0.001, batch_size=32)
+ps = hp.scope(lr=0.001, batch_size=32)
 
 # 从字符串参数创建（key=value 格式）
-ps = param_scope("lr=0.001", "batch_size=32")
+ps = hp.scope("lr=0.001", "batch_size=32")
 
 # 从字典创建
-ps = param_scope(**{"train.lr": 0.001, "train.batch_size": 32})
+ps = hp.scope(**{"train.lr": 0.001, "train.batch_size": 32})
 
 # 空作用域（清除继承的值）
-ps = param_scope.empty()
-ps = param_scope.empty(lr=0.001)
+ps = hp.scope.empty()
+ps = hp.scope.empty(lr=0.001)
 ```
 
 ### 读取参数
 
 ```python
 # 使用 | 运算符（缺失时返回默认值）
-lr = param_scope.train.lr | 0.001
+lr = hp.scope.train.lr | 0.001
 
 # 使用函数调用（缺失时返回默认值）
-lr = param_scope.train.lr(0.001)
+lr = hp.scope.train.lr(0.001)
 
 # 无默认值（缺失时抛出 KeyError）
-lr = param_scope.train.lr()
+lr = hp.scope.train.lr()
 
 # 动态 key 访问
 key = "train.lr"
-lr = param_scope[key] | 0.001
+lr = scope[key] | 0.001
 ```
 
 ### 写入参数
 
 ```python
-with param_scope() as ps:
+with hp.scope() as ps:
     # 属性赋值
-    param_scope.train.lr = 0.001
+    hp.scope.train.lr = 0.001
     
     # 通过实例
     ps.train.batch_size = 32
@@ -66,57 +66,57 @@ with param_scope() as ps:
 
 ```python
 # 基本用法
-with param_scope(**{"lr": 0.001}):
-    print(param_scope.lr())  # 0.001
+with hp.scope(**{"lr": 0.001}):
+    print(hp.scope.lr())  # 0.001
 
 # 嵌套作用域
-with param_scope(**{"a": 1}):
-    print(param_scope.a())  # 1
-    with param_scope(**{"a": 2}):
-        print(param_scope.a())  # 2
-    print(param_scope.a())  # 1（自动回滚）
+with hp.scope(**{"a": 1}):
+    print(hp.scope.a())  # 1
+    with hp.scope(**{"a": 2}):
+        print(hp.scope.a())  # 2
+    print(hp.scope.a())  # 1（自动回滚）
 ```
 
 ### 静态方法
 
-#### `param_scope.empty(*args, **kwargs)`
+#### `hp.scope.empty(*args, **kwargs)`
 
 创建一个新的空作用域，清除所有继承的值。
 
 ```python
-with param_scope(**{"inherited": 1}):
-    with param_scope.empty(**{"fresh": 2}) as ps:
+with hp.scope(**{"inherited": 1}):
+    with hp.scope.empty(**{"fresh": 2}) as ps:
         print(ps.inherited("missing"))  # "missing"
         print(ps.fresh())  # 2
 ```
 
-#### `param_scope.current()`
+#### `hp.scope.current()`
 
 返回当前活动的作用域。
 
 ```python
-with param_scope(**{"key": "value"}):
-    ps = param_scope.current()
+with hp.scope(**{"key": "value"}):
+    ps = hp.scope.current()
     print(ps.key())  # "value"
 ```
 
-#### `param_scope.frozen()`
+#### `hp.scope.frozen()`
 
 将当前作用域快照为新线程的全局基线。
 
 ```python
-with param_scope(**{"global_config": 42}):
-    param_scope.frozen()
+with hp.scope(**{"global_config": 42}):
+    hp.scope.frozen()
     # 新线程将继承 global_config=42
 ```
 
-#### `param_scope.init(params=None)`
+#### `hp.scope.init(params=None)`
 
-为新线程初始化 param_scope。
+为新线程初始化 scope。
 
 ```python
 def thread_target():
-    param_scope.init({"thread_param": 1})
+    hp.scope.init({"thread_param": 1})
     # ...
 ```
 
@@ -127,7 +127,7 @@ def thread_target():
 返回所有参数 key 的可迭代对象。
 
 ```python
-with param_scope(**{"a": 1, "b.c": 2}) as ps:
+with hp.scope(**{"a": 1, "b.c": 2}) as ps:
     print(list(ps.keys()))  # ['a', 'b.c']
 ```
 
@@ -145,28 +145,28 @@ with param_scope(**{"a": 1, "b.c": 2}) as ps:
 
 ---
 
-## @auto_param
+## @hp.param
 
 装饰器，自动将函数参数绑定到超参数。
 
 ### 导入
 
 ```python
-from hyperparameter import auto_param
+import hyperparameter as hp
 ```
 
 ### 基本用法
 
 ```python
-@auto_param("train")
+@hp.param("train")
 def train(lr=0.001, batch_size=32, epochs=10):
     print(f"lr={lr}, batch_size={batch_size}")
 
 # 使用函数默认值
 train()  # lr=0.001, batch_size=32
 
-# 通过 param_scope 覆盖
-with param_scope(**{"train.lr": 0.01}):
+# 通过 scope 覆盖
+with hp.scope(**{"train.lr": 0.01}):
     train()  # lr=0.01, batch_size=32
 
 # 直接传参优先级最高
@@ -176,42 +176,42 @@ train(lr=0.1)  # lr=0.1, batch_size=32
 ### 自定义命名空间
 
 ```python
-@auto_param("myapp.config.train")
+@hp.param("myapp.config.train")
 def train(lr=0.001):
     print(f"lr={lr}")
 
-with param_scope(**{"myapp.config.train.lr": 0.01}):
+with hp.scope(**{"myapp.config.train.lr": 0.01}):
     train()  # lr=0.01
 ```
 
 ### 无命名空间（使用函数名）
 
 ```python
-@auto_param
+@hp.param
 def my_function(x=1):
     return x
 
-with param_scope(**{"my_function.x": 2}):
+with hp.scope(**{"my_function.x": 2}):
     my_function()  # 返回 2
 ```
 
 ### 类装饰器
 
 ```python
-@auto_param("Model")
+@hp.param("Model")
 class Model:
     def __init__(self, hidden_size=256, dropout=0.1):
         self.hidden_size = hidden_size
         self.dropout = dropout
 
-with param_scope(**{"Model.hidden_size": 512}):
+with hp.scope(**{"Model.hidden_size": 512}):
     model = Model()  # hidden_size=512, dropout=0.1
 ```
 
 ### 参数解析优先级
 
 1. **直接传参**（最高优先级）
-2. **param_scope 覆盖**
+2. **scope 覆盖**
 3. **函数签名默认值**（最低优先级）
 
 ---
@@ -223,13 +223,13 @@ CLI 应用程序入口，支持自动参数解析。
 ### 导入
 
 ```python
-from hyperparameter import launch
+import hyperparameter as hp
 ```
 
 ### 单函数模式
 
 ```python
-@auto_param("app")
+@hp.param("app")
 def main(input_file, output_file="out.txt", verbose=False):
     """处理输入文件。
     
@@ -241,7 +241,7 @@ def main(input_file, output_file="out.txt", verbose=False):
     pass
 
 if __name__ == "__main__":
-    launch(main)
+    hp.launch(main)
 ```
 
 运行：
@@ -253,18 +253,18 @@ python app.py input.txt -D app.verbose=true
 ### 多函数模式（子命令）
 
 ```python
-@auto_param("train")
+@hp.param("train")
 def train(epochs=10, lr=0.001):
     """训练模型。"""
     pass
 
-@auto_param("eval")
+@hp.param("eval")
 def evaluate(checkpoint="model.pt"):
     """评估模型。"""
     pass
 
 if __name__ == "__main__":
-    launch()  # 自动发现所有 @auto_param 函数
+    hp.launch()  # 自动发现所有 @hp.param 函数
 ```
 
 运行：
@@ -284,15 +284,15 @@ python app.py eval --checkpoint best.pt
 
 ---
 
-## run_cli
+## launch
 
 `launch` 的替代方案，行为略有不同。
 
 ```python
-from hyperparameter import run_cli
+import hyperparameter as hp
 
 if __name__ == "__main__":
-    run_cli()
+    hp.launch()
 ```
 
 ---
@@ -304,8 +304,8 @@ if __name__ == "__main__":
 ### 布尔值转换
 
 ```python
-with param_scope(**{"flag": "true"}):
-    param_scope.flag(False)  # True
+with hp.scope(**{"flag": "true"}):
+    hp.scope.flag(False)  # True
 
 # 识别的真值: "true", "True", "TRUE", "t", "T", "yes", "YES", "y", "Y", "1", "on", "ON"
 # 识别的假值: "false", "False", "FALSE", "f", "F", "no", "NO", "n", "N", "0", "off", "OFF"
@@ -314,25 +314,25 @@ with param_scope(**{"flag": "true"}):
 ### 整数转换
 
 ```python
-with param_scope(**{"count": "42"}):
-    param_scope.count(0)  # 42 (int)
+with hp.scope(**{"count": "42"}):
+    hp.scope.count(0)  # 42 (int)
 
-with param_scope(**{"value": "3.14"}):
-    param_scope.value(0)  # 3.14 (float，保留精度)
+with hp.scope(**{"value": "3.14"}):
+    hp.scope.value(0)  # 3.14 (float，保留精度)
 ```
 
 ### 浮点数转换
 
 ```python
-with param_scope(**{"rate": "0.001"}):
-    param_scope.rate(0.0)  # 0.001
+with hp.scope(**{"rate": "0.001"}):
+    hp.scope.rate(0.0)  # 0.001
 ```
 
 ### 字符串转换
 
 ```python
-with param_scope(**{"count": 42}):
-    param_scope.count("0")  # "42" (string)
+with hp.scope(**{"count": 42}):
+    hp.scope.count("0")  # "42" (string)
 ```
 
 ---
@@ -347,8 +347,8 @@ with param_scope(**{"count": 42}):
 import threading
 
 def worker():
-    with param_scope(**{"worker_id": threading.current_thread().name}):
-        print(param_scope.worker_id())
+    with hp.scope(**{"worker_id": threading.current_thread().name}):
+        print(hp.scope.worker_id())
 
 threads = [threading.Thread(target=worker) for _ in range(3)]
 for t in threads:
@@ -362,11 +362,11 @@ for t in threads:
 使用 `frozen()` 将值传播到新线程：
 
 ```python
-with param_scope(**{"global_config": 42}):
-    param_scope.frozen()
+with hp.scope(**{"global_config": 42}):
+    hp.scope.frozen()
 
 def worker():
-    print(param_scope.global_config())  # 42
+    print(hp.scope.global_config())  # 42
 
 t = threading.Thread(target=worker)
 t.start()
@@ -382,8 +382,8 @@ t.join()
 访问缺失的必需参数时抛出：
 
 ```python
-with param_scope():
-    param_scope.missing()  # 抛出 KeyError
+with hp.scope():
+    hp.scope.missing()  # 抛出 KeyError
 ```
 
 ### 安全访问
@@ -391,9 +391,9 @@ with param_scope():
 始终提供默认值以避免 KeyError：
 
 ```python
-with param_scope():
-    param_scope.missing | "default"  # 返回 "default"
-    param_scope.missing("default")   # 返回 "default"
+with hp.scope():
+    hp.scope.missing | "default"  # 返回 "default"
+    hp.scope.missing("default")   # 返回 "default"
 ```
 
 ---
@@ -405,9 +405,9 @@ with param_scope():
 嵌套字典会自动展平：
 
 ```python
-with param_scope(**{"model": {"hidden": 256, "layers": 4}}):
-    print(param_scope["model.hidden"]())  # 256
-    print(param_scope.model.layers())     # 4
+with hp.scope(**{"model": {"hidden": 256, "layers": 4}}):
+    print(scope["model.hidden"]())  # 256
+    print(hp.scope.model.layers())     # 4
 ```
 
 ### 动态 key 构造
@@ -415,13 +415,13 @@ with param_scope(**{"model": {"hidden": 256, "layers": 4}}):
 ```python
 for task in ["train", "eval"]:
     key = f"config.{task}.batch_size"
-    value = getattr(param_scope.config, task).batch_size | 32
+    value = getattr(hp.scope.config, task).batch_size | 32
 ```
 
 ### 访问底层存储
 
 ```python
-with param_scope(**{"a": 1, "b": 2}) as ps:
+with hp.scope(**{"a": 1, "b": 2}) as ps:
     storage = ps.storage()
     print(storage.storage())  # {'a': 1, 'b': 2}
 ```
@@ -630,8 +630,8 @@ Hyperparameter: train.lr
   Description: Training function with configurable learning rate.
 
   Usage:
-    # 通过 param_scope 访问
-    value = param_scope.train.lr | <default>
+    # 通过 scope 访问
+    value = hp.scope.train.lr | <default>
     
     # 通过命令行设置
     --train.lr=<value>

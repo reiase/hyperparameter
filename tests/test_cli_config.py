@@ -1,9 +1,9 @@
 import json
 import pytest
-from hyperparameter import auto_param, launch
+import hyperparameter as hp
 
 
-@auto_param("my_app")
+@hp.param("my_app")
 def my_app(x=1, y=2):
     return {"x": x, "y": y}
 
@@ -22,13 +22,13 @@ def test_cli_config_load(tmp_path):
 
     try:
         # Launch should pick up config
-        result = launch(my_app)
+        result = hp.launch(my_app)
         assert result["x"] == 10
         assert result["y"] == 20
 
         # Test override precedence: CLI > Config
         sys.argv = ["prog", "--config", str(config_file), "--define", "my_app.x=99"]
-        result = launch(my_app)
+        result = hp.launch(my_app)
         assert result["x"] == 99
         assert result["y"] == 20
 
@@ -51,7 +51,7 @@ def test_cli_multi_config(tmp_path):
     sys.argv = ["prog", "-C", str(base_cfg), str(override_cfg)]
 
     try:
-        result = launch(my_app)
+        result = hp.launch(my_app)
         assert result["x"] == 1
         assert result["y"] == 2
     finally:

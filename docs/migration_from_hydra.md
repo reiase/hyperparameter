@@ -39,15 +39,15 @@ hidden_size = 256
 dropout = 0.1
 
 # main.py
-from hyperparameter import auto_param, param_scope, loader
+import hyperparameter as hp
 
-@auto_param("model")
+@hp.param("model")
 def build_model(hidden_size=128, dropout=0.0):
     print(hidden_size)  # 256 (from config)
 
 if __name__ == "__main__":
-    cfg = loader.load("config.toml")
-    with param_scope(**cfg):
+    cfg = hp.config("config.toml")
+    with hp.scope(**cfg):
         build_model()
 ```
 
@@ -68,12 +68,12 @@ layers: 50
 
 **Hyperparameter:**
 ```python
-from hyperparameter import loader, param_scope
+import hyperparameter as hp
 
 # Load and merge multiple configs (later files override earlier)
-cfg = loader.load(["base.toml", "model/resnet.toml", "dataset/imagenet.toml"])
+cfg = hp.config(["base.toml", "model/resnet.toml", "dataset/imagenet.toml"])
 
-with param_scope(**cfg):
+with hp.scope(**cfg):
     train()
 ```
 
@@ -114,7 +114,7 @@ cs.store(name="model_config", node=ModelConfig)
 **Hyperparameter:**
 ```python
 from dataclasses import dataclass
-from hyperparameter import loader
+import hyperparameter as hp
 
 @dataclass
 class ModelConfig:
@@ -122,7 +122,7 @@ class ModelConfig:
     dropout: float = 0.1
 
 # Direct validation, no ConfigStore needed
-cfg = loader.load("config.toml", schema=ModelConfig)
+cfg = hp.config("config.toml", schema=ModelConfig)
 print(cfg.hidden_size)  # IDE autocomplete works!
 ```
 
@@ -145,26 +145,26 @@ python train.py -C config.toml -D model.hidden_size=512
 This is something Hydra **cannot** do easily:
 
 ```python
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 
-@auto_param("layer")
+@hp.param("layer")
 def create_layer(dropout=0.1):
     return f"Layer with dropout={dropout}"
 
 # Different dropout for different layers - no code change needed!
-with param_scope(**{"layer.dropout": 0.1}):
+with hp.scope(**{"layer.dropout": 0.1}):
     layer1 = create_layer()  # dropout=0.1
 
-with param_scope(**{"layer.dropout": 0.5}):
+with hp.scope(**{"layer.dropout": 0.5}):
     layer2 = create_layer()  # dropout=0.5
 ```
 
 ## Migration Checklist
 
 - [ ] **Config Files**: Convert YAML to TOML/JSON (or keep YAML with PyYAML installed)
-- [ ] **Decorators**: Replace `@hydra.main` with `@auto_param` + `launch()`
-- [ ] **Config Access**: Replace `cfg.x.y` with `param_scope.x.y | default` or function injection
-- [ ] **Composition**: Replace `defaults` list with `loader.load([file1, file2])`
+- [ ] **Decorators**: Replace `@hydra.main` with `@hp.param` + `hp.launch()`
+- [ ] **Config Access**: Replace `cfg.x.y` with `hp.scope.x.y | default` or function injection
+- [ ] **Composition**: Replace `defaults` list with `hp.config([file1, file2])`
 - [ ] **Interpolation**: Same syntax `${key}` works
 - [ ] **CLI**: Replace positional overrides with `-D key=value`
 

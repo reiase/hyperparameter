@@ -1,9 +1,5 @@
 # Hyperparameter
 
-<p align="center">
-  <img src="hyperparameter.svg" alt="Hyperparameter logo" width="180" />
-</p>
-
 <h3 align="center">
   <p style="text-align: center;">
   <a href="README.md" target="_blank">ENGLISH</a> | <a href="README.zh.md">中文文档</a>
@@ -26,7 +22,7 @@ pip install hyperparameter
 # Run a ready-to-use demo
 python -m hyperparameter.examples.quickstart
 
-# Try the @auto_param CLI: override defaults from the command line
+# Try the @hp.param CLI: override defaults from the command line
 python -m hyperparameter.examples.quickstart --define greet.name=Alice --enthusiasm=3
 
 # Inspect params and defaults
@@ -59,7 +55,7 @@ python -m hyperparameter.examples.quickstart -lps
     
     ```python
     from dataclasses import dataclass
-    from hyperparameter import loader
+    import hyperparameter as hp
     
     @dataclass
     class AppConfig:
@@ -68,7 +64,7 @@ python -m hyperparameter.examples.quickstart -lps
         debug: bool = False
     
     # Validates types and converts automatically: "8080" -> 8080 (int)
-    cfg = loader.load("config.toml", schema=AppConfig)
+    cfg = hp.config("config.toml", schema=AppConfig)
     ```
     
     ## Key Features
@@ -102,15 +98,15 @@ pip install hyperparameter
 ### Python
 
 ```python
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 
-@auto_param("foo")
+@hp.param("foo")
 def foo(x=1, y="a"):
     return f"x={x}, y={y}"
 
 foo()  # x=1, y='a'
 
-with param_scope(**{"foo.x": 2}):
+with hp.scope(**{"foo.x": 2}):
     foo()  # x=2, y='a'
 ```
 
@@ -159,7 +155,7 @@ ASSERT(1 == GET_PARAM(a.b, 1), "get undefined param");
 #### Python
 
 ```python
-x = param_scope.foo.x | "default value"
+x = hp.scope.foo.x | "default value"
 ```
 
 #### Rust
@@ -173,9 +169,9 @@ x = param_scope.foo.x | "default value"
 #### Python
 
 ```python
-with param_scope() as ps: # 1st scope start
+with hp.scope() as ps: # 1st scope start
     ps.foo.x=1
-    with param_scope() as ps2: # 2nd scope start
+    with hp.scope() as ps2: # 2nd scope start
         ps.foo.y=2
     # 2nd scope end
 # 1st scope end
@@ -200,11 +196,11 @@ with_params!{ // 1st scope start
 #### Python
 
 ```python
-@auto_param("foo")
+@hp.param("foo")
 def foo(x=1): # Print hyperparameter foo.x
     print(f"foo.x={x}")
 
-with param_scope() as ps:
+with hp.scope() as ps:
     ps.foo.x=2 # Modify foo.x in the current thread
     
     foo() # foo.x=2
@@ -240,9 +236,9 @@ In command line applications, it's common to define hyperparameters using comman
 
 ```python
 # example.py
-from hyperparameter import param_scope, auto_param
+import hyperparameter as hp
 
-@auto_param("example")
+@hp.param("example")
 def main(a=0, b=1):
     print(f"example.a={a}, example.b={b}")
 
@@ -253,7 +249,7 @@ if __name__ == "__main__":
     parser.add_argument("-D", "--define", nargs="*", default=[], action="extend")
     args = parser.parse_args()
 
-    with param_scope(*args.define):
+    with hp.scope(*args.define):
         main()
 ```
 

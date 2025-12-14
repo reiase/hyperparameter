@@ -73,22 +73,22 @@ batch_size = 256
 **main.py:**
 ```python
 import os
-from hyperparameter import loader, param_scope, auto_param
+import hyperparameter as hp
 
 def load_config():
     env = os.environ.get("ENV", "dev")
-    return loader.load([
+    return hp.config([
         "config/base.toml",
         f"config/{env}.toml"
     ])
 
-@auto_param("model")
+@hp.param("model")
 def train(batch_size=32, learning_rate=0.001):
     print(f"Training with batch_size={batch_size}, lr={learning_rate}")
 
 if __name__ == "__main__":
     cfg = load_config()
-    with param_scope(**cfg):
+    with hp.scope(**cfg):
         train()
 ```
 
@@ -138,13 +138,13 @@ vocab_size = 30522
 
 **main.py:**
 ```python
-from hyperparameter import loader, param_scope
+import hyperparameter as hp
 
 def load_model_config(model_name: str):
     """Load model config with inheritance."""
     base_config = "config/models/base_transformer.toml"
     model_config = f"config/models/{model_name}.toml"
-    return loader.load([base_config, model_config])
+    return hp.config([base_config, model_config])
 
 # Usage
 cfg = load_model_config("bert_large")
@@ -189,7 +189,7 @@ config/secrets.local.toml
 ```python
 import os
 from pathlib import Path
-from hyperparameter import loader, param_scope
+import hyperparameter as hp
 
 def load_config_with_secrets():
     configs = ["config/app.toml"]
@@ -199,7 +199,7 @@ def load_config_with_secrets():
     if secrets_file.exists():
         configs.append(str(secrets_file))
     
-    cfg = loader.load(configs)
+    cfg = hp.config(configs)
     return cfg
 
 cfg = load_config_with_secrets()
@@ -229,18 +229,18 @@ variant = "control"  # "control" or "treatment"
 
 **main.py:**
 ```python
-from hyperparameter import loader, param_scope
+import hyperparameter as hp
 
-cfg = loader.load("config/features.toml")
+cfg = hp.config("config/features.toml")
 
-with param_scope(**cfg):
+with hp.scope(**cfg):
     # Check feature flags anywhere in code
-    if param_scope.features.new_ui | False:
+    if hp.scope.features.new_ui | False:
         render_new_ui()
     else:
         render_old_ui()
     
-    if param_scope.features.experimental_model | False:
+    if hp.scope.features.experimental_model | False:
         model = ExperimentalModel()
     else:
         model = StableModel()
@@ -261,10 +261,10 @@ You need to run experiments with different parameter configurations.
 ### Solution
 
 ```python
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 import random
 
-@auto_param("experiment")
+@hp.param("experiment")
 def run_experiment(
     model_type="baseline",
     learning_rate=0.001,
@@ -284,7 +284,7 @@ def get_experiment_config(user_id: str):
 
 # Usage
 user_config = get_experiment_config("user_123")
-with param_scope(**user_config):
+with hp.scope(**user_config):
     run_experiment()
 ```
 
@@ -298,32 +298,32 @@ You have a training pipeline with multiple stages, each needing different config
 ### Solution
 
 ```python
-from hyperparameter import auto_param, param_scope
+import hyperparameter as hp
 
-@auto_param("train.pretrain")
+@hp.param("train.pretrain")
 def pretrain(lr=0.001, epochs=10, warmup=True):
     print(f"Pretraining: lr={lr}, epochs={epochs}, warmup={warmup}")
 
-@auto_param("train.finetune")
+@hp.param("train.finetune")
 def finetune(lr=0.0001, epochs=5, freeze_backbone=True):
     print(f"Finetuning: lr={lr}, epochs={epochs}, freeze={freeze_backbone}")
 
-@auto_param("train.rl")
+@hp.param("train.rl")
 def rl_train(lr=0.00001, episodes=1000, exploration=0.1):
     print(f"RL Training: lr={lr}, episodes={episodes}, exploration={exploration}")
 
 def run_pipeline():
     # Stage 1: Pretrain with high LR
-    with param_scope(**{"train.pretrain.lr": 0.001, "train.pretrain.epochs": 20}):
+    with hp.scope(**{"train.pretrain.lr": 0.001, "train.pretrain.epochs": 20}):
         pretrain()
     
     # Stage 2: Finetune with low LR
-    with param_scope(**{"train.finetune.lr": 0.00005}):
+    with hp.scope(**{"train.finetune.lr": 0.00005}):
         finetune()
     
     # Stage 3: RL with decaying exploration
     for stage, exploration in enumerate([0.5, 0.3, 0.1, 0.05]):
-        with param_scope(**{"train.rl.exploration": exploration}):
+        with hp.scope(**{"train.rl.exploration": exploration}):
             print(f"--- RL Stage {stage + 1} ---")
             rl_train()
 
@@ -341,7 +341,7 @@ This showcases the **dynamic scoping** feature that Hydra cannot easily replicat
 
 ```python
 from dataclasses import dataclass
-from hyperparameter import loader
+import hyperparameter as hp
 
 @dataclass
 class ModelConfig:
@@ -349,7 +349,7 @@ class ModelConfig:
     dropout: float = 0.1
     activation: str = "relu"
 
-cfg: ModelConfig = loader.load("config.toml", schema=ModelConfig)
+cfg: ModelConfig = hp.config("config.toml", schema=ModelConfig)
 # Now cfg.hidden_size has autocomplete!
 ```
 

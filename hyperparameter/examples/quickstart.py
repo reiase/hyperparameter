@@ -6,19 +6,18 @@ import textwrap
 from textwrap import dedent
 
 try:
-    from hyperparameter import auto_param, launch, param_scope
+    import hyperparameter as hp
 except ModuleNotFoundError:
     repo_root = os.path.abspath(
         os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)
     )
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
-    from hyperparameter import auto_param, launch, param_scope
+    
 
-
-@auto_param
+@hp.param
 def greet(name: str = "world", enthusiasm: int = 1) -> None:
-    """Print a greeting; values can be overridden via CLI or param_scope."""
+    """Print a greeting; values can be overridden via CLI or hp.scope."""
     suffix = "!" * max(1, enthusiasm)
     print(f"hello, {name}{suffix}")
 
@@ -37,15 +36,15 @@ def demo() -> None:
     ).strip()
     scoped_code = dedent(
         """
-        with param_scope(**{"greet.name": "scope-user", "greet.enthusiasm": 3}):
+        with hp.scope(**{"greet.name": "scope-user", "greet.enthusiasm": 3}):
             greet()
         """
     ).strip()
     nested_code = dedent(
         """
-        with param_scope(**{"greet.name": "outer", "greet.enthusiasm": 2}):
+        with hp.scope(**{"greet.name": "outer", "greet.enthusiasm": 2}):
             greet()  # outer scope values
-            with param_scope(**{"greet.name": "inner"}):
+            with hp.scope(**{"greet.name": "inner"}):
                 greet()  # inner overrides name only; enthusiasm inherited
         """
     ).strip()
@@ -56,7 +55,7 @@ def demo() -> None:
         textwrap.indent(
             dedent(
                 """
-            @auto_param
+            @hp.param
             def greet(name: str = "world", enthusiasm: int = 1) -> None:
                 suffix = "!" * max(1, enthusiasm)
                 print(f"hello, {name}{suffix}")
@@ -74,14 +73,14 @@ def demo() -> None:
 
     print(f"\n{yellow}=== Quickstart: scoped override ==={reset}")
     print(f"{cyan}{scoped_code}{reset}")
-    with param_scope(**{"greet.name": "scope-user", "greet.enthusiasm": 3}):
+    with hp.scope(**{"greet.name": "scope-user", "greet.enthusiasm": 3}):
         greet()
 
     print(f"\n{yellow}=== Quickstart: nested scopes ==={reset}")
     print(f"{cyan}{nested_code}{reset}")
-    with param_scope(**{"greet.name": "outer", "greet.enthusiasm": 2}):
+    with hp.scope(**{"greet.name": "outer", "greet.enthusiasm": 2}):
         greet()
-        with param_scope(**{"greet.name": "inner"}):
+        with hp.scope(**{"greet.name": "inner"}):
             greet()
 
     print(f"\n{yellow}=== Quickstart: CLI override ==={reset}")
@@ -90,8 +89,8 @@ def demo() -> None:
 
 
 if __name__ == "__main__":
-    # No args: run the quick demo. With args: expose the @auto_param CLI.
+    # No args: run the quick demo. With args: expose the @hp.param CLI.
     if len(sys.argv) == 1:
         demo()
     else:
-        launch(greet)
+        hp.launch(greet)

@@ -1,14 +1,15 @@
 import json
 import os
 import pytest
-from hyperparameter import loader
+import hyperparameter as hp
+from hyperparameter.loader import _merge_dicts
 
 
 def test_deep_merge():
     base = {"a": 1, "b": {"c": 2, "d": 3}}
     override = {"b": {"c": 4}, "e": 5}
 
-    merged = loader._merge_dicts(base, override)
+    merged = _merge_dicts(base, override)
 
     assert merged["a"] == 1
     assert merged["b"]["c"] == 4
@@ -22,7 +23,7 @@ def test_load_single_json(tmp_path):
     with open(cfg_path, "w") as f:
         json.dump(data, f)
 
-    loaded = loader.load(str(cfg_path))
+    loaded = hp.config(str(cfg_path))
     assert loaded == data
 
 
@@ -43,7 +44,7 @@ def test_load_composition(tmp_path):
         f.write("[train]\nlr = 0.001\n")
 
     # Test composition
-    configs = loader.load([str(base_cfg), str(override_cfg), str(toml_cfg)])
+    configs = hp.config([str(base_cfg), str(override_cfg), str(toml_cfg)])
 
     assert configs["model"]["layers"] == 4
     assert configs["model"]["hidden"] == 128  # from base
@@ -57,5 +58,5 @@ def test_load_fallback_toml(tmp_path):
     with open(cfg_path, "w") as f:
         f.write("a = 1\n")
 
-    loaded = loader.load(str(cfg_path))
+    loaded = hp.config(str(cfg_path))
     assert loaded["a"] == 1

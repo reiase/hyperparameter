@@ -10,7 +10,7 @@
 from threading import Thread
 from unittest import TestCase
 
-from hyperparameter import param_scope
+import hyperparameter as hp
 
 
 class TestThreadIsolation(TestCase):
@@ -18,7 +18,7 @@ class TestThreadIsolation(TestCase):
 
     def _in_thread(self, key, expected_val):
         """在新线程中检查参数值"""
-        ps = param_scope()
+        ps = hp.scope()
         if expected_val is None:
             with self.assertRaises(KeyError):
                 getattr(ps, key)()
@@ -27,7 +27,7 @@ class TestThreadIsolation(TestCase):
 
     def test_new_thread_isolated(self):
         """新线程不继承主线程的参数"""
-        with param_scope(**{"a.b": 42}):
+        with hp.scope(**{"a.b": 42}):
             t = Thread(target=self._in_thread, args=("a.b", None))
             t.start()
             t.join()
@@ -37,8 +37,8 @@ class TestThreadIsolation(TestCase):
         results = []
 
         def worker(val):
-            with param_scope(**{"x": val}):
-                results.append(param_scope.x())
+            with hp.scope(**{"x": val}):
+                results.append(hp.scope.x())
 
         threads = [Thread(target=worker, args=(i,)) for i in range(10)]
         for t in threads:
@@ -54,14 +54,14 @@ class TestFrozenPropagation(TestCase):
 
     def test_frozen_propagates_to_new_thread(self):
         """frozen() 传播到新线程"""
-        with param_scope() as ps:
-            param_scope.A.B = 1
-            param_scope.frozen()
+        with hp.scope() as ps:
+            hp.scope.A.B = 1
+            hp.scope.frozen()
 
         result = []
 
         def target():
-            result.append(param_scope.A.B())
+            result.append(hp.scope.A.B())
 
         t = Thread(target=target)
         t.start()
@@ -71,15 +71,15 @@ class TestFrozenPropagation(TestCase):
 
     def test_frozen_multiple_values(self):
         """frozen() 传播多个值"""
-        with param_scope(**{"x": 1, "y": 2, "z": 3}):
-            param_scope.frozen()
+        with hp.scope(**{"x": 1, "y": 2, "z": 3}):
+            hp.scope.frozen()
 
         results = {}
 
         def target():
-            results["x"] = param_scope.x()
-            results["y"] = param_scope.y()
-            results["z"] = param_scope.z()
+            results["x"] = hp.scope.x()
+            results["y"] = hp.scope.y()
+            results["z"] = hp.scope.z()
 
         t = Thread(target=target)
         t.start()
@@ -89,20 +89,20 @@ class TestFrozenPropagation(TestCase):
 
     def test_frozen_update(self):
         """多次 frozen() 更新全局状态"""
-        with param_scope(**{"val": 1}):
-            param_scope.frozen()
+        with hp.scope(**{"val": 1}):
+            hp.scope.frozen()
 
         results = []
 
         def check():
-            results.append(param_scope.val())
+            results.append(hp.scope.val())
 
         t1 = Thread(target=check)
         t1.start()
         t1.join()
 
-        with param_scope(**{"val": 2}):
-            param_scope.frozen()
+        with hp.scope(**{"val": 2}):
+            hp.scope.frozen()
 
         t2 = Thread(target=check)
         t2.start()
@@ -116,15 +116,15 @@ class TestMultipleThreads(TestCase):
 
     def test_concurrent_read(self):
         """并发读取"""
-        with param_scope(**{"shared": 42}):
-            param_scope.frozen()
+        with hp.scope(**{"shared": 42}):
+            hp.scope.frozen()
 
         results = []
         errors = []
 
         def reader(expected):
             try:
-                val = param_scope.shared()
+                val = hp.scope.shared()
                 results.append(val == expected)
             except Exception as e:
                 errors.append(str(e))
@@ -144,9 +144,9 @@ class TestMultipleThreads(TestCase):
         lock = __import__("threading").Lock()
 
         def writer(thread_id):
-            with param_scope(**{"tid": thread_id}):
+            with hp.scope(**{"tid": thread_id}):
                 for _ in range(100):
-                    val = param_scope.tid()
+                    val = hp.scope.tid()
                     if val != thread_id:
                         with lock:
                             results[thread_id] = False
@@ -167,12 +167,12 @@ class TestMultipleThreads(TestCase):
         results = []
 
         def worker():
-            with param_scope(**{"outer": 1}):
-                results.append(param_scope.outer())
-                with param_scope(**{"outer": 2, "inner": 3}):
-                    results.append(param_scope.outer())
-                    results.append(param_scope.inner())
-                results.append(param_scope.outer())
+            with hp.scope(**{"outer": 1}):
+                results.append(hp.scope.outer())
+                with hp.scope(**{"outer": 2, "inner": 3}):
+                    results.append(hp.scope.outer())
+                    results.append(hp.scope.inner())
+                results.append(hp.scope.outer())
 
         t = Thread(target=worker)
         t.start()

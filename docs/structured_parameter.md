@@ -96,17 +96,17 @@ The code becomes too complicated, having dozens of parameters to handle, most of
 
 ### A Fast Trial of Structured Parameter
 
-We can simplify the code with `auto_param`, which automatically converts the parameters into a parameter tree. And then, we can specify the parameters by name:
+We can simplify the code with `param`, which automatically converts the parameters into a parameter tree. And then, we can specify the parameters by name:
 
 ```python
 # add parameter support for custom functions with a decorator
-@auto_param("myns.rec.rank.dropout")
+@hp.param("myns.rec.rank.dropout")
 class dropout:
     def __init__(self, ratio=0.5):
         ...
 
 # add parameter support for library functions 
-wrapped_bn = auto_param("myns.rec.rank.bn")(keras.layers.BatchNormalization)
+wrapped_bn = param("myns.rec.rank.bn")(keras.layers.BatchNormalization)
 ```
 
 `myns.rec.rank` is the namespace for my project, and `myns.rec.rank.dropout` refers to the function defined in our code. We can refer to the keyword arguments (e.g. `ratio=0.5`) with the path `hp().myns.rec.rank.dropout`. 
@@ -123,10 +123,10 @@ class WideAndDeepModel(keras.Model):
         self.bn1 = wrapped_bn()
         self.dropout1 = dropout()
 ```
-And we can change the parameters of the `BN` layers with `param_scope`:
+And we can change the parameters of the `BN` layers with `scope`:
 
 ```python
-with param_scope(**{
+with hp.scope(**{
     "myns.rec.rank.dropout.ratio": 0.6,
     "myns.rec.rank.bn.center": False,
     ...
@@ -139,18 +139,18 @@ Or read the parameters from a JSON file:
 ```python
 with open("model.cfg.json") as f:
     cfg = json.load(f)
-with param_scope(**cfg):
+with hp.scope(**cfg):
     model = WideAndDeepModel() 
 ```
 
 ### Fine-grained Control of Structured Parameters
 
-In the last section, we have introduced how to structure the parameters with `auto_param` and modify them with `param_scope` by their path.
+In the last section, we have introduced how to structure the parameters with `param` and modify them with `scope` by their path.
 However, we may also need to access the same parameter in different places in our code, e.g., different layers in a DNN model.
 
 In such situation, we can break our code into named scopes. And then, we can identify each access to the parameters and set a value for each access.
 
-To add named scopes to our code, we can use `param_scope`:
+To add named scopes to our code, we can use `scope`:
 
 ```python
 class WideAndDeepModel(keras.Model):
@@ -160,22 +160,22 @@ class WideAndDeepModel(keras.Model):
         ...):
 
         ...
-        with param_scope["layer1"]():
+        with scope["layer1"]():
             self.bn1 = wrapped_bn()
             self.dropout1 = dropout()
-        with param_scope["layer2"]():
+        with scope["layer2"]():
             self.bn2 = wrapped_bn()
             self.dropout2 = dropout()
         ...
 
-with param_scope["wdmodel"]():
+with scope["wdmodel"]():
     model = WideAndDeepModel()
 ```
 
-`param_scope["layer1"]` creates a named scope called `layer1`. Since the scope is created inside another named scope `param_scope["wdmodel"]`, its full path should be `wdmodel.layer1`. We can specify different values of a parameter according to its path. For example:
+`scope["layer1"]` creates a named scope called `layer1`. Since the scope is created inside another named scope `scope["wdmodel"]`, its full path should be `wdmodel.layer1`. We can specify different values of a parameter according to its path. For example:
 
 ```python
-with param_scope["wdmodel"](**{
+with scope["wdmodel"](**{
     "myns.rec.rank.dropout.ratio@wdmodel.layer1": 0.6,
     "myns.rec.rank.dropout.ratio@wdmodel.layer2": 0.7,
 }):

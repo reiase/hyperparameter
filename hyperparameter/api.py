@@ -12,7 +12,7 @@ T = TypeVar("T")
 _MISSING = object()
 
 
-def _repr_dict(d: Dict[str, Any]) -> List[Tuple[str, Any]]:
+def _repr_dict(d: Dict[str, Any]) -> list:
     """Helper function to represent dictionary as sorted list of tuples."""
     d = [(k, v) for k, v in d.items()]
     d.sort()
@@ -441,16 +441,16 @@ def _coerce_with_default(value: Any, default: Any) -> Any:
 
 
 @_dynamic_dispatch
-class param_scope(_HyperParameter):
+class scope(_HyperParameter):
     """A thread-safe hyperparameter context scope
 
     Examples
     --------
-    **create new `param_scope`**
-    >>> ps = param_scope(a="a", b="b")           # create from call arguments
-    >>> ps = param_scope(**{"a": "a", "b": "b"}) # create from a dict
+    **create new `scope`**
+    >>> ps = scope(a="a", b="b")           # create from call arguments
+    >>> ps = scope(**{"a": "a", "b": "b"}) # create from a dict
 
-    **read parameters from `param_scope`**
+    **read parameters from `scope`**
     >>> ps.a() # read parameter
     'a'
     >>> ps.c("c")  # read parameter with default value if missing
@@ -458,49 +458,49 @@ class param_scope(_HyperParameter):
     >>> ps.c | "c" # another way for reading missing parameters
     'c'
 
-    **`param_scope` as a context scope**
-    >>> with param_scope(**{"a": "a"}) as ps:
+    **`scope` as a context scope**
+    >>> with scope(**{"a": "a"}) as ps:
     ...     print(ps.a())
     a
 
-    **read parameter from param_scope in a function**
+    **read parameter from scope in a function**
     >>> def foo():
-    ...    with param_scope() as ps:
+    ...    with scope() as ps:
     ...        return ps.a()
-    >>> with param_scope(**{"a": "a", "b": "b"}) as ps:
-    ...     foo() # foo should get param_scope using a with statement
+    >>> with scope(**{"a": "a", "b": "b"}) as ps:
+    ...     foo() # foo should get scope using a with statement
     'a'
 
     **modify parameters in nested scopes**
-    >>> with param_scope.empty(**{'a': 1, 'b': 2}) as ps:
+    >>> with scope.empty(**{'a': 1, 'b': 2}) as ps:
     ...     _repr_dict(ps.storage().storage())
-    ...     with param_scope(**{'b': 3}) as ps:
+    ...     with scope(**{'b': 3}) as ps:
     ...         _repr_dict(ps.storage().storage())
-    ...     with param_scope() as ps:
+    ...     with scope() as ps:
     ...         _repr_dict(ps.storage().storage())
     [('a', 1), ('b', 2)]
     [('a', 1), ('b', 3)]
     [('a', 1), ('b', 2)]
 
-    **use object-style parameter key in param_scope**
-    >>> with param_scope(**{"a.b.c": [1,2]}) as ps:
+    **use object-style parameter key in scope**
+    >>> with scope(**{"a.b.c": [1,2]}) as ps:
     ...     ps.a.b.c()
     [1, 2]
 
-    **access parameter with `param_scope`**
-    >>> with param_scope(x=1):
-    ...     param_scope.x(2) # read parameter
-    ...     param_scope.y(2) # read a missing parameter with default value
-    ...     param_scope.y | 2
-    ...     param_scope.z = 3
-    ...     param_scope.z | 0
+    **access parameter with `scope`**
+    >>> with scope(x=1):
+    ...     scope.x(2) # read parameter
+    ...     scope.y(2) # read a missing parameter with default value
+    ...     scope.y | 2
+    ...     scope.z = 3
+    ...     scope.z | 0
     1
     2
     2
     3
 
-    **convert param_scope to dict**:
-    >>> ps = param_scope.empty(a=1, b=2)
+    **convert scope to dict**:
+    >>> ps = scope.empty(a=1, b=2)
     >>> _repr_dict(dict(ps))
     [('a', 1), ('b', 2)]
     """
@@ -513,21 +513,21 @@ class param_scope(_HyperParameter):
                 k, v = line.split("=", 1)
                 self.put(k, v)
 
-    def __enter__(self) -> "param_scope":
-        """enter a `param_scope` context
+    def __enter__(self) -> "scope":
+        """enter a `scope` context
 
         Examples
         --------
-        >>> with param_scope():
-        ...     param_scope.p = "origin"
-        ...     with param_scope(**{"p": "origin"}) as ps:
+        >>> with scope():
+        ...     scope.p = "origin"
+        ...     with scope(**{"p": "origin"}) as ps:
         ...         ps.storage().storage()      # outer scope
-        ...         with param_scope() as ps:   # unmodified scope
+        ...         with scope() as ps:   # unmodified scope
         ...             ps.storage().storage()  # inner scope
-        ...         with param_scope(**{"p": "modified"}) as ps: # modified scope
+        ...         with scope(**{"p": "modified"}) as ps: # modified scope
         ...             ps.storage().storage()  # inner scope with modified params
-        ...         _ = param_scope(**{"p": "modified"}) # not used in with ctx
-        ...         with param_scope() as ps:   # unmodified scope
+        ...         _ = scope(**{"p": "modified"}) # not used in with ctx
+        ...         with scope() as ps:   # unmodified scope
         ...             ps.storage().storage()  # inner scope
         {'p': 'origin'}
         {'p': 'origin'}
@@ -550,19 +550,19 @@ class param_scope(_HyperParameter):
         return _ParamAccessor(self)
 
     @staticmethod
-    def empty(*args: str, **kwargs: Any) -> "param_scope":
-        """create an empty `param_scope`.
+    def empty(*args: str, **kwargs: Any) -> "scope":
+        """create an empty `scope`.
 
         Examples
         --------
-        >>> with param_scope(a="not empty") as ps: # start a new param_scope `a` = 'not empty'
-        ...     param_scope.a("empty")             # read parameter `a`
-        ...     with param_scope.empty() as ps2:   # parameter `a` is cleared in ps2
-        ...         param_scope.a("empty")         # read parameter `a` = 'empty'
+        >>> with scope(a="not empty") as ps: # start a new scope `a` = 'not empty'
+        ...     scope.a("empty")             # read parameter `a`
+        ...     with scope.empty() as ps2:   # parameter `a` is cleared in ps2
+        ...         scope.a("empty")         # read parameter `a` = 'empty'
         'not empty'
         'empty'
         """
-        retval = param_scope().clear().update(kwargs)
+        retval = scope().clear().update(kwargs)
         for line in args:
             if "=" in line:
                 k, v = line.split("=", 1)
@@ -570,52 +570,52 @@ class param_scope(_HyperParameter):
         return retval
 
     @staticmethod
-    def current() -> "param_scope":
-        """get current `param_scope`
+    def current() -> "scope":
+        """get current `scope`
 
         Examples
         --------
-        >>> with param_scope(a=1) as ps:
-        ...     param_scope.current().a("empty") # read `a` from current `param_scope`
+        >>> with scope(a=1) as ps:
+        ...     scope.current().a("empty") # read `a` from current `scope`
         '1'
 
-        >>> with param_scope() as ps1:
-        ...     with param_scope(a=1) as ps2:
-        ...         param_scope.current().a = 2  # set parameter `a` = 2
-        ...         param_scope.a("empty")       # read `a` in `ps2`
-        ...     param_scope.a("empty")           # read `a` in `ps1`, where `a` is not set
+        >>> with scope() as ps1:
+        ...     with scope(a=1) as ps2:
+        ...         scope.current().a = 2  # set parameter `a` = 2
+        ...         scope.a("empty")       # read `a` in `ps2`
+        ...     scope.a("empty")           # read `a` in `ps1`, where `a` is not set
         '2'
         'empty'
         """
-        retval = param_scope()
+        retval = scope()
         retval._storage = TLSKVStorage.current()
         return retval
 
     @staticmethod
     def init(params: Optional[Dict[str, Any]] = None) -> None:
-        """init param_scope for a new thread."""
+        """init scope for a new thread."""
         if params is None:
             params = {}
-        param_scope(**params).__enter__()
+        scope(**params).__enter__()
 
     @staticmethod
     def frozen() -> None:
-        with param_scope():
+        with scope():
             TLSKVStorage.frozen()
 
 
-_param_scope = param_scope._func
+_scope = scope._func
 
 
 @overload
-def auto_param(func: Callable) -> Callable: ...
+def param(func: Callable) -> Callable: ...
 
 
 @overload
-def auto_param(name: str) -> Callable[[Callable], Callable]: ...
+def param(name: str) -> Callable[[Callable], Callable]: ...
 
 
-def auto_param(
+def param(
     name_or_func: Union[str, Callable, None],
 ) -> Union[Callable, Callable[[Callable], Callable]]:
     """Convert keyword arguments into hyperparameters
@@ -623,19 +623,19 @@ def auto_param(
     Examples
     --------
 
-    >>> @auto_param
+    >>> @param
     ... def foo(a, b=2, c='c', d=None):
     ...     print(a, b, c, d)
 
     >>> foo(1)
     1 2 c None
 
-    >>> with param_scope('foo.b=3'):
+    >>> with scope('foo.b=3'):
     ...     foo(2)
     2 3 c None
 
     classes are also supported:
-    >>> @auto_param
+    >>> @param
     ... class foo:
     ...     def __init__(self, a, b=2, c='c', d=None):
     ...         print(a, b, c, d)
@@ -643,28 +643,28 @@ def auto_param(
     >>> obj = foo(1)
     1 2 c None
 
-    >>> with param_scope('foo.b=3'):
+    >>> with scope('foo.b=3'):
     ...     obj = foo(2)
     2 3 c None
 
-    >>> @auto_param('myns.foo.params')
+    >>> @param('myns.foo.params')
     ... def foo(a, b=2, c='c', d=None):
     ...     print(a, b, c, d)
     >>> foo(1)
     1 2 c None
 
-    >>> with param_scope('myns.foo.params.b=3'):
+    >>> with scope('myns.foo.params.b=3'):
     ...     foo(2)
     2 3 c None
 
-    >>> with param_scope('myns.foo.params.b=3'):
-    ...     param_scope.myns.foo.params.b = 4
+    >>> with scope('myns.foo.params.b=3'):
+    ...     scope.myns.foo.params.b = 4
     ...     foo(2)
     2 4 c None
     """
 
     if callable(name_or_func):
-        return auto_param(None)(name_or_func)
+        return param(None)(name_or_func)
 
     if has_rust_backend:
 
@@ -686,7 +686,7 @@ def auto_param(
 
             @functools.wraps(func)
             def inner(*arg: Any, **kws: Any) -> Any:
-                with param_scope() as hp:
+                with scope() as hp:
                     for k, v in predef_kws.items():
                         if k not in kws:
                             try:
@@ -720,7 +720,7 @@ def auto_param(
 
         @functools.wraps(func)
         def inner(*arg: Any, **kws: Any) -> Any:
-            with param_scope() as hp:
+            with scope() as hp:
                 local_params: Dict[str, Any] = {}
                 for k, v in predef_kws.items():
                     if k not in kws:
@@ -739,4 +739,4 @@ def auto_param(
 
 
 # Import CLI functions from cli.py to maintain backward compatibility
-from .cli import launch, run_cli
+from .cli import launch
