@@ -26,7 +26,7 @@ jobs:
       uses: taiki-e/install-action@cargo-llvm-cov
     - name: Install requirements
       run: |
-        pip install pytest pytest-cov && pip install -e .
+        pip install pytest pytest-cov pytest-asyncio && pip install -e .
     - name: Run tests and collect coverage
       run: |
         cd src/core/
