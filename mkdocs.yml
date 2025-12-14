@@ -35,6 +35,13 @@ nav:
   - home: index.zh.md
   - quick: quick_start.md
   - quick: quick_start.zh.md
+  - Guides:
+    - Migrating from Hydra: migration_from_hydra.md
+    - 从 Hydra 迁移: migration_from_hydra.zh.md
+    - Cookbook: cookbook.md
+    - Cookbook: cookbook.zh.md
+    - Architecture: architecture.md
+    - 架构概述: architecture.zh.md
   - Best Practice: structured_parameter.md
   - Examples:
     - Hyperparameter Optimization: examples/optimization.md
