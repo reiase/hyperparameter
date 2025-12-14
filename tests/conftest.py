@@ -15,7 +15,17 @@ pytest 配置和公共 fixtures
 
 import pytest
 import hyperparameter as hp
-from hyperparameter.storage import has_rust_backend
+from hyperparameter.storage import has_rust_backend, GLOBAL_STORAGE, GLOBAL_STORAGE_LOCK
+
+
+@pytest.fixture(autouse=True)
+def clean_global_storage():
+    """Clean global storage before and after each test to prevent state leakage."""
+    with GLOBAL_STORAGE_LOCK:
+        GLOBAL_STORAGE.clear()
+    yield
+    with GLOBAL_STORAGE_LOCK:
+        GLOBAL_STORAGE.clear()
 
 
 @pytest.fixture
