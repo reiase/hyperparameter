@@ -40,7 +40,7 @@ jobs:
         cd core/
         cargo llvm-cov --no-run --lcov --output-path ../coverage.lcov
     - name: Upload coverage reports to Codecov with GitHub Action
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v5
       with:
         files: coverage.lcov,coverage.xml
         token: ${{ secrets.CODECOV }}
