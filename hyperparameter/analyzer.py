@@ -496,11 +496,11 @@ class _ASTAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _get_param_namespace(self, decorators: List[ast.expr]) -> Optional[str]:
-        """获取 @param 或 @auto_param 的命名空间（兼容新旧用法）
+        """获取 @param 或 @hp.param 的命名空间（兼容新旧用法）
         
         支持：
         - @param 或 @param("ns")
-        - @auto_param 或 @auto_param("ns")
+        - @hp.param 或 @hp.param("ns")
         - @hp.param 或 @hp.param("ns")
         """
         param_names = ("param", "auto_param")  # 支持新旧两种名称
